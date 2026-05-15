@@ -630,7 +630,7 @@ function listDashboardSubApps_(spreadsheet, auth) {
         title: item.name,
         status: subAppStatusLabel_(item.status),
         statusKey: item.status,
-        icon: isPreparing ? 'briefcase' : item.icon,
+        icon: item.icon,
         description: item.description,
         updated: item.lastUpdatedAt ? 'Aktualizováno: ' + item.lastUpdatedAt : 'Aktualizace zatím není uvedena',
         targetUrl: item.targetUrl,
