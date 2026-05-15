@@ -48,6 +48,7 @@
           <button class="nav-link nav-link-child" type="button" data-section="locations" data-tooltip="Umístění"><svg><use href="#i-briefcase"></use></svg><span>Umístění</span></button>
           <button class="nav-link nav-link-child" type="button" data-section="departments" data-tooltip="Úseky"><svg><use href="#i-list"></use></svg><span>Úseky</span></button>
           <button class="nav-link nav-link-child" type="button" data-section="subapps" data-tooltip="Dlaždice"><svg><use href="#i-layout"></use></svg><span>Dlaždice</span></button>
+          <button class="nav-link nav-link-child" type="button" data-section="roles" data-tooltip="Role"><svg><use href="#i-settings"></use></svg><span>Role</span></button>
         </nav>
 
         <div class="team-panel">
@@ -193,6 +194,30 @@
               <svg><use href="#i-layout"></use></svg>
               <strong>Zatím nejsou nastavené žádné dlaždice</strong>
               <span>Přidejte první subaplikaci, která se má zobrazit na dashboardu.</span>
+            </div>
+          </section>
+        </section>
+
+        <section class="page settings-page" id="rolesPage" hidden>
+          <section class="admin-panel">
+            <div class="admin-panel-head">
+              <span class="admin-panel-icon"><svg><use href="#i-settings"></use></svg></span>
+              <div class="admin-panel-title">
+                <h3>Role a oprávnění</h3>
+                <p>Správa přístupových rolí a jejich oprávnění</p>
+              </div>
+              <button class="button button-primary admin-add-user" type="button" data-action="create-role"><svg><use href="#i-settings"></use></svg>Nová role</button>
+            </div>
+            <div class="table-shell">
+              <table class="users-table" aria-label="Role">
+                <thead><tr><th>Klíč</th><th>Název</th><th>Popis</th><th>Oprávnění</th><th>Stav</th><th></th></tr></thead>
+                <tbody id="rolesRows"></tbody>
+              </table>
+            </div>
+            <div class="empty-state users-empty" id="rolesEmpty" hidden>
+              <svg><use href="#i-settings"></use></svg>
+              <strong>Žádné role</strong>
+              <span>Přidejte první přístupovou roli.</span>
             </div>
           </section>
         </section>
@@ -416,6 +441,50 @@
         </div>
         <footer class="modal-actions">
           <button class="button button-secondary" type="button" data-action="close-permissions-modal"><svg><use href="#i-close"></use></svg>Zavřít</button>
+        </footer>
+      </div>
+    </dialog>
+
+    <dialog class="modal" id="roleModal">
+      <form id="roleForm">
+        <header class="modal-header">
+          <span class="modal-icon"><svg><use href="#i-settings"></use></svg></span>
+          <div class="modal-header-text">
+            <p class="kicker">Správa rolí</p>
+            <h2 id="roleModalTitle">Nová role</h2>
+          </div>
+          <button class="modal-close" type="button" data-action="close-roles-modal" aria-label="Zavřít"><svg><use href="#i-close"></use></svg></button>
+        </header>
+        <div class="modal-body">
+          <div class="form-grid">
+            <label>Klíč role (unikátní)<input type="text" name="roleKey" placeholder="MOJE_ROLE" required pattern="[A-Z0-9_]+" style="text-transform:uppercase"></label>
+            <label>Název role<input type="text" name="roleName" placeholder="Moje role" required></label>
+            <label style="grid-column:1/-1">Popis<input type="text" name="description" placeholder="Popis účelu role"></label>
+          </div>
+          <label class="switch-row"><input type="checkbox" name="active" checked> <span>Aktivní role</span></label>
+        </div>
+        <footer class="modal-actions">
+          <button class="button button-secondary" type="button" data-action="close-roles-modal"><svg><use href="#i-close"></use></svg>Zrušit</button>
+          <button class="button button-primary" type="submit"><svg><use href="#i-check"></use></svg>Uložit roli</button>
+        </footer>
+      </form>
+    </dialog>
+
+    <dialog class="modal user-modal" id="rolesModal">
+      <div class="modal-panel">
+        <header class="modal-header">
+          <span class="modal-icon"><svg><use href="#i-settings"></use></svg></span>
+          <div class="modal-header-text">
+            <p class="kicker">Správa oprávnění</p>
+            <h2 id="rolesModalTitle">Oprávnění role</h2>
+          </div>
+          <button class="modal-close" type="button" data-action="close-roles-modal" aria-label="Zavřít"><svg><use href="#i-close"></use></svg></button>
+        </header>
+        <div class="modal-body">
+          <div id="rolePermsContent" style="display:flex;flex-direction:column;gap:.75rem"></div>
+        </div>
+        <footer class="modal-actions">
+          <button class="button button-secondary" type="button" data-action="close-roles-modal"><svg><use href="#i-close"></use></svg>Zavřít</button>
         </footer>
       </div>
     </dialog>

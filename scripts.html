@@ -26,6 +26,8 @@
     subAppsState: { subApps: [] },
     permissionsState: { permissions: [], users: [], subApps: [], currentSubAppKey: '' },
     permissionsModal: null,
+    rolesState: { roles: [], permsByRole: {}, knownPermissions: [] },
+    rolesModal: null,
     iconCatalog: [],
 
     init() {
@@ -37,6 +39,7 @@
       this.departmentModal = document.querySelector('#departmentModal');
       this.subAppModal = document.querySelector('#subAppModal');
       this.permissionsModal = document.querySelector('#permissionsModal');
+      this.rolesModal = document.querySelector('#rolesModal');
       this.iconCatalog = window.LIDL_ICON_CATALOG || [];
       this.applyBootstrap(window.APP_BOOTSTRAP || {});
       this.bindEvents();
@@ -79,6 +82,7 @@
           if (section === 'locations') { this.showView('locations'); this.renderLocations(); return; }
           if (section === 'departments') { this.showView('departments'); this.renderDepartments(); return; }
           if (section === 'subapps') { this.showView('subapps'); this.renderSubApps(); return; }
+          if (section === 'roles') { this.showView('roles'); this.loadRoles(); return; }
           this.showView('home');
           this.loadHome();
         });
@@ -147,6 +151,12 @@
       if (addPermBtn) addPermBtn.addEventListener('click', () => this.openPermissionForm());
       const permForm = document.querySelector('#permissionForm');
       if (permForm) permForm.addEventListener('submit', (e) => { e.preventDefault(); this.savePermissionFromForm(); });
+
+      document.querySelectorAll('[data-action="close-roles-modal"]').forEach(b => b.addEventListener('click', () => this.closeRolesModal()));
+      const createRole = document.querySelector('[data-action="create-role"]');
+      if (createRole) createRole.addEventListener('click', () => this.openRoleForm());
+      const roleForm = document.querySelector('#roleForm');
+      if (roleForm) roleForm.addEventListener('submit', (e) => { e.preventDefault(); this.saveRoleFromForm(); });
 
       const iconSearch = document.querySelector('#iconSearch');
       if (iconSearch) iconSearch.addEventListener('input', () => this.renderIconPicker(iconSearch.value));
@@ -316,7 +326,7 @@
       if (app) app.dataset.view = view;
       const denied = document.querySelector('#accessDenied');
       if (denied && !denied.hidden) return;
-      const pages = { home: '#dashboardPage', users: '#usersPage', locations: '#locationsPage', departments: '#departmentsPage', subapps: '#subappsPage' };
+      const pages = { home: '#dashboardPage', users: '#usersPage', locations: '#locationsPage', departments: '#departmentsPage', subapps: '#subappsPage', roles: '#rolesPage' };
       Object.entries(pages).forEach(([k, sel]) => {
         const el = document.querySelector(sel);
         if (el) el.hidden = k !== view;
@@ -980,6 +990,143 @@
       });
     },
 
+    loadRoles() {
+      this.callServer('getRolesAdminData', null, { silent: true })
+        .then((data) => {
+          this.rolesState = data;
+          this.renderRoles();
+        })
+        .catch((err) => this.toast(err.message || 'Nepodařilo se načíst role.', 'error'));
+    },
+
+    renderRoles() {
+      const rows = document.querySelector('#rolesRows');
+      const empty = document.querySelector('#rolesEmpty');
+      const roles = this.rolesState.roles || [];
+      const permsByRole = this.rolesState.permsByRole || {};
+      const SYSTEM_ROLES = ['SUPERADMIN', 'ADMIN', 'EDITOR', 'VIEWER'];
+      if (!rows) return;
+      if (!roles.length) { rows.innerHTML = ''; if (empty) empty.hidden = false; return; }
+      if (empty) empty.hidden = true;
+      rows.innerHTML = roles.map(role => {
+        const perms = (permsByRole[role.roleKey] || []).join(', ') || '–';
+        const isSystem = SYSTEM_ROLES.indexOf(role.roleKey) >= 0;
+        return `
+          <tr>
+            <td><strong>${this.escape(role.roleKey)}</strong></td>
+            <td>${this.escape(role.roleName)}</td>
+            <td><small>${this.escape(role.description || '–')}</small></td>
+            <td>${this.escape(perms)}</td>
+            <td><span class="state-chip ${role.active ? 'is-active' : 'is-muted'}">${role.active ? 'Aktivní' : 'Vypnuto'}</span></td>
+            <td class="table-actions">
+              <button type="button" class="icon-button" data-action="manage-role-perms" data-key="${this.escape(role.roleKey)}" title="Oprávnění role"><svg><use href="#i-settings"></use></svg></button>
+              <button type="button" class="icon-button" data-action="edit-role" data-key="${this.escape(role.roleKey)}" aria-label="Upravit roli"><svg><use href="#i-pencil"></use></svg></button>
+              ${!isSystem ? `<button type="button" class="icon-button danger" data-action="delete-role" data-key="${this.escape(role.roleKey)}" aria-label="Smazat roli"><svg><use href="#i-trash"></use></svg></button>` : ''}
+            </td>
+          </tr>`;
+      }).join('');
+      rows.querySelectorAll('[data-action="edit-role"]').forEach(b => {
+        b.addEventListener('click', () => this.openRoleForm(this.rolesState.roles.find(r => r.roleKey === b.dataset.key)));
+      });
+      rows.querySelectorAll('[data-action="delete-role"]').forEach(b => {
+        b.addEventListener('click', () => this.confirmDeleteRole(b.dataset.key));
+      });
+      rows.querySelectorAll('[data-action="manage-role-perms"]').forEach(b => {
+        b.addEventListener('click', () => this.openRolesModal(b.dataset.key));
+      });
+    },
+
+    openRoleForm(role) {
+      const form = document.querySelector('#roleForm');
+      if (!form) return;
+      form.reset();
+      this.setText('#roleModalTitle', role ? 'Upravit roli' : 'Nová role');
+      const keyField = form.elements.roleKey;
+      keyField.value = role ? role.roleKey : '';
+      keyField.readOnly = !!role;
+      form.elements.roleName.value = role ? role.roleName : '';
+      form.elements.description.value = role ? (role.description || '') : '';
+      form.elements.active.checked = role ? Boolean(role.active) : true;
+      document.querySelector('#roleModal').showModal();
+    },
+
+    closeRoleForm() {
+      document.querySelector('#roleModal').close();
+    },
+
+    saveRoleFromForm() {
+      const form = document.querySelector('#roleForm');
+      const payload = {
+        roleKey: form.elements.roleKey.value,
+        roleName: form.elements.roleName.value,
+        description: form.elements.description.value,
+        active: form.elements.active.checked,
+      };
+      this.closeRoleForm();
+      this.callServer('saveRole', payload, { silent: true })
+        .then((data) => { this.rolesState = data; this.renderRoles(); this.toast('Role uložena.'); })
+        .catch((err) => this.toast(err.message || 'Nepodařilo se uložit roli.', 'error'));
+    },
+
+    confirmDeleteRole(roleKey) {
+      const role = (this.rolesState.roles || []).find(r => r.roleKey === roleKey);
+      if (!role) return;
+      this.openModal('Smazat roli', 'Opravdu chcete smazat roli ' + role.roleName + '? Tuto akci nelze vrátit.', () => {
+        this.callServer('deleteRole', roleKey, { silent: true })
+          .then((data) => { this.rolesState = data; this.renderRoles(); this.toast('Role smazána.'); })
+          .catch((err) => this.toast(err.message || 'Nepodařilo se smazat roli.', 'error'));
+      });
+    },
+
+    openRolesModal(roleKey) {
+      const role = (this.rolesState.roles || []).find(r => r.roleKey === roleKey);
+      this.setText('#rolesModalTitle', 'Oprávnění: ' + (role ? role.roleName : roleKey));
+      this.renderRolePerms(roleKey);
+      if (this.rolesModal) this.rolesModal.showModal();
+    },
+
+    closeRolesModal() {
+      if (this.rolesModal) this.rolesModal.close();
+    },
+
+    renderRolePerms(roleKey) {
+      const container = document.querySelector('#rolePermsContent');
+      if (!container) return;
+      const permsByRole = this.rolesState.permsByRole || {};
+      const knownPerms = this.rolesState.knownPermissions || ['*', 'dashboard.view', 'users.manage'];
+      const current = permsByRole[roleKey] || [];
+      const SYSTEM_ROLES = ['SUPERADMIN', 'ADMIN', 'EDITOR', 'VIEWER'];
+      const isSystem = SYSTEM_ROLES.indexOf(roleKey) >= 0;
+
+      container.innerHTML = knownPerms.map(perm => {
+        const has = current.indexOf(perm) >= 0;
+        return `
+          <div class="perm-row">
+            <span class="perm-key">${this.escape(perm)}</span>
+            <span class="state-chip ${has ? 'is-active' : 'is-muted'}">${has ? 'Povoleno' : 'Zakázáno'}</span>
+            ${has
+              ? `<button type="button" class="button button-secondary button-sm" data-action="remove-role-perm" data-role="${this.escape(roleKey)}" data-perm="${this.escape(perm)}">Odebrat</button>`
+              : `<button type="button" class="button button-primary button-sm" data-action="add-role-perm" data-role="${this.escape(roleKey)}" data-perm="${this.escape(perm)}">Přidat</button>`
+            }
+          </div>`;
+      }).join('');
+
+      container.querySelectorAll('[data-action="add-role-perm"]').forEach(b => {
+        b.addEventListener('click', () => {
+          this.callServer('saveRolePermission', { roleKey: b.dataset.role, permissionKey: b.dataset.perm }, { silent: true })
+            .then((data) => { this.rolesState = data; this.renderRolePerms(roleKey); this.renderRoles(); this.toast('Oprávnění přidáno.'); })
+            .catch((err) => this.toast(err.message, 'error'));
+        });
+      });
+      container.querySelectorAll('[data-action="remove-role-perm"]').forEach(b => {
+        b.addEventListener('click', () => {
+          this.callServer('deleteRolePermission', { roleKey: b.dataset.role, permissionKey: b.dataset.perm }, { silent: true })
+            .then((data) => { this.rolesState = data; this.renderRolePerms(roleKey); this.renderRoles(); this.toast('Oprávnění odebráno.'); })
+            .catch((err) => this.toast(err.message, 'error'));
+        });
+      });
+    },
+
     filterDepartmentsByLocation(locationName) {
       const loc = (this.usersState.locations || []).find(l => l.displayName === locationName);
       const locId = loc ? loc.id : null;
@@ -1030,6 +1177,7 @@
 
     getLoaderText(functionName) {
       const labels = {
+        getInitData: 'Načítám aplikaci...',
         getHomeData: 'Načítám dashboard...',
         getUsersAdminData: 'Načítám uživatele...',
         saveUser: 'Ukládám uživatele...',
@@ -1042,6 +1190,14 @@
         deleteDepartment: 'Mažu úsek...',
         saveSubApp: 'Ukládám dlaždici...',
         deleteSubApp: 'Mažu dlaždici...',
+        getSubAppPermissionsData: 'Načítám oprávnění...',
+        saveSubAppPermission: 'Ukládám oprávnění...',
+        deleteSubAppPermission: 'Mažu oprávnění...',
+        getRolesAdminData: 'Načítám role...',
+        saveRole: 'Ukládám roli...',
+        deleteRole: 'Mažu roli...',
+        saveRolePermission: 'Ukládám oprávnění role...',
+        deleteRolePermission: 'Mažu oprávnění role...',
       };
       return labels[functionName] || 'Načítám data...';
     },

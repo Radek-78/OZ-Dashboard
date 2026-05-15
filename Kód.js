@@ -96,7 +96,7 @@ function getInitData() {
     loadedAt: new Date().toISOString(),
   };
 
-  var homeData = null;
+  let homeData = null;
   if (context.auth.hasAccess && hasPermission_(context.auth, 'dashboard.view')) {
     const loadedAt = new Date();
     homeData = {
@@ -113,7 +113,7 @@ function getInitData() {
     };
   }
 
-  var settingsData = null;
+  let settingsData = null;
   if (context.auth.hasAccess && hasPermission_(context.auth, 'users.manage')) {
     settingsData = buildUsersAdminData_(context);
   }
@@ -250,6 +250,11 @@ function removeDiacritics_(str) {
     return {'á':'a','č':'c','ď':'d','é':'e','ě':'e','í':'i','ň':'n','ó':'o','ř':'r','š':'s','ť':'t','ú':'u','ů':'u','ý':'y','ž':'z'}[c] || c;
   }).join('').replace(/[^a-z0-9]/g, '');
 }
+/**
+ * Sestaví kontext přihlášeného uživatele: databáze, identita, role, oprávnění.
+ * Volá se na začátku každého API requestu.
+ * @returns {{ database: Object, user: Object, auth: Object }}
+ */
 function getCurrentUserContext_() {
   const database = ensureDatabase_();
   const email = getSignedInUser_();
@@ -304,6 +309,11 @@ function getCurrentUserContext_() {
   };
 }
 
+/**
+ * Zajistí přístup k databázovému spreadsheetu.
+ * Fast path: CacheService (6 h TTL). Fallback: PropertiesService → vytvoří nový spreadsheet.
+ * @returns {{ spreadsheet: GoogleAppsScript.Spreadsheet.Spreadsheet, spreadsheetId: string, spreadsheetUrl: string }}
+ */
 function ensureDatabase_() {
   const cache = CacheService.getScriptCache();
   const props = PropertiesService.getScriptProperties();
@@ -444,6 +454,15 @@ function setupDatabaseSheets_(spreadsheet) {
   ]);
 }
 
+/**
+ * Zajistí existenci sheetu se zadaným schématem.
+ * Pokud sheet neexistuje, vytvoří ho. Pokud existuje, pouze doplní chybějící sloupce (non-destructive).
+ * @param {GoogleAppsScript.Spreadsheet.Spreadsheet} spreadsheet
+ * @param {string} name - název sheetu
+ * @param {string[]} headers - požadované sloupce v pořadí
+ * @param {Array[]=} seedRows - volitelné seed řádky pro prázdný sheet
+ * @returns {GoogleAppsScript.Spreadsheet.Sheet}
+ */
 function ensureSheet_(spreadsheet, name, headers, seedRows) {
   let sheet = spreadsheet.getSheetByName(name);
 
@@ -540,23 +559,30 @@ function listRoles_(spreadsheet) {
     .map((role) => ({ value: role.roleKey, label: role.roleName || role.roleKey }));
 }
 
+/**
+ * Převede jeden řádek z LOCATIONS sheetu na normalizovaný objekt s displayName.
+ * @param {Object} loc - surový objekt z getObjects_()
+ * @returns {Object}
+ */
+function mapLocationRow_(loc) {
+  const displayName = loc.type === 'CENTRALA'
+    ? 'Centrála'
+    : [loc.code, loc.abbreviation, loc.city].filter(Boolean).join(' ');
+  return {
+    id: loc.id,
+    type: String(loc.type || ''),
+    code: String(loc.code || ''),
+    abbreviation: String(loc.abbreviation || ''),
+    city: String(loc.city || ''),
+    displayName: displayName,
+    active: isTruthy_(loc.active),
+  };
+}
+
 function listLocations_(spreadsheet) {
   return getObjects_(spreadsheet.getSheetByName('LOCATIONS'))
     .filter(function(loc) { return isTruthy_(loc.active); })
-    .map(function(loc) {
-      var displayName = loc.type === 'CENTRALA'
-        ? 'Centrála'
-        : [loc.code, loc.abbreviation, loc.city].filter(Boolean).join(' ');
-      return {
-        id: loc.id,
-        type: loc.type,
-        code: loc.code,
-        abbreviation: loc.abbreviation,
-        city: loc.city,
-        displayName: displayName,
-        active: isTruthy_(loc.active),
-      };
-    })
+    .map(mapLocationRow_)
     .sort(function(a, b) {
       if (a.type === 'CENTRALA') return -1;
       if (b.type === 'CENTRALA') return 1;
@@ -579,57 +605,57 @@ function listDepartments_(spreadsheet) {
 }
 
 function getLocationsData() {
-  var context = requirePermission_('users.manage');
+  const context = requirePermission_('users.manage');
   return buildLocationsData_(context);
 }
 
 function buildLocationsData_(context) {
-  var spreadsheet = context.database.spreadsheet;
+  const spreadsheet = context.database.spreadsheet;
   return {
     auth: context.auth,
-    locations: getObjects_(spreadsheet.getSheetByName('LOCATIONS')).map(function(loc) {
-      var displayName = loc.type === 'CENTRALA'
-        ? 'Centrála'
-        : [loc.code, loc.abbreviation, loc.city].filter(Boolean).join(' ');
-      return {
-        id: loc.id, type: loc.type, code: String(loc.code || ''), abbreviation: String(loc.abbreviation || ''),
-        city: String(loc.city || ''), displayName: displayName, active: isTruthy_(loc.active),
-        createdAt: formatDateValue_(loc.createdAt), updatedAt: formatDateValue_(loc.updatedAt),
-      };
-    }).sort(function(a, b) {
-      if (a.type === 'CENTRALA') return -1;
-      if (b.type === 'CENTRALA') return 1;
-      return parseInt(a.code, 10) - parseInt(b.code, 10);
-    }),
+    locations: getObjects_(spreadsheet.getSheetByName('LOCATIONS'))
+      .map(function(loc) {
+        const base = mapLocationRow_(loc);
+        return {
+          ...base,
+          createdAt: formatDateValue_(loc.createdAt),
+          updatedAt: formatDateValue_(loc.updatedAt),
+        };
+      })
+      .sort(function(a, b) {
+        if (a.type === 'CENTRALA') return -1;
+        if (b.type === 'CENTRALA') return 1;
+        return parseInt(a.code, 10) - parseInt(b.code, 10);
+      }),
   };
 }
 
 function saveLocation(payload) {
-  var context = requirePermission_('users.manage');
-  var spreadsheet = context.database.spreadsheet;
-  var data = payload || {};
-  var id = String(data.id || '').trim();
-  var type = String(data.type || 'LC').trim().toUpperCase();
-  var code = String(data.code || '').trim();
-  var abbreviation = String(data.abbreviation || '').trim().toUpperCase();
-  var city = String(data.city || '').trim();
-  var active = data.active === true || data.active === 'true';
+  const context = requirePermission_('users.manage');
+  const spreadsheet = context.database.spreadsheet;
+  const data = payload || {};
+  const id = String(data.id || '').trim();
+  const type = String(data.type || 'LC').trim().toUpperCase();
+  const code = String(data.code || '').trim();
+  const abbreviation = String(data.abbreviation || '').trim().toUpperCase();
+  const city = String(data.city || '').trim();
+  const active = data.active === true || data.active === 'true';
 
   if (type === 'LC' && !code) throw new Error('Vyplňte číslo LC.');
   if (type === 'LC' && !city) throw new Error('Vyplňte město.');
 
-  var lock = LockService.getScriptLock();
+  const lock = LockService.getScriptLock();
   lock.waitLock(10000);
   try {
-    var now = new Date();
-    var sheet = spreadsheet.getSheetByName('LOCATIONS');
-    var values = sheet.getDataRange().getValues();
-    var headers = values[0];
-    var idIndex = headers.indexOf('id');
-    var codeIndex = headers.indexOf('code');
-    var targetRow = -1;
+    const now = new Date();
+    const sheet = spreadsheet.getSheetByName('LOCATIONS');
+    const values = sheet.getDataRange().getValues();
+    const headers = values[0];
+    const idIndex = headers.indexOf('id');
+    const codeIndex = headers.indexOf('code');
+    let targetRow = -1;
 
-    for (var row = 1; row < values.length; row++) {
+    for (let row = 1; row < values.length; row++) {
       if (id && String(values[row][idIndex] || '') === id) {
         targetRow = row + 1;
       } else if (type === 'LC' && code && String(values[row][codeIndex] || '').trim() === code) {
@@ -637,8 +663,8 @@ function saveLocation(payload) {
       }
     }
 
-    var rowValues = headers.map(function(h) {
-      var map = { id: id || Utilities.getUuid(), type: type, code: code, abbreviation: abbreviation,
+    const rowValues = headers.map(function(h) {
+      const map = { id: id || Utilities.getUuid(), type: type, code: code, abbreviation: abbreviation,
         city: city, active: active, updatedAt: now };
       if (!id) map.createdAt = now;
       return map[h] !== undefined ? map[h] : (targetRow > 0 && values[targetRow - 1][headers.indexOf(h)] !== undefined ? values[targetRow - 1][headers.indexOf(h)] : '');
@@ -659,26 +685,26 @@ function saveLocation(payload) {
 }
 
 function deleteLocation(locationId) {
-  var context = requirePermission_('users.manage');
-  var spreadsheet = context.database.spreadsheet;
-  var normalized = String(locationId || '').trim();
+  const context = requirePermission_('users.manage');
+  const spreadsheet = context.database.spreadsheet;
+  const normalized = String(locationId || '').trim();
   if (!normalized) throw new Error('Chybí ID umístění.');
 
-  var lock = LockService.getScriptLock();
+  const lock = LockService.getScriptLock();
   lock.waitLock(10000);
   try {
-    var sheet = spreadsheet.getSheetByName('LOCATIONS');
-    var values = sheet.getDataRange().getValues();
-    var headers = values[0];
-    var idIndex = headers.indexOf('id');
-    var typeIndex = headers.indexOf('type');
+    const sheet = spreadsheet.getSheetByName('LOCATIONS');
+    const values = sheet.getDataRange().getValues();
+    const headers = values[0];
+    const idIndex = headers.indexOf('id');
+    const typeIndex = headers.indexOf('type');
 
-    for (var row = 1; row < values.length; row++) {
+    for (let row = 1; row < values.length; row++) {
       if (String(values[row][idIndex] || '') === normalized) {
         if (String(values[row][typeIndex] || '') === 'CENTRALA') throw new Error('Centrálu nelze smazat.');
 
-        var deptRows = getObjects_(spreadsheet.getSheetByName('DEPARTMENTS'));
-        var deptUsing = deptRows.filter(function(d) {
+        const deptRows = getObjects_(spreadsheet.getSheetByName('DEPARTMENTS'));
+        const deptUsing = deptRows.filter(function(d) {
           return String(d.locationIds || '').split(',').map(function(s) { return s.trim(); }).indexOf(normalized) >= 0;
         });
         if (deptUsing.length > 0) {
@@ -688,12 +714,12 @@ function deleteLocation(locationId) {
           );
         }
 
-        var location = rowToObject_(headers, values[row]);
-        var locationName = location.type === 'CENTRALA'
+        const location = rowToObject_(headers, values[row]);
+        const locationName = location.type === 'CENTRALA'
           ? 'Centrála'
           : [location.code, location.abbreviation, location.city].filter(Boolean).join(' ');
-        var userRows = getObjects_(spreadsheet.getSheetByName('USERS'));
-        var usersUsing = userRows.filter(function(user) {
+        const userRows = getObjects_(spreadsheet.getSheetByName('USERS'));
+        const usersUsing = userRows.filter(function(user) {
           return String(user.locationName || '').trim() === locationName;
         });
         if (usersUsing.length > 0) {
@@ -716,12 +742,12 @@ function deleteLocation(locationId) {
 }
 
 function getDepartmentsData() {
-  var context = requirePermission_('users.manage');
+  const context = requirePermission_('users.manage');
   return buildDepartmentsData_(context);
 }
 
 function buildDepartmentsData_(context) {
-  var spreadsheet = context.database.spreadsheet;
+  const spreadsheet = context.database.spreadsheet;
   return {
     auth: context.auth,
     departments: getObjects_(spreadsheet.getSheetByName('DEPARTMENTS')).map(function(d) {
@@ -736,35 +762,35 @@ function buildDepartmentsData_(context) {
 }
 
 function saveSubApp(payload) {
-  var context = requirePermission_('users.manage');
-  var spreadsheet = context.database.spreadsheet;
-  var data = normalizeSubAppPayload_(payload);
+  const context = requirePermission_('users.manage');
+  const spreadsheet = context.database.spreadsheet;
+  const data = normalizeSubAppPayload_(payload);
   validateSubAppPayload_(data);
 
-  var lock = LockService.getScriptLock();
+  const lock = LockService.getScriptLock();
   lock.waitLock(10000);
   try {
-    var now = new Date();
-    var sheet = spreadsheet.getSheetByName('SUBAPPS');
-    var values = sheet.getDataRange().getValues();
-    var headers = values[0];
-    var idIndex = headers.indexOf('id');
-    var keyIndex = headers.indexOf('key');
-    var sortOrderIndex = headers.indexOf('sortOrder');
-    var targetRow = -1;
+    const now = new Date();
+    const sheet = spreadsheet.getSheetByName('SUBAPPS');
+    const values = sheet.getDataRange().getValues();
+    const headers = values[0];
+    const idIndex = headers.indexOf('id');
+    const keyIndex = headers.indexOf('key');
+    const sortOrderIndex = headers.indexOf('sortOrder');
+    let targetRow = -1;
 
     // Sestavíme existující klíče a max sortOrder přímo z načtených dat (bez extra read)
-    var existingKeys = [];
-    var maxSortOrder = 0;
-    for (var row = 1; row < values.length; row++) {
+    const existingKeys = [];
+    let maxSortOrder = 0;
+    for (let row = 1; row < values.length; row++) {
       existingKeys.push(String(values[row][keyIndex] || '').trim().toUpperCase());
       maxSortOrder = Math.max(maxSortOrder, Number(values[row][sortOrderIndex] || 0));
     }
 
     if (!data.id && !data.key) {
-      var base = normalizeSubAppKey_(removeDiacritics_(data.name).toUpperCase()) || 'SUBAPP';
-      var candidate = base;
-      var suffix = 2;
+      const base = normalizeSubAppKey_(removeDiacritics_(data.name).toUpperCase()) || 'SUBAPP';
+      let candidate = base;
+      let suffix = 2;
       while (existingKeys.indexOf(candidate) >= 0) {
         candidate = base + '_' + suffix;
         suffix += 1;
@@ -775,9 +801,9 @@ function saveSubApp(payload) {
       data.sortOrder = maxSortOrder + 1;
     }
 
-    for (var row = 1; row < values.length; row++) {
-      var rowId = String(values[row][idIndex] || '');
-      var rowKey = String(values[row][keyIndex] || '').trim().toUpperCase();
+    for (let row = 1; row < values.length; row++) {
+      const rowId = String(values[row][idIndex] || '');
+      const rowKey = String(values[row][keyIndex] || '').trim().toUpperCase();
       if (data.id && rowId === data.id) {
         targetRow = row + 1;
       } else if (rowKey === data.key) {
@@ -787,8 +813,8 @@ function saveSubApp(payload) {
 
     if (data.id && targetRow < 0) throw new Error('Dlaždice nebyla nalezena.');
 
-    var source = targetRow > 0 ? rowToObject_(headers, values[targetRow - 1]) : {};
-    var rowValues = buildSubAppRow_(headers, data, source, now);
+    const source = targetRow > 0 ? rowToObject_(headers, values[targetRow - 1]) : {};
+    const rowValues = buildSubAppRow_(headers, data, source, now);
     if (targetRow > 0) {
       sheet.getRange(targetRow, 1, 1, headers.length).setValues([rowValues]);
       Logger.log('[SUBAPP_UPDATE] by=%s key=%s', context.user.email, data.key);
@@ -804,32 +830,31 @@ function saveSubApp(payload) {
 }
 
 function deleteSubApp(subAppId) {
-  var context = requirePermission_('users.manage');
-  var spreadsheet = context.database.spreadsheet;
-  var normalized = String(subAppId || '').trim();
+  const context = requirePermission_('users.manage');
+  const spreadsheet = context.database.spreadsheet;
+  const normalized = String(subAppId || '').trim();
   if (!normalized) throw new Error('Chybí ID dlaždice.');
 
-  var lock = LockService.getScriptLock();
+  const lock = LockService.getScriptLock();
   lock.waitLock(10000);
   try {
-    var sheet = spreadsheet.getSheetByName('SUBAPPS');
-    var values = sheet.getDataRange().getValues();
-    var headers = values[0];
-    var idIndex = headers.indexOf('id');
+    const sheet = spreadsheet.getSheetByName('SUBAPPS');
+    const values = sheet.getDataRange().getValues();
+    const headers = values[0];
+    const idIndex = headers.indexOf('id');
+    const keyIndex = headers.indexOf('key');
 
-    var keyIndex = headers.indexOf('key');
-
-    for (var row = 1; row < values.length; row++) {
+    for (let row = 1; row < values.length; row++) {
       if (String(values[row][idIndex] || '') === normalized) {
-        var subAppKey = String(values[row][keyIndex] || '');
+        const subAppKey = String(values[row][keyIndex] || '');
         sheet.deleteRow(row + 1);
 
         if (subAppKey) {
-          var permSheet = spreadsheet.getSheetByName('SUBAPP_PERMISSIONS');
-          var permValues = permSheet.getDataRange().getValues();
-          var permHeaders = permValues[0];
-          var permKeyIndex = permHeaders.indexOf('subAppKey');
-          for (var pr = permValues.length - 1; pr >= 1; pr--) {
+          const permSheet = spreadsheet.getSheetByName('SUBAPP_PERMISSIONS');
+          const permValues = permSheet.getDataRange().getValues();
+          const permHeaders = permValues[0];
+          const permKeyIndex = permHeaders.indexOf('subAppKey');
+          for (let pr = permValues.length - 1; pr >= 1; pr--) {
             if (String(permValues[pr][permKeyIndex] || '') === subAppKey) {
               permSheet.deleteRow(pr + 1);
             }
@@ -874,8 +899,8 @@ function listSubApps_(spreadsheet) {
 }
 
 function listDashboardSubApps_(spreadsheet, auth) {
-  var canOpenPreparing = isAdminAuth_(auth);
-  var userAccess = auth && auth.subApps ? auth.subApps : {};
+  const canOpenPreparing = isAdminAuth_(auth);
+  const userAccess = auth && auth.subApps ? auth.subApps : {};
   return listSubApps_(spreadsheet)
     .filter(function(item) { return item.active; })
     .filter(function(item) {
@@ -883,10 +908,10 @@ function listDashboardSubApps_(spreadsheet, auth) {
       return item.status === 'ACTIVE' || item.status === 'PREPARING';
     })
     .map(function(item) {
-      var isActive = item.status === 'ACTIVE';
-      var isPreparing = item.status === 'PREPARING';
-      var enabled = isActive || (isPreparing && canOpenPreparing);
-      var accessKey = String(item.key || '').trim().toUpperCase();
+      const isActive = item.status === 'ACTIVE';
+      const isPreparing = item.status === 'PREPARING';
+      const enabled = isActive || (isPreparing && canOpenPreparing);
+      const accessKey = String(item.key || '').trim().toUpperCase();
       return {
         id: item.id,
         key: item.key,
@@ -905,27 +930,27 @@ function listDashboardSubApps_(spreadsheet, auth) {
 }
 
 function saveDepartment(payload) {
-  var context = requirePermission_('users.manage');
-  var spreadsheet = context.database.spreadsheet;
-  var data = payload || {};
-  var id = String(data.id || '').trim();
-  var name = String(data.name || '').trim();
-  var locationIds = String(data.locationIds || '').trim();
-  var active = data.active === true || data.active === 'true';
+  const context = requirePermission_('users.manage');
+  const spreadsheet = context.database.spreadsheet;
+  const data = payload || {};
+  const id = String(data.id || '').trim();
+  const name = String(data.name || '').trim();
+  const locationIds = String(data.locationIds || '').trim();
+  const active = data.active === true || data.active === 'true';
   if (!name) throw new Error('Vyplňte název úseku.');
 
-  var lock = LockService.getScriptLock();
+  const lock = LockService.getScriptLock();
   lock.waitLock(10000);
   try {
-    var now = new Date();
-    var sheet = spreadsheet.getSheetByName('DEPARTMENTS');
-    var values = sheet.getDataRange().getValues();
-    var headers = values[0];
-    var idIndex = headers.indexOf('id');
-    var nameIndex = headers.indexOf('name');
-    var targetRow = -1;
+    const now = new Date();
+    const sheet = spreadsheet.getSheetByName('DEPARTMENTS');
+    const values = sheet.getDataRange().getValues();
+    const headers = values[0];
+    const idIndex = headers.indexOf('id');
+    const nameIndex = headers.indexOf('name');
+    let targetRow = -1;
 
-    for (var row = 1; row < values.length; row++) {
+    for (let row = 1; row < values.length; row++) {
       if (id && String(values[row][idIndex] || '') === id) {
         targetRow = row + 1;
       } else if (String(values[row][nameIndex] || '').trim().toLowerCase() === name.toLowerCase()) {
@@ -933,8 +958,8 @@ function saveDepartment(payload) {
       }
     }
 
-    var rowValues = headers.map(function(h) {
-      var map = { id: id || Utilities.getUuid(), name: name, locationIds: locationIds, active: active, updatedAt: now };
+    const rowValues = headers.map(function(h) {
+      const map = { id: id || Utilities.getUuid(), name: name, locationIds: locationIds, active: active, updatedAt: now };
       if (!id) map.createdAt = now;
       return map[h] !== undefined ? map[h] : (targetRow > 0 && values[targetRow - 1][headers.indexOf(h)] !== undefined ? values[targetRow - 1][headers.indexOf(h)] : '');
     });
@@ -954,26 +979,26 @@ function saveDepartment(payload) {
 }
 
 function deleteDepartment(departmentId) {
-  var context = requirePermission_('users.manage');
-  var spreadsheet = context.database.spreadsheet;
-  var normalized = String(departmentId || '').trim();
+  const context = requirePermission_('users.manage');
+  const spreadsheet = context.database.spreadsheet;
+  const normalized = String(departmentId || '').trim();
   if (!normalized) throw new Error('Chybí ID úseku.');
 
-  var lock = LockService.getScriptLock();
+  const lock = LockService.getScriptLock();
   lock.waitLock(10000);
   try {
-    var sheet = spreadsheet.getSheetByName('DEPARTMENTS');
-    var values = sheet.getDataRange().getValues();
-    var headers = values[0];
-    var idIndex = headers.indexOf('id');
-    var nameIndex = headers.indexOf('name');
+    const sheet = spreadsheet.getSheetByName('DEPARTMENTS');
+    const values = sheet.getDataRange().getValues();
+    const headers = values[0];
+    const idIndex = headers.indexOf('id');
+    const nameIndex = headers.indexOf('name');
 
-    for (var row = 1; row < values.length; row++) {
+    for (let row = 1; row < values.length; row++) {
       if (String(values[row][idIndex] || '') === normalized) {
-        var deptName = String(values[row][nameIndex] || '');
+        const deptName = String(values[row][nameIndex] || '');
 
-        var userRows = getObjects_(spreadsheet.getSheetByName('USERS'));
-        var usersUsing = userRows.filter(function(u) {
+        const userRows = getObjects_(spreadsheet.getSheetByName('USERS'));
+        const usersUsing = userRows.filter(function(u) {
           return String(u.department || '').trim() === deptName && isTruthy_(u.active);
         });
         if (usersUsing.length > 0) {
@@ -1045,6 +1070,12 @@ function getUserSubAppAccess_(spreadsheet, user) {
   }, {});
 }
 
+/**
+ * Ověří, zda má přihlášený uživatel dané oprávnění. Vyhodí chybu při nedostatku práv.
+ * @param {string} permission - klíč oprávnění, např. 'users.manage'
+ * @returns {{ database: Object, user: Object, auth: Object }} kontext přihlášeného uživatele
+ * @throws {Error} pokud uživatel nemá přístup
+ */
 function requirePermission_(permission) {
   const context = getCurrentUserContext_();
   if (!context.auth.hasAccess || !hasPermission_(context.auth, permission)) {
@@ -1053,6 +1084,12 @@ function requirePermission_(permission) {
   return context;
 }
 
+/**
+ * Zkontroluje, zda auth objekt obsahuje dané oprávnění (nebo wildcard '*').
+ * @param {Object} auth - auth objekt z getCurrentUserContext_()
+ * @param {string} permission
+ * @returns {boolean}
+ */
 function hasPermission_(auth, permission) {
   const permissions = auth && auth.permissions ? auth.permissions : [];
   return permissions.indexOf('*') >= 0 || permissions.indexOf(permission) >= 0;
@@ -1089,7 +1126,7 @@ function validateUserPayload_(data, spreadsheet) {
 }
 
 function normalizeSubAppPayload_(payload) {
-  var data = payload || {};
+  const data = payload || {};
   return {
     id: String(data.id || '').trim(),
     key: normalizeSubAppKey_(data.key),
@@ -1108,7 +1145,7 @@ function validateSubAppPayload_(data) {
   if (!data.name) throw new Error('Vyplňte název dlaždice.');
   if (['ACTIVE', 'PREPARING', 'DISABLED'].indexOf(data.status) < 0) throw new Error('Vyberte platný stav dlaždice.');
   if (data.targetUrl) {
-    var url = String(data.targetUrl).trim().toLowerCase();
+    const url = String(data.targetUrl).trim().toLowerCase();
     if (url && !url.startsWith('https://') && !url.startsWith('http://')) {
       throw new Error('Cílová URL musí začínat https:// nebo http://');
     }
@@ -1119,27 +1156,10 @@ function normalizeSubAppKey_(value) {
   return String(value || '').trim().toUpperCase().replace(/[^A-Z0-9_]/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '');
 }
 
-function makeUniqueSubAppKey_(spreadsheet, name) {
-  var base = normalizeSubAppKey_(removeDiacritics_(name).toUpperCase()) || 'SUBAPP';
-  var existing = listSubApps_(spreadsheet).map(function(item) { return String(item.key || '').toUpperCase(); });
-  var candidate = base;
-  var suffix = 2;
-  while (existing.indexOf(candidate) >= 0) {
-    candidate = base + '_' + suffix;
-    suffix += 1;
-  }
-  return candidate;
-}
-
-function getNextSubAppSortOrder_(spreadsheet) {
-  var values = listSubApps_(spreadsheet).map(function(item) { return Number(item.sortOrder || 0); });
-  if (!values.length) return 1;
-  return Math.max.apply(null, values) + 1;
-}
 
 function buildSubAppRow_(headers, data, original, now) {
-  var source = original || {};
-  var values = {
+  const source = original || {};
+  const values = {
     id: data.id || Utilities.getUuid(),
     key: data.key,
     name: data.name,
@@ -1157,7 +1177,7 @@ function buildSubAppRow_(headers, data, original, now) {
 }
 
 function normalizeSubAppStatus_(value) {
-  var normalized = String(value || 'DISABLED').trim().toUpperCase();
+  const normalized = String(value || 'DISABLED').trim().toUpperCase();
   if (['ACTIVE', 'AKTIVNI', 'AKTIVNÍ'].indexOf(normalized) >= 0) return 'ACTIVE';
   if (['PREPARING', 'V_PRIPRAVE', 'V_PŘÍPRAVĚ', 'V PRIPRAVE', 'V PŘÍPRAVĚ'].indexOf(normalized) >= 0) return 'PREPARING';
   return 'DISABLED';
@@ -1170,8 +1190,8 @@ function subAppStatusLabel_(status) {
 }
 
 function isAdminAuth_(auth) {
-  var systemRole = String(auth && auth.systemRole || '').toUpperCase();
-  var accessRole = String(auth && auth.accessRole || '').toUpperCase();
+  const systemRole = String(auth && auth.systemRole || '').toUpperCase();
+  const accessRole = String(auth && auth.accessRole || '').toUpperCase();
   return ['SUPERADMIN', 'ADMIN'].indexOf(systemRole) >= 0 || ['SUPERADMIN', 'ADMIN'].indexOf(accessRole) >= 0;
 }
 
@@ -1215,6 +1235,11 @@ function countActiveSuperadmins_(spreadsheet) {
   )).length;
 }
 
+/**
+ * Načte všechny datové řádky ze sheetu jako pole objektů (header = klíč).
+ * @param {GoogleAppsScript.Spreadsheet.Sheet} sheet
+ * @returns {Object[]}
+ */
 function getObjects_(sheet) {
   if (!sheet || sheet.getLastRow() < 2) return [];
   const values = sheet.getDataRange().getValues();
@@ -1229,6 +1254,12 @@ function rowToObject_(headers, row) {
   }, {});
 }
 
+/**
+ * Univerzální pravdivostní test pro hodnoty uložené v Google Sheets.
+ * Akceptuje boolean true, '1', 'true', 'ano', 'yes', 'active', 'aktivni'.
+ * @param {*} value
+ * @returns {boolean}
+ */
 function isTruthy_(value) {
   if (value === true) return true;
   const normalized = String(value || '').trim().toLowerCase();
@@ -1248,15 +1279,15 @@ function getFirstNameFromEmail_(email) {
 }
 
 function getSubAppPermissionsData(subAppKey) {
-  var context = requirePermission_('users.manage');
+  const context = requirePermission_('users.manage');
   return buildPermissionsData_(context, subAppKey);
 }
 
 function buildPermissionsData_(context, subAppKey) {
-  var spreadsheet = context.database.spreadsheet;
-  var key = String(subAppKey || '').trim().toUpperCase();
-  var rows = getObjects_(spreadsheet.getSheetByName('SUBAPP_PERMISSIONS'));
-  var permissions = rows
+  const spreadsheet = context.database.spreadsheet;
+  const key = String(subAppKey || '').trim().toUpperCase();
+  const rows = getObjects_(spreadsheet.getSheetByName('SUBAPP_PERMISSIONS'));
+  const permissions = rows
     .filter(function(r) { return !key || String(r.subAppKey || '').trim().toUpperCase() === key; })
     .map(function(r) {
       return {
@@ -1280,38 +1311,38 @@ function buildPermissionsData_(context, subAppKey) {
 }
 
 function saveSubAppPermission(payload) {
-  var context = requirePermission_('users.manage');
-  var spreadsheet = context.database.spreadsheet;
-  var data = payload || {};
-  var id = String(data.id || '').trim();
-  var userId = String(data.userId || '').trim();
-  var email = String(data.email || '').trim().toLowerCase();
-  var subAppKey = String(data.subAppKey || '').trim().toUpperCase();
-  var accessLevel = String(data.accessLevel || 'READ').trim().toUpperCase();
-  var active = data.active === true || data.active === 'true' || data.active === '1';
+  const context = requirePermission_('users.manage');
+  const spreadsheet = context.database.spreadsheet;
+  const data = payload || {};
+  const id = String(data.id || '').trim();
+  const userId = String(data.userId || '').trim();
+  const email = String(data.email || '').trim().toLowerCase();
+  const subAppKey = String(data.subAppKey || '').trim().toUpperCase();
+  let accessLevel = String(data.accessLevel || 'READ').trim().toUpperCase();
+  const active = data.active === true || data.active === 'true' || data.active === '1';
 
   if (!userId && !email) throw new Error('Vyberte uživatele.');
   if (!subAppKey) throw new Error('Vyberte dlaždici.');
   if (['READ', 'WRITE', 'ADMIN'].indexOf(accessLevel) < 0) accessLevel = 'READ';
 
-  var lock = LockService.getScriptLock();
+  const lock = LockService.getScriptLock();
   lock.waitLock(10000);
   try {
-    var sheet = spreadsheet.getSheetByName('SUBAPP_PERMISSIONS');
-    var values = sheet.getDataRange().getValues();
-    var headers = values[0];
-    var idIndex = headers.indexOf('id');
-    var userIdIndex = headers.indexOf('userId');
-    var emailIndex = headers.indexOf('email');
-    var subAppKeyIndex = headers.indexOf('subAppKey');
-    var targetRow = -1;
-    var now = new Date();
+    const sheet = spreadsheet.getSheetByName('SUBAPP_PERMISSIONS');
+    const values = sheet.getDataRange().getValues();
+    const headers = values[0];
+    const idIndex = headers.indexOf('id');
+    const userIdIndex = headers.indexOf('userId');
+    const emailIndex = headers.indexOf('email');
+    const subAppKeyIndex = headers.indexOf('subAppKey');
+    let targetRow = -1;
+    const now = new Date();
 
-    for (var row = 1; row < values.length; row++) {
-      var rowId = String(values[row][idIndex] || '');
-      var rowUserId = String(values[row][userIdIndex] || '');
-      var rowEmail = String(values[row][emailIndex] || '').trim().toLowerCase();
-      var rowKey = String(values[row][subAppKeyIndex] || '').trim().toUpperCase();
+    for (let row = 1; row < values.length; row++) {
+      const rowId = String(values[row][idIndex] || '');
+      const rowUserId = String(values[row][userIdIndex] || '');
+      const rowEmail = String(values[row][emailIndex] || '').trim().toLowerCase();
+      const rowKey = String(values[row][subAppKeyIndex] || '').trim().toUpperCase();
       if ((id && rowId === id) ||
           (!id && ((userId && rowUserId === userId) || (email && rowEmail === email)) && rowKey === subAppKey)) {
         targetRow = row + 1;
@@ -1319,9 +1350,9 @@ function saveSubAppPermission(payload) {
       }
     }
 
-    var finalId = id || Utilities.getUuid();
-    var rowValues = headers.map(function(h) {
-      var map = { id: finalId, userId: userId, email: email, subAppKey: subAppKey,
+    const finalId = id || Utilities.getUuid();
+    const rowValues = headers.map(function(h) {
+      const map = { id: finalId, userId: userId, email: email, subAppKey: subAppKey,
         accessLevel: accessLevel, active: active, updatedAt: now, updatedBy: context.user.email };
       if (map[h] !== undefined) return map[h];
       return (targetRow > 0 && values[targetRow - 1][headers.indexOf(h)] !== undefined)
@@ -1343,23 +1374,23 @@ function saveSubAppPermission(payload) {
 }
 
 function deleteSubAppPermission(permId) {
-  var context = requirePermission_('users.manage');
-  var spreadsheet = context.database.spreadsheet;
-  var normalized = String(permId || '').trim();
+  const context = requirePermission_('users.manage');
+  const spreadsheet = context.database.spreadsheet;
+  const normalized = String(permId || '').trim();
   if (!normalized) throw new Error('Chybí ID záznamu oprávnění.');
 
-  var lock = LockService.getScriptLock();
+  const lock = LockService.getScriptLock();
   lock.waitLock(10000);
   try {
-    var sheet = spreadsheet.getSheetByName('SUBAPP_PERMISSIONS');
-    var values = sheet.getDataRange().getValues();
-    var headers = values[0];
-    var idIndex = headers.indexOf('id');
-    var subAppKeyIndex = headers.indexOf('subAppKey');
+    const sheet = spreadsheet.getSheetByName('SUBAPP_PERMISSIONS');
+    const values = sheet.getDataRange().getValues();
+    const headers = values[0];
+    const idIndex = headers.indexOf('id');
+    const subAppKeyIndex = headers.indexOf('subAppKey');
 
-    for (var row = 1; row < values.length; row++) {
+    for (let row = 1; row < values.length; row++) {
       if (String(values[row][idIndex] || '') === normalized) {
-        var deletedKey = String(values[row][subAppKeyIndex] || '').trim().toUpperCase();
+        const deletedKey = String(values[row][subAppKeyIndex] || '').trim().toUpperCase();
         sheet.deleteRow(row + 1);
         Logger.log('[PERM_DELETE] by=%s id=%s subApp=%s', context.user.email, normalized, deletedKey);
         return buildPermissionsData_(context, deletedKey);
@@ -1370,6 +1401,216 @@ function deleteSubAppPermission(permId) {
   }
 
   throw new Error('Záznam oprávnění nebyl nalezen.');
+}
+
+function getRolesAdminData() {
+  const context = requirePermission_('users.manage');
+  return buildRolesAdminData_(context);
+}
+
+function buildRolesAdminData_(context) {
+  const spreadsheet = context.database.spreadsheet;
+  const roles = getObjects_(spreadsheet.getSheetByName('ROLES')).map(function(r) {
+    return {
+      roleKey: String(r.roleKey || ''),
+      roleName: String(r.roleName || ''),
+      description: String(r.description || ''),
+      active: isTruthy_(r.active),
+      createdAt: formatDateValue_(r.createdAt),
+      updatedAt: formatDateValue_(r.updatedAt),
+    };
+  }).sort(function(a, b) { return String(a.roleKey).localeCompare(String(b.roleKey), 'cs'); });
+
+  const permRows = getObjects_(spreadsheet.getSheetByName('ROLE_PERMISSIONS'));
+  const permsByRole = permRows.reduce(function(acc, row) {
+    const key = String(row.roleKey || '').trim().toUpperCase();
+    if (!acc[key]) acc[key] = [];
+    if (isTruthy_(row.allowed)) acc[key].push(String(row.permissionKey || ''));
+    return acc;
+  }, {});
+
+  return {
+    auth: context.auth,
+    roles: roles,
+    permsByRole: permsByRole,
+    knownPermissions: ['*', 'dashboard.view', 'users.manage'],
+  };
+}
+
+function saveRole(payload) {
+  const context = requirePermission_('users.manage');
+  const spreadsheet = context.database.spreadsheet;
+  const data = payload || {};
+  const roleKey = String(data.roleKey || '').trim().toUpperCase().replace(/[^A-Z0-9_]/g, '_');
+  const roleName = String(data.roleName || '').trim();
+  const description = String(data.description || '').trim();
+  const active = data.active === true || data.active === 'true' || data.active === '1';
+
+  if (!roleKey) throw new Error('Vyplňte klíč role.');
+  if (!roleName) throw new Error('Vyplňte název role.');
+
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    const sheet = spreadsheet.getSheetByName('ROLES');
+    const values = sheet.getDataRange().getValues();
+    const headers = values[0];
+    const roleKeyIndex = headers.indexOf('roleKey');
+    const now = new Date();
+    let targetRow = -1;
+
+    for (let row = 1; row < values.length; row++) {
+      if (String(values[row][roleKeyIndex] || '').trim().toUpperCase() === roleKey) {
+        targetRow = row + 1;
+        break;
+      }
+    }
+
+    const rowValues = headers.map(function(h) {
+      const map = { roleKey: roleKey, roleName: roleName, description: description, active: active, updatedAt: now };
+      if (!targetRow) map.createdAt = now;
+      if (map[h] !== undefined) return map[h];
+      return targetRow > 0 && values[targetRow - 1] ? values[targetRow - 1][headers.indexOf(h)] : '';
+    });
+
+    if (targetRow > 0) {
+      sheet.getRange(targetRow, 1, 1, headers.length).setValues([rowValues]);
+      Logger.log('[ROLE_UPDATE] by=%s key=%s', context.user.email, roleKey);
+    } else {
+      sheet.appendRow(rowValues);
+      Logger.log('[ROLE_CREATE] by=%s key=%s', context.user.email, roleKey);
+    }
+  } finally {
+    lock.releaseLock();
+  }
+
+  return buildRolesAdminData_(context);
+}
+
+function deleteRole(roleKey) {
+  const context = requirePermission_('users.manage');
+  const spreadsheet = context.database.spreadsheet;
+  const normalized = String(roleKey || '').trim().toUpperCase();
+  if (!normalized) throw new Error('Chybí klíč role.');
+
+  const SYSTEM_ROLES = ['SUPERADMIN', 'ADMIN', 'EDITOR', 'VIEWER'];
+  if (SYSTEM_ROLES.indexOf(normalized) >= 0) throw new Error('Systémové role nelze smazat.');
+
+  // Kontrola: neexistují uživatelé s touto rolí?
+  const userRows = getObjects_(spreadsheet.getSheetByName('USERS'));
+  const usersUsing = userRows.filter(function(u) {
+    return String(u.accessRole || '').trim().toUpperCase() === normalized && isTruthy_(u.active);
+  });
+  if (usersUsing.length > 0) {
+    throw new Error('Roli nelze smazat — je přiřazena ' + usersUsing.length + (usersUsing.length === 1 ? ' uživateli.' : ' uživatelům.'));
+  }
+
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    const sheet = spreadsheet.getSheetByName('ROLES');
+    const values = sheet.getDataRange().getValues();
+    const headers = values[0];
+    const roleKeyIndex = headers.indexOf('roleKey');
+
+    for (let row = 1; row < values.length; row++) {
+      if (String(values[row][roleKeyIndex] || '').trim().toUpperCase() === normalized) {
+        sheet.deleteRow(row + 1);
+
+        // Smaž i ROLE_PERMISSIONS pro tuto roli
+        const permSheet = spreadsheet.getSheetByName('ROLE_PERMISSIONS');
+        const permValues = permSheet.getDataRange().getValues();
+        const permHeaders = permValues[0];
+        const permRoleKeyIndex = permHeaders.indexOf('roleKey');
+        for (let pr = permValues.length - 1; pr >= 1; pr--) {
+          if (String(permValues[pr][permRoleKeyIndex] || '').trim().toUpperCase() === normalized) {
+            permSheet.deleteRow(pr + 1);
+          }
+        }
+
+        Logger.log('[ROLE_DELETE] by=%s key=%s', context.user.email, normalized);
+        return buildRolesAdminData_(context);
+      }
+    }
+  } finally {
+    lock.releaseLock();
+  }
+
+  throw new Error('Role nebyla nalezena.');
+}
+
+function saveRolePermission(payload) {
+  const context = requirePermission_('users.manage');
+  const spreadsheet = context.database.spreadsheet;
+  const data = payload || {};
+  const roleKey = String(data.roleKey || '').trim().toUpperCase();
+  const permissionKey = String(data.permissionKey || '').trim();
+  if (!roleKey) throw new Error('Chybí klíč role.');
+  if (!permissionKey) throw new Error('Chybí klíč oprávnění.');
+
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    const sheet = spreadsheet.getSheetByName('ROLE_PERMISSIONS');
+    const values = sheet.getDataRange().getValues();
+    const headers = values[0];
+    const roleKeyIndex = headers.indexOf('roleKey');
+    const permKeyIndex = headers.indexOf('permissionKey');
+    const now = new Date();
+
+    for (let row = 1; row < values.length; row++) {
+      if (String(values[row][roleKeyIndex] || '').trim().toUpperCase() === roleKey &&
+          String(values[row][permKeyIndex] || '').trim() === permissionKey) {
+        // Již existuje
+        Logger.log('[ROLE_PERM_SKIP] by=%s role=%s perm=%s already_exists', context.user.email, roleKey, permissionKey);
+        return buildRolesAdminData_(context);
+      }
+    }
+
+    const rowValues = headers.map(function(h) {
+      const map = { roleKey: roleKey, permissionKey: permissionKey, allowed: true,
+        description: 'Přidáno přes UI', updatedAt: now };
+      return map[h] !== undefined ? map[h] : '';
+    });
+    sheet.appendRow(rowValues);
+    Logger.log('[ROLE_PERM_ADD] by=%s role=%s perm=%s', context.user.email, roleKey, permissionKey);
+  } finally {
+    lock.releaseLock();
+  }
+
+  return buildRolesAdminData_(context);
+}
+
+function deleteRolePermission(payload) {
+  const context = requirePermission_('users.manage');
+  const spreadsheet = context.database.spreadsheet;
+  const data = payload || {};
+  const roleKey = String(data.roleKey || '').trim().toUpperCase();
+  const permissionKey = String(data.permissionKey || '').trim();
+  if (!roleKey || !permissionKey) throw new Error('Chybí klíč role nebo oprávnění.');
+
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    const sheet = spreadsheet.getSheetByName('ROLE_PERMISSIONS');
+    const values = sheet.getDataRange().getValues();
+    const headers = values[0];
+    const roleKeyIndex = headers.indexOf('roleKey');
+    const permKeyIndex = headers.indexOf('permissionKey');
+
+    for (let row = values.length - 1; row >= 1; row--) {
+      if (String(values[row][roleKeyIndex] || '').trim().toUpperCase() === roleKey &&
+          String(values[row][permKeyIndex] || '').trim() === permissionKey) {
+        sheet.deleteRow(row + 1);
+        Logger.log('[ROLE_PERM_REMOVE] by=%s role=%s perm=%s', context.user.email, roleKey, permissionKey);
+        break;
+      }
+    }
+  } finally {
+    lock.releaseLock();
+  }
+
+  return buildRolesAdminData_(context);
 }
 
 function getSignedInUser_() {
