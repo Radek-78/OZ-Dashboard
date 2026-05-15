@@ -28,6 +28,7 @@
     permissionsModal: null,
     rolesState: { roles: [], permsByRole: {}, knownPermissions: [] },
     rolesModal: null,
+    changelogModal: null,
     iconCatalog: [],
 
     init() {
@@ -40,6 +41,7 @@
       this.subAppModal = document.querySelector('#subAppModal');
       this.permissionsModal = document.querySelector('#permissionsModal');
       this.rolesModal = document.querySelector('#rolesModal');
+      this.changelogModal = document.querySelector('#changelogModal');
       this.iconCatalog = window.LIDL_ICON_CATALOG || [];
       this.applyBootstrap(window.APP_BOOTSTRAP || {});
       this.bindEvents();
@@ -160,6 +162,9 @@
 
       const iconSearch = document.querySelector('#iconSearch');
       if (iconSearch) iconSearch.addEventListener('input', () => this.renderIconPicker(iconSearch.value));
+
+      const versionLink = document.querySelector('#version');
+      if (versionLink) versionLink.addEventListener('click', (e) => { e.preventDefault(); this.openChangelog(); });
     },
 
     loadInitData() {
@@ -1250,6 +1255,32 @@
         clearTimeout(fallback);
         done();
       }, { once: true });
+    },
+
+    openChangelog() {
+      const changelog = window.APP_CHANGELOG || [];
+      const body = document.querySelector('#changelogBody');
+      if (!body) return;
+
+      if (!changelog.length) {
+        body.innerHTML = '<p style="color:var(--color-muted)">Žádné záznamy o změnách.</p>';
+      } else {
+        body.innerHTML = changelog.map((entry) => {
+          const dateStr = entry.date
+            ? new Date(entry.date).toLocaleDateString('cs-CZ', { day: 'numeric', month: 'long', year: 'numeric' })
+            : '';
+          const items = (entry.changes || []).map((c) => `<li>${c}</li>`).join('');
+          return `<div class="changelog-entry">
+            <div class="changelog-entry-header">
+              <strong class="changelog-version-badge">${entry.version}</strong>
+              ${dateStr ? `<span class="changelog-date">${dateStr}</span>` : ''}
+            </div>
+            <ul class="changelog-list">${items}</ul>
+          </div>`;
+        }).join('');
+      }
+
+      this.changelogModal.showModal();
     },
 
     setText(selector, value) {

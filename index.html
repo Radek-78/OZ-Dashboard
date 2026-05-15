@@ -489,8 +489,28 @@
       </div>
     </dialog>
 
+    <dialog class="modal changelog-modal" id="changelogModal">
+      <form method="dialog">
+        <header class="modal-header">
+          <span class="modal-icon"><svg><use href="#i-info"></use></svg></span>
+          <div class="modal-header-text">
+            <p class="kicker">O aplikaci</p>
+            <h2>Historie změn</h2>
+          </div>
+          <button class="modal-close" value="cancel" type="submit" aria-label="Zavřít">
+            <svg><use href="#i-close"></use></svg>
+          </button>
+        </header>
+        <div class="modal-body" id="changelogBody"></div>
+        <footer class="modal-actions">
+          <button class="button button-secondary" value="cancel" type="submit"><svg><use href="#i-close"></use></svg>Zavřít</button>
+        </footer>
+      </form>
+    </dialog>
+
     <script>
       window.APP_BOOTSTRAP = <?!= JSON.stringify(app) ?>;
+      window.APP_CHANGELOG = <?!= JSON.stringify(changelog) ?>;
     </script>
     <?!= include('iconCatalog'); ?>
     <?!= include('scripts'); ?>

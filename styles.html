@@ -1097,6 +1097,56 @@
     padding: 14px 22px;
   }
 
+  /* ── Changelog modal ─────────────────────────────── */
+
+  .changelog-modal .modal-body {
+    max-height: 60vh;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+    padding: 22px 24px;
+  }
+
+  .changelog-entry {
+    display: flex;
+    flex-direction: column;
+    gap: .5rem;
+  }
+
+  .changelog-entry-header {
+    display: flex;
+    align-items: center;
+    gap: .75rem;
+  }
+
+  .changelog-version-badge {
+    background: var(--lidl-blue);
+    border-radius: 6px;
+    color: #fff;
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: .02em;
+    padding: 2px 9px;
+  }
+
+  .changelog-date {
+    color: var(--muted);
+    font-size: 13px;
+  }
+
+  .changelog-list {
+    color: var(--text);
+    font-size: 14px;
+    line-height: 1.65;
+    margin: 0;
+    padding-left: 1.4em;
+  }
+
+  .changelog-list li + li {
+    margin-top: .2rem;
+  }
+
   /* ── Spinner panel ────────────────────────────────── */
 
   .spinner-demos {

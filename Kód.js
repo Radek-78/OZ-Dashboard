@@ -13,6 +13,7 @@ function doGet() {
     user: bootstrap.user.email,
     auth: bootstrap.auth,
     renderedAt: new Date().toISOString(),
+    changelog: APP_CHANGELOG,
   })
     .setTitle(APP_CONFIG.appName)
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
@@ -65,13 +66,13 @@ function getHomeData() {
     auth: context.auth,
     project: {
       name: APP_CONFIG.appName,
-      state: 'Prehled modulu',
+      state: 'Přehled modulů',
     },
     stats: [
-      { label: 'Stav systemu', value: 'Pripraveno', tone: 'success', icon: 'check' },
-      { label: 'Nacteno', value: Utilities.formatDate(loadedAt, Session.getScriptTimeZone(), 'd.M.yyyy HH:mm'), tone: 'info', icon: 'calendar' },
-      { label: 'Prihlaseny uzivatel', value: context.user.email, tone: 'neutral', icon: 'user' },
-      { label: 'Role pristupu', value: context.auth.accessRole || '-', tone: 'neutral', icon: 'info' },
+      { label: 'Stav systému', value: 'Připraveno', tone: 'success', icon: 'check' },
+      { label: 'Načteno', value: Utilities.formatDate(loadedAt, Session.getScriptTimeZone(), 'd.M.yyyy HH:mm'), tone: 'info', icon: 'calendar' },
+      { label: 'Přihlášený uživatel', value: context.user.email, tone: 'neutral', icon: 'user' },
+      { label: 'Role přístupu', value: context.auth.accessRole || '-', tone: 'neutral', icon: 'info' },
     ],
     modules: modules,
     team: [],
@@ -101,16 +102,22 @@ function getInitData() {
     const loadedAt = new Date();
     homeData = {
       auth: context.auth,
-      project: { name: APP_CONFIG.appName, state: 'Prehled modulu' },
+      project: { name: APP_CONFIG.appName, state: 'Přehled modulů' },
       stats: [
-        { label: 'Stav systemu', value: 'Pripraveno', tone: 'success', icon: 'check' },
-        { label: 'Nacteno', value: Utilities.formatDate(loadedAt, Session.getScriptTimeZone(), 'd.M.yyyy HH:mm'), tone: 'info', icon: 'calendar' },
-        { label: 'Prihlaseny uzivatel', value: context.user.email, tone: 'neutral', icon: 'user' },
-        { label: 'Role pristupu', value: context.auth.accessRole || '-', tone: 'neutral', icon: 'info' },
+        { label: 'Stav systému', value: 'Připraveno', tone: 'success', icon: 'check' },
+        { label: 'Načteno', value: Utilities.formatDate(loadedAt, Session.getScriptTimeZone(), 'd.M.yyyy HH:mm'), tone: 'info', icon: 'calendar' },
+        { label: 'Přihlášený uživatel', value: context.user.email, tone: 'neutral', icon: 'user' },
+        { label: 'Role přístupu', value: context.auth.accessRole || '-', tone: 'neutral', icon: 'info' },
       ],
       modules: listDashboardSubApps_(context.database.spreadsheet, context.auth),
       team: [],
     };
+
+    try {
+      updateUserLastVisit_(database.spreadsheet, context.user.id);
+    } catch (e) {
+      Logger.log('[VISIT_UPDATE_FAIL] user=%s error=%s', context.user.email, e && e.message ? e.message : e);
+    }
   }
 
   let settingsData = null;
@@ -157,7 +164,7 @@ function buildUsersAdminData_(context) {
     systemRoles: [
       { value: 'SUPERADMIN', label: 'Superadmin' },
       { value: 'ADMIN', label: 'Admin' },
-      { value: 'USER', label: 'Uzivatel' },
+      { value: 'USER', label: 'Uživatel' },
     ],
     locations: listLocations_(spreadsheet),
     departments: listDepartments_(spreadsheet),
@@ -190,11 +197,11 @@ function saveUser(payload) {
         targetRow = row + 1;
         original = rowToObject_(headers, values[row]);
       } else if (rowEmail === data.email) {
-        throw new Error('Uzivatel s timto e-mailem uz existuje.');
+        throw new Error('Uživatel s tímto e-mailem již existuje.');
       }
     }
 
-    if (data.id && targetRow < 0) throw new Error('Uzivatel nebyl nalezen.');
+    if (data.id && targetRow < 0) throw new Error('Uživatel nebyl nalezen.');
     if (original) assertLastSuperadminIsProtected_(spreadsheet, original, data);
 
     const rowValues = buildUserRow_(headers, data, original, now);
@@ -217,8 +224,8 @@ function deleteUser(userId) {
   const spreadsheet = context.database.spreadsheet;
   const normalizedId = String(userId || '').trim();
 
-  if (!normalizedId) throw new Error('Chybi ID uzivatele.');
-  if (normalizedId === context.user.id) throw new Error('Nemuzete smazat sami sebe.');
+  if (!normalizedId) throw new Error('Chybí ID uživatele.');
+  if (normalizedId === context.user.id) throw new Error('Nemůžete smazat sami sebe.');
 
   const lock = LockService.getScriptLock();
   lock.waitLock(10000);
@@ -241,7 +248,7 @@ function deleteUser(userId) {
     lock.releaseLock();
   }
 
-  throw new Error('Uzivatel nebyl nalezen.');
+  throw new Error('Uživatel nebyl nalezen.');
 }
 
 
@@ -271,7 +278,7 @@ function getCurrentUserContext_() {
       },
       auth: {
         hasAccess: false,
-        reason: 'Ucet neni uveden v seznamu aktivnich uzivatelu aplikace.',
+        reason: 'Účet není uveden v seznamu aktivních uživatelů aplikace.',
         systemRole: user ? user.systemRole : '',
         accessRole: user ? user.accessRole : '',
         permissions: [],
@@ -280,11 +287,6 @@ function getCurrentUserContext_() {
     };
   }
 
-  try {
-    updateUserLastVisit_(database.spreadsheet, user.id);
-  } catch (e) {
-    Logger.log('[VISIT_UPDATE_FAIL] user=%s error=%s', email, e && e.message ? e.message : e);
-  }
   Logger.log('[ACCESS] %s role=%s/%s', email, user.systemRole, user.accessRole);
 
   return {
@@ -416,20 +418,20 @@ function setupDatabaseSheets_(spreadsheet) {
   ensureSheet_(spreadsheet, 'ROLES', [
     'roleKey', 'roleName', 'description', 'active', 'createdAt', 'updatedAt',
   ], [
-    ['SUPERADMIN', 'Superadmin', 'Plny pristup k aplikaci a administraci', true, new Date(), new Date()],
-    ['ADMIN', 'Admin', 'Sprava vybranych casti aplikace', true, new Date(), new Date()],
-    ['EDITOR', 'Editor', 'Prace s daty v pridelenych modulech', true, new Date(), new Date()],
-    ['VIEWER', 'Viewer', 'Pouze cteni pridelenych modulu', true, new Date(), new Date()],
+    ['SUPERADMIN', 'Superadmin', 'Plný přístup k aplikaci a administraci', true, new Date(), new Date()],
+    ['ADMIN', 'Admin', 'Správa vybraných částí aplikace', true, new Date(), new Date()],
+    ['EDITOR', 'Editor', 'Práce s daty v přidělených modulech', true, new Date(), new Date()],
+    ['VIEWER', 'Viewer', 'Pouze čtení přidělených modulů', true, new Date(), new Date()],
   ]);
 
   ensureSheet_(spreadsheet, 'ROLE_PERMISSIONS', [
     'roleKey', 'permissionKey', 'allowed', 'description', 'updatedAt',
   ], [
-    ['SUPERADMIN', '*', true, 'Vsechna opravneni', new Date()],
-    ['ADMIN', 'dashboard.view', true, 'Zobrazeni dashboardu', new Date()],
-    ['ADMIN', 'users.manage', true, 'Sprava uzivatelu', new Date()],
-    ['EDITOR', 'dashboard.view', true, 'Zobrazeni dashboardu', new Date()],
-    ['VIEWER', 'dashboard.view', true, 'Zobrazeni dashboardu', new Date()],
+    ['SUPERADMIN', '*', true, 'Všechna oprávnění', new Date()],
+    ['ADMIN', 'dashboard.view', true, 'Zobrazení dashboardu', new Date()],
+    ['ADMIN', 'users.manage', true, 'Správa uživatelů', new Date()],
+    ['EDITOR', 'dashboard.view', true, 'Zobrazení dashboardu', new Date()],
+    ['VIEWER', 'dashboard.view', true, 'Zobrazení dashboardu', new Date()],
   ]);
 
   ensureSheet_(spreadsheet, 'SUBAPP_PERMISSIONS', [
@@ -1079,7 +1081,7 @@ function getUserSubAppAccess_(spreadsheet, user) {
 function requirePermission_(permission) {
   const context = getCurrentUserContext_();
   if (!context.auth.hasAccess || !hasPermission_(context.auth, permission)) {
-    throw new Error('K teto akci nemate opravneni.');
+    throw new Error('K této akci nemáte oprávnění.');
   }
   return context;
 }
@@ -1112,11 +1114,11 @@ function normalizeUserPayload_(payload) {
 }
 
 function validateUserPayload_(data, spreadsheet) {
-  if (!data.email || data.email.indexOf('@') < 1) throw new Error('Vyplnte platny e-mail uzivatele.');
-  if (!data.firstName) throw new Error('Vyplnte jmeno uzivatele.');
-  if (!data.lastName) throw new Error('Vyplnte prijmeni uzivatele.');
-  if (!data.locationName) throw new Error('Vyplnte misto zarazeni.');
-  if (!data.department) throw new Error('Vyplnte usek.');
+  if (!data.email || data.email.indexOf('@') < 1) throw new Error('Vyplňte platný e-mail uživatele.');
+  if (!data.firstName) throw new Error('Vyplňte jméno uživatele.');
+  if (!data.lastName) throw new Error('Vyplňte příjmení uživatele.');
+  if (!data.locationName) throw new Error('Vyplňte místo zařazení.');
+  if (!data.department) throw new Error('Vyplňte úsek.');
 
   const validSystemRoles = ['SUPERADMIN', 'ADMIN', 'USER'];
   if (validSystemRoles.indexOf(data.systemRole) < 0) throw new Error('Vybrana systemova role neexistuje.');
@@ -1224,7 +1226,7 @@ function assertLastSuperadminIsProtected_(spreadsheet, original, nextData) {
 
   if (!wasActiveSuperadmin || staysActiveSuperadmin) return;
   if (countActiveSuperadmins_(spreadsheet) <= 1) {
-    throw new Error('Nelze odebrat posledniho aktivniho superadmina.');
+    throw new Error('Nelze odebrat posledního aktivního superadmina.');
   }
 }
 

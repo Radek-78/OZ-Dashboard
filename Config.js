@@ -3,7 +3,7 @@ const APP_CONFIG = {
   appSubtitle: '',
   logoFileId: '18mu_Lq1F_FqqSZcolMjLwG0aaQDPMdyD',
   logoUrl: 'https://drive.google.com/thumbnail?id=18mu_Lq1F_FqqSZcolMjLwG0aaQDPMdyD&sz=w320',
-  version: 'v0.1.1',
+  version: 'v0.2.0',
   theme: {
     blue: '#0050aa',
     darkBlue: '#002466',
@@ -15,3 +15,44 @@ const APP_CONFIG = {
   },
 };
 
+const APP_CHANGELOG = [
+  {
+    version: 'v0.2.0',
+    date: '2026-05-15',
+    changes: [
+      'Přidána správa rolí přístupu a jejich oprávnění',
+      'Přidána správa přístupů uživatelů ke dlaždicím (SUBAPP_PERMISSIONS)',
+      'Optimalizace: načítání stránky nyní vyžaduje jediné volání serveru místo tří',
+      'Optimalizace: databázová cache uchovává ID i verzi schématu (DATABASE_INFO_V2)',
+      'Optimalizace: aktualizace posledního přihlášení pouze při načtení stránky',
+      'Refaktoring: var → const/let v celém projektu',
+      'Přidána pomocná funkce mapLocationRow_() — odstraněna duplikace logiky',
+      'Přidána JSDoc dokumentace ke klíčovým serverovým funkcím',
+      'Opravena diakritika v chybových a informačních zprávách',
+    ],
+  },
+  {
+    version: 'v0.1.1',
+    date: '2026-05-01',
+    changes: [
+      'Oprava: přihlášený uživatel vidí všechny aktivní a připravované dlaždice',
+      'Oprava: ochrana posledního aktivního superadmina — nelze odebrat',
+      'Přidána podpora cílové URL u dlaždic aplikací',
+      'Přidáno zobrazení role uživatele v postranním panelu',
+      'Bezpečnost: minimalizace OAuth oprávnění (pouze e-mail a tabulky)',
+    ],
+  },
+  {
+    version: 'v0.1.0',
+    date: '2026-04-01',
+    changes: [
+      'Správa uživatelů — vytvoření, úprava, smazání, aktivace',
+      'Správa umístění (pobočky LC, centrála)',
+      'Správa úseků s vazbou na umístění',
+      'Správa dlaždic aplikací s ikonami a stavy',
+      'Rolový přístupový systém s granulárními oprávněními',
+      'Přihlášení přes Google účet (Google Workspace)',
+      'Responzivní postranní panel s možností sbalení',
+    ],
+  },
+];
