@@ -1099,52 +1099,117 @@
 
   /* ── Changelog modal ─────────────────────────────── */
 
+  .changelog-modal {
+    max-width: min(760px, calc(100vw - 32px));
+  }
+
   .changelog-modal .modal-body {
-    max-height: 60vh;
+    max-height: 65vh;
     overflow-y: auto;
     display: flex;
     flex-direction: column;
-    gap: 1.5rem;
-    padding: 22px 24px;
+    gap: 0;
+    padding: 0;
   }
 
-  .changelog-entry {
-    display: flex;
-    flex-direction: column;
-    gap: .5rem;
+  /* Verze — karta */
+  .cl-version {
+    border-bottom: 1px solid var(--line-soft);
+    padding: 20px 28px;
+    transition: background .15s;
   }
 
-  .changelog-entry-header {
-    display: flex;
+  .cl-version:last-child {
+    border-bottom: none;
+  }
+
+  .cl-version-latest {
+    background: linear-gradient(135deg, #f0f5ff 0%, #eaf0fe 100%);
+  }
+
+  /* Záhlaví verze */
+  .cl-version-head {
     align-items: center;
-    gap: .75rem;
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 13px;
   }
 
-  .changelog-version-badge {
+  .cl-version-left {
+    align-items: center;
+    display: flex;
+    gap: 10px;
+  }
+
+  .cl-version-num {
+    color: var(--text);
+    font-size: 17px;
+    font-weight: 800;
+    letter-spacing: -.01em;
+  }
+
+  .cl-latest-badge {
     background: var(--lidl-blue);
-    border-radius: 6px;
+    border-radius: 20px;
     color: #fff;
-    font-size: 13px;
-    font-weight: 700;
-    letter-spacing: .02em;
-    padding: 2px 9px;
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: .06em;
+    padding: 3px 10px;
+    text-transform: uppercase;
   }
 
-  .changelog-date {
+  .cl-version-date {
     color: var(--muted);
     font-size: 13px;
   }
 
-  .changelog-list {
-    color: var(--text);
-    font-size: 14px;
-    line-height: 1.65;
+  /* Seznam změn */
+  .cl-items {
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+    list-style: none;
     margin: 0;
-    padding-left: 1.4em;
+    padding: 0;
   }
 
-  .changelog-list li + li {
-    margin-top: .2rem;
+  .cl-item {
+    align-items: baseline;
+    display: flex;
+    gap: 10px;
+  }
+
+  .cl-item-text {
+    color: var(--text);
+    font-size: 14px;
+    line-height: 1.5;
+  }
+
+  /* Tagy typů změn */
+  .cl-tag {
+    border-radius: 4px;
+    flex-shrink: 0;
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: .05em;
+    padding: 2px 7px;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+
+  .cl-tag-new      { background: #dcfce7; color: #15803d; }
+  .cl-tag-fix      { background: #fff7ed; color: #c2410c; }
+  .cl-tag-perf     { background: #f3e8ff; color: #7e22ce; }
+  .cl-tag-remove   { background: #fef2f2; color: #b91c1c; }
+  .cl-tag-security { background: #eff6ff; color: #1d4ed8; }
+  .cl-tag-internal { background: #f1f5f9; color: #475569; }
+  .cl-tag-change   { background: #f0f9ff; color: #0369a1; }
+
+  .cl-empty {
+    color: var(--muted);
+    font-size: 14px;
+    padding: 24px 28px;
   }
 
   /* ── Spinner panel ────────────────────────────────── */

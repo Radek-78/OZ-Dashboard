@@ -1257,25 +1257,48 @@
       }, { once: true });
     },
 
+    changelogTagFor(text) {
+      const t = (text || '').toLowerCase();
+      if (/^přidán|^přidána|^přidáno|^nová |^nové |^nový /.test(t))  return { label: 'Nové',       cls: 'cl-tag-new' };
+      if (/^opraven|^opravena|^opraveno|^oprava/.test(t))             return { label: 'Oprava',     cls: 'cl-tag-fix' };
+      if (/^optimalizov|^zrychl|^snížen|^redukován/.test(t))         return { label: 'Výkon',      cls: 'cl-tag-perf' };
+      if (/^odstraněn|^odstraněna|^odstraněno|^odebrán/.test(t))     return { label: 'Odstraněno', cls: 'cl-tag-remove' };
+      if (/^bezpečnost|^zabezpečen/.test(t))                         return { label: 'Bezpečnost', cls: 'cl-tag-security' };
+      if (/^refaktoring|^refaktor|^interní/.test(t))                 return { label: 'Interní',    cls: 'cl-tag-internal' };
+      return { label: 'Změna', cls: 'cl-tag-change' };
+    },
+
     openChangelog() {
       const changelog = window.APP_CHANGELOG || [];
       const body = document.querySelector('#changelogBody');
       if (!body) return;
 
+      // Aktualizuj kicker s názvem aplikace a verzí
+      const latestVersion = changelog.length ? changelog[0].version : '';
+      const appName = (window.APP_BOOTSTRAP && window.APP_BOOTSTRAP.appName) || 'OZ Dashboard';
+      this.setText('#changelogKicker', latestVersion ? `${appName} · ${latestVersion}` : 'Co je nového');
+
       if (!changelog.length) {
-        body.innerHTML = '<p style="color:var(--color-muted)">Žádné záznamy o změnách.</p>';
+        body.innerHTML = '<p class="cl-empty">Žádné záznamy o změnách.</p>';
       } else {
-        body.innerHTML = changelog.map((entry) => {
+        body.innerHTML = changelog.map((entry, idx) => {
+          const isLatest = idx === 0;
           const dateStr = entry.date
             ? new Date(entry.date).toLocaleDateString('cs-CZ', { day: 'numeric', month: 'long', year: 'numeric' })
             : '';
-          const items = (entry.changes || []).map((c) => `<li>${c}</li>`).join('');
-          return `<div class="changelog-entry">
-            <div class="changelog-entry-header">
-              <strong class="changelog-version-badge">${entry.version}</strong>
-              ${dateStr ? `<span class="changelog-date">${dateStr}</span>` : ''}
+          const items = (entry.changes || []).map((c) => {
+            const tag = this.changelogTagFor(c);
+            return `<li class="cl-item"><span class="cl-tag ${tag.cls}">${tag.label}</span><span class="cl-item-text">${c}</span></li>`;
+          }).join('');
+          return `<div class="cl-version${isLatest ? ' cl-version-latest' : ''}">
+            <div class="cl-version-head">
+              <div class="cl-version-left">
+                <span class="cl-version-num">${entry.version}</span>
+                ${isLatest ? '<span class="cl-latest-badge">Nejnovější</span>' : ''}
+              </div>
+              ${dateStr ? `<span class="cl-version-date">${dateStr}</span>` : ''}
             </div>
-            <ul class="changelog-list">${items}</ul>
+            <ul class="cl-items">${items}</ul>
           </div>`;
         }).join('');
       }
