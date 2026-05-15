@@ -1,9 +1,9 @@
-const APP_CONFIG = {
+﻿const APP_CONFIG = {
   appName: 'OZ Dashboard',
   appSubtitle: '',
   logoFileId: '18mu_Lq1F_FqqSZcolMjLwG0aaQDPMdyD',
   logoUrl: 'https://drive.google.com/thumbnail?id=18mu_Lq1F_FqqSZcolMjLwG0aaQDPMdyD&sz=w320',
-  version: 'v0.2.0',
+  version: 'v0.3.0',
   theme: {
     blue: '#0050aa',
     darkBlue: '#002466',
@@ -17,7 +17,17 @@ const APP_CONFIG = {
 
 const APP_CHANGELOG = [
   {
-    version: 'v0.2.0',
+    version: 'v0.3.0',
+    date: '2026-05-15',
+    changes: [
+      'Opravena diakritika v chybových zprávách, popiscích a seed datech',
+      'Optimalizováno zapisování posledního přihlášení — zápis probíhá pouze při načtení stránky',
+      'Kliknutí na číslo verze ve footeru otevře historii změn',
+      'Přidán deploy skript pro automatizaci vydávání verzí',
+    ],
+  },
+  {
+    version: 'v0.3.0',
     date: '2026-05-15',
     changes: [
       'Přidána správa rolí přístupu a jejich oprávnění',
