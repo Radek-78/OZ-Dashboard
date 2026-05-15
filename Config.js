@@ -3,7 +3,7 @@ const APP_CONFIG = {
   appSubtitle: '',
   logoFileId: '18mu_Lq1F_FqqSZcolMjLwG0aaQDPMdyD',
   logoUrl: 'https://drive.google.com/thumbnail?id=18mu_Lq1F_FqqSZcolMjLwG0aaQDPMdyD&sz=w320',
-  version: 'v0.1.0',
+  version: 'v0.1.1',
   theme: {
     blue: '#0050aa',
     darkBlue: '#002466',
