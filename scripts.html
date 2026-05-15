@@ -24,6 +24,8 @@
     locationsState: { locations: [] },
     departmentsState: { departments: [] },
     subAppsState: { subApps: [] },
+    permissionsState: { permissions: [], users: [], subApps: [], currentSubAppKey: '' },
+    permissionsModal: null,
     iconCatalog: [],
 
     init() {
@@ -34,13 +36,12 @@
       this.locationModal = document.querySelector('#locationModal');
       this.departmentModal = document.querySelector('#departmentModal');
       this.subAppModal = document.querySelector('#subAppModal');
+      this.permissionsModal = document.querySelector('#permissionsModal');
       this.iconCatalog = window.LIDL_ICON_CATALOG || [];
       this.applyBootstrap(window.APP_BOOTSTRAP || {});
       this.bindEvents();
       this.startClock();
-      this.loadBootstrap();
-      this.loadHome();
-      this.loadAllSettings();
+      this.loadInitData();
     },
 
     bindEvents() {
@@ -141,27 +142,53 @@
 
       document.querySelectorAll('[data-action="close-subapp-modal"]').forEach(b => b.addEventListener('click', () => this.closeSubAppForm()));
 
+      document.querySelectorAll('[data-action="close-permissions-modal"]').forEach(b => b.addEventListener('click', () => this.closePermissionsModal()));
+      const addPermBtn = document.querySelector('[data-action="add-permission"]');
+      if (addPermBtn) addPermBtn.addEventListener('click', () => this.openPermissionForm());
+      const permForm = document.querySelector('#permissionForm');
+      if (permForm) permForm.addEventListener('submit', (e) => { e.preventDefault(); this.savePermissionFromForm(); });
+
       const iconSearch = document.querySelector('#iconSearch');
       if (iconSearch) iconSearch.addEventListener('input', () => this.renderIconPicker(iconSearch.value));
     },
 
-    loadBootstrap() {
-      this.callServer('getAppBootstrap', null, { silent: true })
-        .then((data) => this.applyBootstrap(data))
-        .catch((error) => this.toast(error.message, 'error'));
-    },
-
-    loadAllSettings() {
-      this.callServer('getUsersAdminData', null, { silent: true })
+    loadInitData() {
+      this.callServer('getInitData', null, { loaderText: 'Načítám dashboard...' })
         .then((data) => {
-          this.applySettingsState(data);
-          this.renderCurrentSettingsView();
+          if (data.bootstrap) this.applyBootstrap(data.bootstrap);
+          if (data.homeData) {
+            this.applyAuth(data.homeData.auth || { hasAccess: true });
+            if (data.homeData.auth && data.homeData.auth.hasAccess) {
+              this.renderStats(data.homeData.stats || []);
+              this.renderModules(data.homeData.modules || []);
+              this.renderTeam(data.homeData.team || []);
+            } else {
+              this.hideLoader();
+            }
+          } else {
+            this.hideLoader();
+          }
+          if (data.settingsData) {
+            this.applySettingsState(data.settingsData);
+            this.renderCurrentSettingsView();
+          }
         })
         .catch((err) => {
-          console.error('loadAllSettings failed:', err);
-          if (err && err.message && err.message.indexOf('opravneni') >= 0) return;
-          this.toast('Nepodařilo se načíst nastavení: ' + (err && err.message ? err.message : 'Neznámá chyba'), 'error');
+          const msg = (err && err.message) ? err.message : 'Nepodařilo se načíst data.';
+          if (/session expired|přihlášení|sign.*in/i.test(msg)) {
+            this.showSessionExpired();
+          } else {
+            this.toast(msg, 'error');
+          }
         });
+    },
+
+    showSessionExpired() {
+      this.openModal(
+        'Platnost sezení vypršela',
+        'Vaše přihlášení vypršelo. Stránku obnovte pro pokračování v práci.',
+        () => window.location.reload(),
+      );
     },
 
     applySettingsState(data) {
@@ -539,6 +566,7 @@
           <td>${this.escape(this.subAppIconLabel(item.icon))}</td>
           <td>${this.escape(this.formatDateTime(item.lastUpdatedAt))}</td>
           <td class="table-actions">
+            <button type="button" class="icon-button" data-action="manage-permissions" data-id="${this.escape(item.id)}" data-key="${this.escape(item.key)}" aria-label="Přístupy dlaždice ${this.escape(item.name)}" title="Správa přístupů"><svg><use href="#i-users"></use></svg></button>
             <button type="button" class="icon-button" data-action="edit-subapp" data-id="${this.escape(item.id)}" aria-label="Upravit dlaždici ${this.escape(item.name)}"><svg><use href="#i-pencil"></use></svg></button>
             <button type="button" class="icon-button danger" data-action="delete-subapp" data-id="${this.escape(item.id)}" aria-label="Smazat dlaždici ${this.escape(item.name)}"><svg><use href="#i-trash"></use></svg></button>
           </td>
@@ -549,6 +577,9 @@
       });
       rows.querySelectorAll('[data-action="delete-subapp"]').forEach(b => {
         b.addEventListener('click', () => this.confirmDeleteSubApp(b.dataset.id));
+      });
+      rows.querySelectorAll('[data-action="manage-permissions"]').forEach(b => {
+        b.addEventListener('click', () => this.openPermissionsModal(b.dataset.key, b.dataset.id));
       });
     },
 
@@ -849,6 +880,106 @@
       });
     },
 
+    openPermissionsModal(subAppKey, subAppId) {
+      const subApp = (this.subAppsState.subApps || []).find(s => s.id === subAppId || s.key === subAppKey);
+      const title = subApp ? subApp.name : subAppKey;
+      this.setText('#permissionsModalTitle', 'Přístupy: ' + title);
+      this.permissionsState.currentSubAppKey = subAppKey;
+      this.callServer('getSubAppPermissionsData', subAppKey, { silent: true })
+        .then((data) => {
+          this.permissionsState = { ...data, currentSubAppKey: subAppKey };
+          this.renderPermissions();
+          this.renderPermissionUserOptions();
+          if (this.permissionsModal) this.permissionsModal.showModal();
+        })
+        .catch((err) => this.toast(err.message || 'Nepodařilo se načíst oprávnění.', 'error'));
+    },
+
+    closePermissionsModal() {
+      if (this.permissionsModal) this.permissionsModal.close();
+    },
+
+    renderPermissions() {
+      const tbody = document.querySelector('#permissionsRows');
+      const empty = document.querySelector('#permissionsEmpty');
+      const perms = this.permissionsState.permissions || [];
+      if (!tbody) return;
+      if (!perms.length) {
+        tbody.innerHTML = '';
+        if (empty) empty.hidden = false;
+        return;
+      }
+      if (empty) empty.hidden = true;
+      tbody.innerHTML = perms.map(p => `
+        <tr>
+          <td>${this.escape(p.email || p.userId || '–')}</td>
+          <td><span class="role-chip is-blue">${this.escape(p.accessLevel || 'READ')}</span></td>
+          <td><span class="state-chip ${p.active ? 'is-active' : 'is-muted'}">${p.active ? 'Aktivní' : 'Vypnuto'}</span></td>
+          <td>${this.escape(this.formatDateTime(p.updatedAt))}</td>
+          <td class="table-actions">
+            <button type="button" class="icon-button danger" data-action="delete-permission" data-id="${this.escape(p.id)}" aria-label="Odebrat přístup ${this.escape(p.email)}"><svg><use href="#i-trash"></use></svg></button>
+          </td>
+        </tr>
+      `).join('');
+      tbody.querySelectorAll('[data-action="delete-permission"]').forEach(b => {
+        b.addEventListener('click', () => this.confirmDeletePermission(b.dataset.id));
+      });
+    },
+
+    renderPermissionUserOptions() {
+      const users = this.permissionsState.users || [];
+      const existingEmails = (this.permissionsState.permissions || []).map(p => p.email.toLowerCase());
+      const available = users.filter(u => !existingEmails.includes((u.email || '').toLowerCase()));
+      this.setSelectOptions('#permUserSelect', [
+        { value: '', label: '— vyberte uživatele —' },
+        ...available.map(u => ({ value: u.id + '|' + u.email, label: (u.fullName || u.email) + ' (' + u.email + ')' })),
+      ]);
+    },
+
+    openPermissionForm() {
+      const form = document.querySelector('#permissionForm');
+      if (form) form.reset();
+    },
+
+    savePermissionFromForm() {
+      const form = document.querySelector('#permissionForm');
+      if (!form) return;
+      const userVal = form.elements.userId.value;
+      if (!userVal) { this.toast('Vyberte uživatele.', 'error'); return; }
+      const parts = userVal.split('|');
+      const payload = {
+        userId: parts[0] || '',
+        email: parts[1] || '',
+        subAppKey: this.permissionsState.currentSubAppKey,
+        accessLevel: form.elements.accessLevel.value,
+        active: true,
+      };
+      this.callServer('saveSubAppPermission', payload, { silent: true })
+        .then((data) => {
+          this.permissionsState = { ...data, currentSubAppKey: this.permissionsState.currentSubAppKey };
+          this.renderPermissions();
+          this.renderPermissionUserOptions();
+          form.reset();
+          this.toast('Přístup byl přidán.');
+        })
+        .catch((err) => this.toast(err.message || 'Nepodařilo se přidat přístup.', 'error'));
+    },
+
+    confirmDeletePermission(permId) {
+      const perm = (this.permissionsState.permissions || []).find(p => p.id === permId);
+      if (!perm) return;
+      this.openModal('Odebrat přístup', 'Opravdu chcete odebrat přístup uživatele ' + (perm.email || permId) + '?', () => {
+        this.callServer('deleteSubAppPermission', permId, { silent: true })
+          .then((data) => {
+            this.permissionsState = { ...data, currentSubAppKey: this.permissionsState.currentSubAppKey };
+            this.renderPermissions();
+            this.renderPermissionUserOptions();
+            this.toast('Přístup byl odebrán.');
+          })
+          .catch((err) => this.toast(err.message || 'Nepodařilo se odebrat přístup.', 'error'));
+      });
+    },
+
     filterDepartmentsByLocation(locationName) {
       const loc = (this.usersState.locations || []).find(l => l.displayName === locationName);
       const locId = loc ? loc.id : null;
@@ -909,7 +1040,6 @@
         getDepartmentsData: 'Načítám úseky...',
         saveDepartment: 'Ukládám úsek...',
         deleteDepartment: 'Mažu úsek...',
-        getSubAppsData: 'Načítám dlaždice...',
         saveSubApp: 'Ukládám dlaždici...',
         deleteSubApp: 'Mažu dlaždici...',
       };

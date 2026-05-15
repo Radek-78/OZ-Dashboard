@@ -382,6 +382,44 @@
       </form>
     </dialog>
 
+    <dialog class="modal user-modal" id="permissionsModal">
+      <div class="modal-panel">
+        <header class="modal-header">
+          <span class="modal-icon"><svg><use href="#i-users"></use></svg></span>
+          <div class="modal-header-text">
+            <p class="kicker">Správa přístupů</p>
+            <h2 id="permissionsModalTitle">Přístupy k dlaždici</h2>
+          </div>
+          <button class="modal-close" type="button" data-action="close-permissions-modal" aria-label="Zavřít"><svg><use href="#i-close"></use></svg></button>
+        </header>
+        <div class="modal-body">
+          <div class="table-shell" style="margin-bottom:1.25rem">
+            <table class="users-table" aria-label="Přístupy uživatelů">
+              <thead><tr><th>Uživatel</th><th>Úroveň přístupu</th><th>Stav</th><th>Aktualizováno</th><th></th></tr></thead>
+              <tbody id="permissionsRows"></tbody>
+            </table>
+            <div class="empty-state users-empty" id="permissionsEmpty" hidden>
+              <svg><use href="#i-users"></use></svg>
+              <strong>Žádné přístupy</strong>
+              <span>Přidejte první uživatele, kteří budou mít přístup k této dlaždici.</span>
+            </div>
+          </div>
+          <form id="permissionForm" style="display:flex;gap:.75rem;align-items:flex-end;flex-wrap:wrap">
+            <label style="flex:1;min-width:200px">Přidat uživatele<select name="userId" id="permUserSelect" required></select></label>
+            <label>Úroveň přístupu<select name="accessLevel">
+              <option value="READ">READ – čtení</option>
+              <option value="WRITE">WRITE – zápis</option>
+              <option value="ADMIN">ADMIN – správa</option>
+            </select></label>
+            <button class="button button-primary" type="submit" data-action="add-permission"><svg><use href="#i-check"></use></svg>Přidat</button>
+          </form>
+        </div>
+        <footer class="modal-actions">
+          <button class="button button-secondary" type="button" data-action="close-permissions-modal"><svg><use href="#i-close"></use></svg>Zavřít</button>
+        </footer>
+      </div>
+    </dialog>
+
     <script>
       window.APP_BOOTSTRAP = <?!= JSON.stringify(app) ?>;
     </script>

@@ -78,6 +78,70 @@ function getHomeData() {
   };
 }
 
+function getInitData() {
+  const context = getCurrentUserContext_();
+
+  const bootstrap = {
+    appName: APP_CONFIG.appName,
+    appSubtitle: APP_CONFIG.appSubtitle,
+    logoUrl: APP_CONFIG.logoUrl,
+    version: APP_CONFIG.version,
+    theme: APP_CONFIG.theme,
+    user: context.user,
+    auth: context.auth,
+    database: {
+      spreadsheetId: context.database.spreadsheetId,
+      spreadsheetUrl: context.database.spreadsheetUrl,
+    },
+    loadedAt: new Date().toISOString(),
+  };
+
+  var homeData = null;
+  if (context.auth.hasAccess && hasPermission_(context.auth, 'dashboard.view')) {
+    const loadedAt = new Date();
+    homeData = {
+      auth: context.auth,
+      project: { name: APP_CONFIG.appName, state: 'Prehled modulu' },
+      stats: [
+        { label: 'Stav systemu', value: 'Pripraveno', tone: 'success', icon: 'check' },
+        { label: 'Nacteno', value: Utilities.formatDate(loadedAt, Session.getScriptTimeZone(), 'd.M.yyyy HH:mm'), tone: 'info', icon: 'calendar' },
+        { label: 'Prihlaseny uzivatel', value: context.user.email, tone: 'neutral', icon: 'user' },
+        { label: 'Role pristupu', value: context.auth.accessRole || '-', tone: 'neutral', icon: 'info' },
+      ],
+      modules: listDashboardSubApps_(context.database.spreadsheet, context.auth),
+      team: [],
+    };
+  }
+
+  var settingsData = null;
+  if (context.auth.hasAccess && hasPermission_(context.auth, 'users.manage')) {
+    settingsData = buildUsersAdminData_(context);
+  }
+
+  return { bootstrap: bootstrap, homeData: homeData, settingsData: settingsData };
+}
+
+function getHealthData() {
+  try {
+    const context = getCurrentUserContext_();
+    const sheets = context.database.spreadsheet.getSheets().map(function(s) { return s.getName(); });
+    return {
+      status: 'ok',
+      timestamp: new Date().toISOString(),
+      spreadsheetId: context.database.spreadsheetId,
+      sheets: sheets,
+      user: context.user.email,
+      schemaVersion: DATABASE_SCHEMA_VERSION,
+    };
+  } catch (e) {
+    return {
+      status: 'error',
+      timestamp: new Date().toISOString(),
+      error: e && e.message ? e.message : String(e),
+    };
+  }
+}
+
 function getUsersAdminData() {
   const context = requirePermission_('users.manage');
   return buildUsersAdminData_(context);
@@ -211,7 +275,11 @@ function getCurrentUserContext_() {
     };
   }
 
-  updateUserLastVisit_(database.spreadsheet, user.id);
+  try {
+    updateUserLastVisit_(database.spreadsheet, user.id);
+  } catch (e) {
+    Logger.log('[VISIT_UPDATE_FAIL] user=%s error=%s', email, e && e.message ? e.message : e);
+  }
   Logger.log('[ACCESS] %s role=%s/%s', email, user.systemRole, user.accessRole);
 
   return {
@@ -239,49 +307,53 @@ function getCurrentUserContext_() {
 function ensureDatabase_() {
   const cache = CacheService.getScriptCache();
   const props = PropertiesService.getScriptProperties();
-  const cachedId = cache.get('DATABASE_SPREADSHEET_ID');
+  const CACHE_KEY = 'DATABASE_INFO_V2';
 
-  if (cachedId) {
+  // Fast path: vše v cache — žádné PropertiesService I/O
+  const cachedJson = cache.get(CACHE_KEY);
+  if (cachedJson) {
     try {
-      const spreadsheet = SpreadsheetApp.openById(cachedId);
-      ensureDatabaseSchema_(spreadsheet, props);
-      return { spreadsheet, spreadsheetId: cachedId, spreadsheetUrl: spreadsheet.getUrl() };
+      const cached = JSON.parse(cachedJson);
+      if (cached.id && cached.schemaVersion === DATABASE_SCHEMA_VERSION) {
+        const spreadsheet = SpreadsheetApp.openById(cached.id);
+        return { spreadsheet, spreadsheetId: cached.id, spreadsheetUrl: spreadsheet.getUrl() };
+      }
     } catch (e) {
-      cache.remove('DATABASE_SPREADSHEET_ID');
-      Logger.log('[DATABASE_CACHE_INVALID] id=%s error=%s', cachedId, e && e.message ? e.message : e);
+      cache.remove(CACHE_KEY);
+      Logger.log('[DATABASE_CACHE_INVALID] error=%s', e && e.message ? e.message : e);
     }
   }
 
+  // Cache miss nebo stará verze schématu — PropertiesService
   const storedId = props.getProperty('DATABASE_SPREADSHEET_ID');
 
   if (storedId) {
     try {
       const spreadsheet = SpreadsheetApp.openById(storedId);
-      cache.put('DATABASE_SPREADSHEET_ID', storedId, DATABASE_CACHE_TTL_SECONDS);
       ensureDatabaseSchema_(spreadsheet, props);
+      cache.put(CACHE_KEY, JSON.stringify({ id: storedId, schemaVersion: DATABASE_SCHEMA_VERSION }), DATABASE_CACHE_TTL_SECONDS);
       return { spreadsheet, spreadsheetId: storedId, spreadsheetUrl: spreadsheet.getUrl() };
     } catch (e) {
-      // Spreadsheet byl smazán — znovu inicializujeme
       props.deleteProperty('DATABASE_SPREADSHEET_ID');
       props.deleteProperty('DATABASE_SPREADSHEET_URL');
       props.deleteProperty('DATABASE_SCHEMA_VERSION');
-      cache.remove('DATABASE_SPREADSHEET_ID');
+      cache.remove(CACHE_KEY);
       Logger.log('[DATABASE_MISSING] id=%s error=%s', storedId, e && e.message ? e.message : e);
     }
   }
 
-  // První spuštění nebo obnova po smazání — pouze jednou
+  // První spuštění nebo obnova po smazání
   const lock = LockService.getScriptLock();
   lock.waitLock(30000);
   try {
     const recheckId = props.getProperty('DATABASE_SPREADSHEET_ID');
     if (recheckId) {
       const spreadsheet = SpreadsheetApp.openById(recheckId);
-      cache.put('DATABASE_SPREADSHEET_ID', recheckId, DATABASE_CACHE_TTL_SECONDS);
       if (props.getProperty('DATABASE_SCHEMA_VERSION') !== DATABASE_SCHEMA_VERSION) {
         setupDatabaseSheets_(spreadsheet);
         props.setProperty('DATABASE_SCHEMA_VERSION', DATABASE_SCHEMA_VERSION);
       }
+      cache.put(CACHE_KEY, JSON.stringify({ id: recheckId, schemaVersion: DATABASE_SCHEMA_VERSION }), DATABASE_CACHE_TTL_SECONDS);
       return { spreadsheet, spreadsheetId: recheckId, spreadsheetUrl: spreadsheet.getUrl() };
     }
 
@@ -289,10 +361,10 @@ function ensureDatabase_() {
     const spreadsheetId = spreadsheet.getId();
     props.setProperty('DATABASE_SPREADSHEET_ID', spreadsheetId);
     props.setProperty('DATABASE_SPREADSHEET_URL', spreadsheet.getUrl());
-    cache.put('DATABASE_SPREADSHEET_ID', spreadsheetId, DATABASE_CACHE_TTL_SECONDS);
 
     setupDatabaseSheets_(spreadsheet);
     props.setProperty('DATABASE_SCHEMA_VERSION', DATABASE_SCHEMA_VERSION);
+    cache.put(CACHE_KEY, JSON.stringify({ id: spreadsheetId, schemaVersion: DATABASE_SCHEMA_VERSION }), DATABASE_CACHE_TTL_SECONDS);
     seedInitialUserIfNeeded_(spreadsheet);
 
     return { spreadsheet, spreadsheetId, spreadsheetUrl: spreadsheet.getUrl() };
@@ -321,9 +393,9 @@ function setupDatabaseSheets_(spreadsheet) {
   ensureSheet_(spreadsheet, 'CONFIG', [
     'key', 'value', 'description', 'updatedAt', 'updatedBy',
   ], [
-    ['appName', APP_CONFIG.appName, 'Nazev aplikace', new Date(), getSignedInUser_()],
-    ['appVersion', APP_CONFIG.version, 'Verze aplikace', new Date(), getSignedInUser_()],
-    ['databaseSchemaVersion', DATABASE_SCHEMA_VERSION, 'Verze databazove struktury', new Date(), getSignedInUser_()],
+    ['appName', APP_CONFIG.appName, 'Nazev aplikace', new Date(), 'system'],
+    ['appVersion', APP_CONFIG.version, 'Verze aplikace', new Date(), 'system'],
+    ['databaseSchemaVersion', DATABASE_SCHEMA_VERSION, 'Verze databazove struktury', new Date(), 'system'],
   ]);
 
   ensureSheet_(spreadsheet, 'USERS', [
@@ -351,7 +423,7 @@ function setupDatabaseSheets_(spreadsheet) {
   ]);
 
   ensureSheet_(spreadsheet, 'SUBAPP_PERMISSIONS', [
-    'userId', 'email', 'subAppKey', 'accessLevel', 'active', 'updatedAt', 'updatedBy',
+    'id', 'userId', 'email', 'subAppKey', 'accessLevel', 'active', 'updatedAt', 'updatedBy',
   ]);
 
   ensureSheet_(spreadsheet, 'SUBAPPS', [
@@ -663,15 +735,6 @@ function buildDepartmentsData_(context) {
   };
 }
 
-function getSubAppsData() {
-  var context = requirePermission_('users.manage');
-  var spreadsheet = context.database.spreadsheet;
-  return {
-    auth: context.auth,
-    subApps: listSubApps_(spreadsheet),
-  };
-}
-
 function saveSubApp(payload) {
   var context = requirePermission_('users.manage');
   var spreadsheet = context.database.spreadsheet;
@@ -687,13 +750,29 @@ function saveSubApp(payload) {
     var headers = values[0];
     var idIndex = headers.indexOf('id');
     var keyIndex = headers.indexOf('key');
+    var sortOrderIndex = headers.indexOf('sortOrder');
     var targetRow = -1;
 
+    // Sestavíme existující klíče a max sortOrder přímo z načtených dat (bez extra read)
+    var existingKeys = [];
+    var maxSortOrder = 0;
+    for (var row = 1; row < values.length; row++) {
+      existingKeys.push(String(values[row][keyIndex] || '').trim().toUpperCase());
+      maxSortOrder = Math.max(maxSortOrder, Number(values[row][sortOrderIndex] || 0));
+    }
+
     if (!data.id && !data.key) {
-      data.key = makeUniqueSubAppKey_(spreadsheet, data.name);
+      var base = normalizeSubAppKey_(removeDiacritics_(data.name).toUpperCase()) || 'SUBAPP';
+      var candidate = base;
+      var suffix = 2;
+      while (existingKeys.indexOf(candidate) >= 0) {
+        candidate = base + '_' + suffix;
+        suffix += 1;
+      }
+      data.key = candidate;
     }
     if (!data.id && !data.sortOrder) {
-      data.sortOrder = getNextSubAppSortOrder_(spreadsheet);
+      data.sortOrder = maxSortOrder + 1;
     }
 
     for (var row = 1; row < values.length; row++) {
@@ -800,13 +879,14 @@ function listDashboardSubApps_(spreadsheet, auth) {
   return listSubApps_(spreadsheet)
     .filter(function(item) { return item.active; })
     .filter(function(item) {
-      var accessKey = String(item.key || '').trim().toUpperCase();
-      return canOpenPreparing || (item.status === 'ACTIVE' && Boolean(userAccess[accessKey]));
+      if (canOpenPreparing) return true;
+      return item.status === 'ACTIVE' || item.status === 'PREPARING';
     })
     .map(function(item) {
       var isActive = item.status === 'ACTIVE';
       var isPreparing = item.status === 'PREPARING';
       var enabled = isActive || (isPreparing && canOpenPreparing);
+      var accessKey = String(item.key || '').trim().toUpperCase();
       return {
         id: item.id,
         key: item.key,
@@ -819,7 +899,7 @@ function listDashboardSubApps_(spreadsheet, auth) {
         targetUrl: item.targetUrl,
         enabled: enabled,
         accent: item.status === 'ACTIVE' ? 'blue' : (item.status === 'PREPARING' ? 'red' : 'muted'),
-        accessLevel: userAccess[String(item.key || '').trim().toUpperCase()] || null,
+        accessLevel: userAccess[accessKey] || null,
       };
     });
 }
@@ -1165,6 +1245,131 @@ function getFirstNameFromEmail_(email) {
   const local = String(email || '').split('@')[0];
   const first = local.split(/[._-]+/).filter(Boolean)[0] || local;
   return first ? first.charAt(0).toUpperCase() + first.slice(1) : '';
+}
+
+function getSubAppPermissionsData(subAppKey) {
+  var context = requirePermission_('users.manage');
+  return buildPermissionsData_(context, subAppKey);
+}
+
+function buildPermissionsData_(context, subAppKey) {
+  var spreadsheet = context.database.spreadsheet;
+  var key = String(subAppKey || '').trim().toUpperCase();
+  var rows = getObjects_(spreadsheet.getSheetByName('SUBAPP_PERMISSIONS'));
+  var permissions = rows
+    .filter(function(r) { return !key || String(r.subAppKey || '').trim().toUpperCase() === key; })
+    .map(function(r) {
+      return {
+        id: String(r.id || ''),
+        userId: String(r.userId || ''),
+        email: String(r.email || ''),
+        subAppKey: String(r.subAppKey || ''),
+        accessLevel: String(r.accessLevel || 'READ'),
+        active: isTruthy_(r.active),
+        updatedAt: formatDateValue_(r.updatedAt),
+        updatedBy: String(r.updatedBy || ''),
+      };
+    });
+  return {
+    auth: context.auth,
+    permissions: permissions,
+    users: listUsers_(spreadsheet),
+    subApps: listSubApps_(spreadsheet),
+    currentSubAppKey: key,
+  };
+}
+
+function saveSubAppPermission(payload) {
+  var context = requirePermission_('users.manage');
+  var spreadsheet = context.database.spreadsheet;
+  var data = payload || {};
+  var id = String(data.id || '').trim();
+  var userId = String(data.userId || '').trim();
+  var email = String(data.email || '').trim().toLowerCase();
+  var subAppKey = String(data.subAppKey || '').trim().toUpperCase();
+  var accessLevel = String(data.accessLevel || 'READ').trim().toUpperCase();
+  var active = data.active === true || data.active === 'true' || data.active === '1';
+
+  if (!userId && !email) throw new Error('Vyberte uživatele.');
+  if (!subAppKey) throw new Error('Vyberte dlaždici.');
+  if (['READ', 'WRITE', 'ADMIN'].indexOf(accessLevel) < 0) accessLevel = 'READ';
+
+  var lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    var sheet = spreadsheet.getSheetByName('SUBAPP_PERMISSIONS');
+    var values = sheet.getDataRange().getValues();
+    var headers = values[0];
+    var idIndex = headers.indexOf('id');
+    var userIdIndex = headers.indexOf('userId');
+    var emailIndex = headers.indexOf('email');
+    var subAppKeyIndex = headers.indexOf('subAppKey');
+    var targetRow = -1;
+    var now = new Date();
+
+    for (var row = 1; row < values.length; row++) {
+      var rowId = String(values[row][idIndex] || '');
+      var rowUserId = String(values[row][userIdIndex] || '');
+      var rowEmail = String(values[row][emailIndex] || '').trim().toLowerCase();
+      var rowKey = String(values[row][subAppKeyIndex] || '').trim().toUpperCase();
+      if ((id && rowId === id) ||
+          (!id && ((userId && rowUserId === userId) || (email && rowEmail === email)) && rowKey === subAppKey)) {
+        targetRow = row + 1;
+        break;
+      }
+    }
+
+    var finalId = id || Utilities.getUuid();
+    var rowValues = headers.map(function(h) {
+      var map = { id: finalId, userId: userId, email: email, subAppKey: subAppKey,
+        accessLevel: accessLevel, active: active, updatedAt: now, updatedBy: context.user.email };
+      if (map[h] !== undefined) return map[h];
+      return (targetRow > 0 && values[targetRow - 1][headers.indexOf(h)] !== undefined)
+        ? values[targetRow - 1][headers.indexOf(h)] : '';
+    });
+
+    if (targetRow > 0) {
+      sheet.getRange(targetRow, 1, 1, headers.length).setValues([rowValues]);
+      Logger.log('[PERM_UPDATE] by=%s user=%s subApp=%s level=%s active=%s', context.user.email, email, subAppKey, accessLevel, active);
+    } else {
+      sheet.appendRow(rowValues);
+      Logger.log('[PERM_CREATE] by=%s user=%s subApp=%s level=%s', context.user.email, email, subAppKey, accessLevel);
+    }
+  } finally {
+    lock.releaseLock();
+  }
+
+  return buildPermissionsData_(context, subAppKey);
+}
+
+function deleteSubAppPermission(permId) {
+  var context = requirePermission_('users.manage');
+  var spreadsheet = context.database.spreadsheet;
+  var normalized = String(permId || '').trim();
+  if (!normalized) throw new Error('Chybí ID záznamu oprávnění.');
+
+  var lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    var sheet = spreadsheet.getSheetByName('SUBAPP_PERMISSIONS');
+    var values = sheet.getDataRange().getValues();
+    var headers = values[0];
+    var idIndex = headers.indexOf('id');
+    var subAppKeyIndex = headers.indexOf('subAppKey');
+
+    for (var row = 1; row < values.length; row++) {
+      if (String(values[row][idIndex] || '') === normalized) {
+        var deletedKey = String(values[row][subAppKeyIndex] || '').trim().toUpperCase();
+        sheet.deleteRow(row + 1);
+        Logger.log('[PERM_DELETE] by=%s id=%s subApp=%s', context.user.email, normalized, deletedKey);
+        return buildPermissionsData_(context, deletedKey);
+      }
+    }
+  } finally {
+    lock.releaseLock();
+  }
+
+  throw new Error('Záznam oprávnění nebyl nalezen.');
 }
 
 function getSignedInUser_() {
