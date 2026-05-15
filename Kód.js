@@ -46,7 +46,7 @@ function getAppBootstrap() {
 
 function getHomeData() {
   const context = getCurrentUserContext_();
-  if (!context.auth.hasAccess) {
+  if (!context.auth.hasAccess || !hasPermission_(context.auth, 'dashboard.view')) {
     return {
       auth: context.auth,
       stats: [],
@@ -77,8 +77,11 @@ function getHomeData() {
 
 function getUsersAdminData() {
   const context = requirePermission_('users.manage');
-  const spreadsheet = context.database.spreadsheet;
+  return buildUsersAdminData_(context);
+}
 
+function buildUsersAdminData_(context) {
+  const spreadsheet = context.database.spreadsheet;
   return {
     auth: context.auth,
     currentUserId: context.user.id,
@@ -99,65 +102,76 @@ function saveUser(payload) {
   const context = requirePermission_('users.manage');
   const spreadsheet = context.database.spreadsheet;
   const data = normalizeUserPayload_(payload);
-  const sheet = spreadsheet.getSheetByName('USERS');
-  const values = sheet.getDataRange().getValues();
-  const headers = values[0];
-  const idIndex = headers.indexOf('id');
-  const emailIndex = headers.indexOf('email');
-  const now = new Date();
-
   validateUserPayload_(data, spreadsheet);
 
-  let targetRow = -1;
-  let original = null;
-  for (let row = 1; row < values.length; row++) {
-    const rowId = String(values[row][idIndex] || '');
-    const rowEmail = String(values[row][emailIndex] || '').trim().toLowerCase();
-    if (data.id && rowId === data.id) {
-      targetRow = row + 1;
-      original = rowToObject_(headers, values[row]);
-    } else if (rowEmail === data.email) {
-      throw new Error('Uzivatel s timto e-mailem uz existuje.');
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    const sheet = spreadsheet.getSheetByName('USERS');
+    const values = sheet.getDataRange().getValues();
+    const headers = values[0];
+    const idIndex = headers.indexOf('id');
+    const emailIndex = headers.indexOf('email');
+    const now = new Date();
+
+    let targetRow = -1;
+    let original = null;
+    for (let row = 1; row < values.length; row++) {
+      const rowId = String(values[row][idIndex] || '');
+      const rowEmail = String(values[row][emailIndex] || '').trim().toLowerCase();
+      if (data.id && rowId === data.id) {
+        targetRow = row + 1;
+        original = rowToObject_(headers, values[row]);
+      } else if (rowEmail === data.email) {
+        throw new Error('Uzivatel s timto e-mailem uz existuje.');
+      }
     }
+
+    if (data.id && targetRow < 0) throw new Error('Uzivatel nebyl nalezen.');
+    if (original) assertLastSuperadminIsProtected_(spreadsheet, original, data);
+
+    const rowValues = buildUserRow_(headers, data, original, now);
+    if (targetRow > 0) {
+      sheet.getRange(targetRow, 1, 1, headers.length).setValues([rowValues]);
+      Logger.log('[USER_UPDATE] by=%s target=%s', context.user.email, data.email);
+    } else {
+      sheet.appendRow(rowValues);
+      Logger.log('[USER_CREATE] by=%s target=%s role=%s', context.user.email, data.email, data.accessRole);
+    }
+  } finally {
+    lock.releaseLock();
   }
 
-  if (data.id && targetRow < 0) {
-    throw new Error('Uzivatel nebyl nalezen.');
-  }
-
-  if (original) {
-    assertLastSuperadminIsProtected_(spreadsheet, original, data);
-  }
-
-  const rowValues = buildUserRow_(headers, data, original, now);
-  if (targetRow > 0) {
-    sheet.getRange(targetRow, 1, 1, headers.length).setValues([rowValues]);
-  } else {
-    sheet.appendRow(rowValues);
-  }
-
-  return getUsersAdminData();
+  return buildUsersAdminData_(context);
 }
 
 function deleteUser(userId) {
   const context = requirePermission_('users.manage');
   const spreadsheet = context.database.spreadsheet;
-  const sheet = spreadsheet.getSheetByName('USERS');
-  const values = sheet.getDataRange().getValues();
-  const headers = values[0];
-  const idIndex = headers.indexOf('id');
   const normalizedId = String(userId || '').trim();
 
   if (!normalizedId) throw new Error('Chybi ID uzivatele.');
   if (normalizedId === context.user.id) throw new Error('Nemuzete smazat sami sebe.');
 
-  for (let row = 1; row < values.length; row++) {
-    if (String(values[row][idIndex] || '') === normalizedId) {
-      const target = rowToObject_(headers, values[row]);
-      assertLastSuperadminIsProtected_(spreadsheet, target, { active: false, accessRole: '', systemRole: '' });
-      sheet.deleteRow(row + 1);
-      return getUsersAdminData();
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    const sheet = spreadsheet.getSheetByName('USERS');
+    const values = sheet.getDataRange().getValues();
+    const headers = values[0];
+    const idIndex = headers.indexOf('id');
+
+    for (let row = 1; row < values.length; row++) {
+      if (String(values[row][idIndex] || '') === normalizedId) {
+        const target = rowToObject_(headers, values[row]);
+        assertLastSuperadminIsProtected_(spreadsheet, target, { active: false, accessRole: '', systemRole: '' });
+        sheet.deleteRow(row + 1);
+        Logger.log('[USER_DELETE] by=%s target=%s', context.user.email, target.email || normalizedId);
+        return buildUsersAdminData_(context);
+      }
     }
+  } finally {
+    lock.releaseLock();
   }
 
   throw new Error('Uzivatel nebyl nalezen.');
@@ -195,6 +209,7 @@ function getCurrentUserContext_() {
   }
 
   updateUserLastVisit_(database.spreadsheet, user.id);
+  Logger.log('[ACCESS] %s role=%s/%s', email, user.systemRole, user.accessRole);
 
   return {
     database,
@@ -219,29 +234,50 @@ function getCurrentUserContext_() {
 }
 
 function ensureDatabase_() {
+  const cache = CacheService.getScriptCache();
+  const cachedId = cache.get('DATABASE_SPREADSHEET_ID');
+
+  if (cachedId) {
+    const spreadsheet = SpreadsheetApp.openById(cachedId);
+    return { spreadsheet, spreadsheetId: cachedId, spreadsheetUrl: spreadsheet.getUrl() };
+  }
+
+  const props = PropertiesService.getScriptProperties();
+  const storedId = props.getProperty('DATABASE_SPREADSHEET_ID');
+
+  if (storedId) {
+    try {
+      const spreadsheet = SpreadsheetApp.openById(storedId);
+      cache.put('DATABASE_SPREADSHEET_ID', storedId, 21600);
+      return { spreadsheet, spreadsheetId: storedId, spreadsheetUrl: spreadsheet.getUrl() };
+    } catch (e) {
+      // Spreadsheet byl smazán — znovu inicializujeme
+      props.deleteProperty('DATABASE_SPREADSHEET_ID');
+      props.deleteProperty('DATABASE_SPREADSHEET_URL');
+    }
+  }
+
+  // První spuštění nebo obnova po smazání — pouze jednou
   const lock = LockService.getScriptLock();
   lock.waitLock(30000);
-
   try {
-    const props = PropertiesService.getScriptProperties();
-    let spreadsheetId = props.getProperty('DATABASE_SPREADSHEET_ID');
-    let spreadsheet = spreadsheetId ? SpreadsheetApp.openById(spreadsheetId) : null;
-
-    if (!spreadsheet) {
-      spreadsheet = SpreadsheetApp.create(APP_CONFIG.appName + ' - databaze');
-      spreadsheetId = spreadsheet.getId();
-      props.setProperty('DATABASE_SPREADSHEET_ID', spreadsheetId);
-      props.setProperty('DATABASE_SPREADSHEET_URL', spreadsheet.getUrl());
+    const recheckId = props.getProperty('DATABASE_SPREADSHEET_ID');
+    if (recheckId) {
+      const spreadsheet = SpreadsheetApp.openById(recheckId);
+      cache.put('DATABASE_SPREADSHEET_ID', recheckId, 21600);
+      return { spreadsheet, spreadsheetId: recheckId, spreadsheetUrl: spreadsheet.getUrl() };
     }
+
+    const spreadsheet = SpreadsheetApp.create(APP_CONFIG.appName + ' - databaze');
+    const spreadsheetId = spreadsheet.getId();
+    props.setProperty('DATABASE_SPREADSHEET_ID', spreadsheetId);
+    props.setProperty('DATABASE_SPREADSHEET_URL', spreadsheet.getUrl());
+    cache.put('DATABASE_SPREADSHEET_ID', spreadsheetId, 21600);
 
     setupDatabaseSheets_(spreadsheet);
     seedInitialUserIfNeeded_(spreadsheet);
 
-    return {
-      spreadsheet,
-      spreadsheetId,
-      spreadsheetUrl: spreadsheet.getUrl(),
-    };
+    return { spreadsheet, spreadsheetId, spreadsheetUrl: spreadsheet.getUrl() };
   } finally {
     lock.releaseLock();
   }
@@ -304,27 +340,44 @@ function setupDatabaseSheets_(spreadsheet) {
 
 function ensureSheet_(spreadsheet, name, headers, seedRows) {
   let sheet = spreadsheet.getSheetByName(name);
+
   if (!sheet) {
     sheet = spreadsheet.insertSheet(name);
-  }
-
-  const currentHeaders = sheet.getLastColumn()
-    ? sheet.getRange(1, 1, 1, Math.max(sheet.getLastColumn(), headers.length)).getValues()[0]
-    : [];
-
-  const needsHeaders = headers.some((header, index) => currentHeaders[index] !== header);
-  if (needsHeaders) {
-    sheet.clear();
     sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
     sheet.setFrozenRows(1);
     sheet.getRange(1, 1, 1, headers.length).setFontWeight('bold');
     sheet.autoResizeColumns(1, headers.length);
-
     if (seedRows && seedRows.length) {
       sheet.getRange(2, 1, seedRows.length, headers.length).setValues(seedRows);
     }
-  } else if (seedRows && seedRows.length && sheet.getLastRow() < 2) {
-    sheet.getRange(2, 1, seedRows.length, headers.length).setValues(seedRows);
+    return sheet;
+  }
+
+  // List existuje — pouze přidáme chybějící sloupce, nikdy nesmažeme existující data.
+  const lastCol = sheet.getLastColumn();
+  const existingHeaders = lastCol > 0
+    ? sheet.getRange(1, 1, 1, lastCol).getValues()[0].map(String)
+    : [];
+
+  const missing = headers.filter(function(h) { return existingHeaders.indexOf(h) < 0; });
+  if (missing.length > 0) {
+    const startCol = lastCol + 1;
+    sheet.getRange(1, startCol, 1, missing.length).setValues([missing]);
+    sheet.getRange(1, startCol, 1, missing.length).setFontWeight('bold');
+    Logger.log('[SCHEMA] List "%s": přidány sloupce: %s', name, missing.join(', '));
+  }
+
+  if (seedRows && seedRows.length && sheet.getLastRow() < 2) {
+    const currentHeaders = lastCol > 0
+      ? sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].map(String)
+      : headers;
+    const reordered = seedRows.map(function(row) {
+      return currentHeaders.map(function(h) {
+        const i = headers.indexOf(h);
+        return i >= 0 ? row[i] : '';
+      });
+    });
+    sheet.getRange(2, 1, reordered.length, currentHeaders.length).setValues(reordered);
   }
 
   return sheet;
@@ -351,6 +404,7 @@ function seedInitialUserIfNeeded_(spreadsheet) {
     now,
     now,
   ]);
+  Logger.log('[SEED] Prvni superadmin vytvoren: %s v %s', email, now.toISOString());
 }
 
 function listUsers_(spreadsheet) {
@@ -420,6 +474,10 @@ function listDepartments_(spreadsheet) {
 
 function getLocationsData() {
   var context = requirePermission_('users.manage');
+  return buildLocationsData_(context);
+}
+
+function buildLocationsData_(context) {
   var spreadsheet = context.database.spreadsheet;
   return {
     auth: context.auth,
@@ -450,61 +508,98 @@ function saveLocation(payload) {
   var abbreviation = String(data.abbreviation || '').trim().toUpperCase();
   var city = String(data.city || '').trim();
   var active = data.active === true || data.active === 'true';
-  var now = new Date();
 
   if (type === 'LC' && !code) throw new Error('Vyplňte číslo LC.');
   if (type === 'LC' && !city) throw new Error('Vyplňte město.');
 
-  var sheet = spreadsheet.getSheetByName('LOCATIONS');
-  var values = sheet.getDataRange().getValues();
-  var headers = values[0];
-  var idIndex = headers.indexOf('id');
-  var targetRow = -1;
+  var lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    var now = new Date();
+    var sheet = spreadsheet.getSheetByName('LOCATIONS');
+    var values = sheet.getDataRange().getValues();
+    var headers = values[0];
+    var idIndex = headers.indexOf('id');
+    var codeIndex = headers.indexOf('code');
+    var targetRow = -1;
 
-  for (var row = 1; row < values.length; row++) {
-    if (id && String(values[row][idIndex] || '') === id) {
-      targetRow = row + 1;
+    for (var row = 1; row < values.length; row++) {
+      if (id && String(values[row][idIndex] || '') === id) {
+        targetRow = row + 1;
+      } else if (type === 'LC' && code && String(values[row][codeIndex] || '').trim() === code) {
+        throw new Error('Umístění s tímto kódem LC již existuje.');
+      }
     }
+
+    var rowValues = headers.map(function(h) {
+      var map = { id: id || Utilities.getUuid(), type: type, code: code, abbreviation: abbreviation,
+        city: city, active: active, updatedAt: now };
+      if (!id) map.createdAt = now;
+      return map[h] !== undefined ? map[h] : (targetRow > 0 && values[targetRow - 1][headers.indexOf(h)] !== undefined ? values[targetRow - 1][headers.indexOf(h)] : '');
+    });
+
+    if (targetRow > 0) {
+      sheet.getRange(targetRow, 1, 1, headers.length).setValues([rowValues]);
+      Logger.log('[LOCATION_UPDATE] by=%s id=%s code=%s', context.user.email, id, code);
+    } else {
+      sheet.appendRow(rowValues);
+      Logger.log('[LOCATION_CREATE] by=%s type=%s code=%s', context.user.email, type, code);
+    }
+  } finally {
+    lock.releaseLock();
   }
 
-  var rowValues = headers.map(function(h) {
-    var map = { id: id || Utilities.getUuid(), type: type, code: code, abbreviation: abbreviation,
-      city: city, active: active, updatedAt: now };
-    if (!id) map.createdAt = now;
-    return map[h] !== undefined ? map[h] : (targetRow > 0 && values[targetRow - 1][headers.indexOf(h)] !== undefined ? values[targetRow - 1][headers.indexOf(h)] : '');
-  });
-
-  if (targetRow > 0) {
-    sheet.getRange(targetRow, 1, 1, headers.length).setValues([rowValues]);
-  } else {
-    sheet.appendRow(rowValues);
-  }
-  return getLocationsData();
+  return buildLocationsData_(context);
 }
 
 function deleteLocation(locationId) {
   var context = requirePermission_('users.manage');
   var spreadsheet = context.database.spreadsheet;
-  var sheet = spreadsheet.getSheetByName('LOCATIONS');
-  var values = sheet.getDataRange().getValues();
-  var headers = values[0];
-  var idIndex = headers.indexOf('id');
-  var typeIndex = headers.indexOf('type');
   var normalized = String(locationId || '').trim();
   if (!normalized) throw new Error('Chybí ID umístění.');
 
-  for (var row = 1; row < values.length; row++) {
-    if (String(values[row][idIndex] || '') === normalized) {
-      if (String(values[row][typeIndex] || '') === 'CENTRALA') throw new Error('Centrálu nelze smazat.');
-      sheet.deleteRow(row + 1);
-      return getLocationsData();
+  var lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    var sheet = spreadsheet.getSheetByName('LOCATIONS');
+    var values = sheet.getDataRange().getValues();
+    var headers = values[0];
+    var idIndex = headers.indexOf('id');
+    var typeIndex = headers.indexOf('type');
+
+    for (var row = 1; row < values.length; row++) {
+      if (String(values[row][idIndex] || '') === normalized) {
+        if (String(values[row][typeIndex] || '') === 'CENTRALA') throw new Error('Centrálu nelze smazat.');
+
+        var deptRows = getObjects_(spreadsheet.getSheetByName('DEPARTMENTS'));
+        var deptUsing = deptRows.filter(function(d) {
+          return String(d.locationIds || '').split(',').map(function(s) { return s.trim(); }).indexOf(normalized) >= 0;
+        });
+        if (deptUsing.length > 0) {
+          throw new Error(
+            'Umístění nelze smazat — používají ho tyto úseky: ' +
+            deptUsing.map(function(d) { return d.name; }).join(', ') + '.'
+          );
+        }
+
+        sheet.deleteRow(row + 1);
+        Logger.log('[LOCATION_DELETE] by=%s id=%s', context.user.email, normalized);
+        return buildLocationsData_(context);
+      }
     }
+  } finally {
+    lock.releaseLock();
   }
+
   throw new Error('Umístění nebylo nalezeno.');
 }
 
 function getDepartmentsData() {
   var context = requirePermission_('users.manage');
+  return buildDepartmentsData_(context);
+}
+
+function buildDepartmentsData_(context) {
   var spreadsheet = context.database.spreadsheet;
   return {
     auth: context.auth,
@@ -532,63 +627,97 @@ function saveSubApp(payload) {
   var context = requirePermission_('users.manage');
   var spreadsheet = context.database.spreadsheet;
   var data = normalizeSubAppPayload_(payload);
-  var sheet = spreadsheet.getSheetByName('SUBAPPS');
-  var values = sheet.getDataRange().getValues();
-  var headers = values[0];
-  var idIndex = headers.indexOf('id');
-  var keyIndex = headers.indexOf('key');
-  var now = new Date();
-  var targetRow = -1;
-
   validateSubAppPayload_(data);
 
-  if (!data.id && !data.key) {
-    data.key = makeUniqueSubAppKey_(spreadsheet, data.name);
-  }
+  var lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    var now = new Date();
+    var sheet = spreadsheet.getSheetByName('SUBAPPS');
+    var values = sheet.getDataRange().getValues();
+    var headers = values[0];
+    var idIndex = headers.indexOf('id');
+    var keyIndex = headers.indexOf('key');
+    var targetRow = -1;
 
-  if (!data.id && !data.sortOrder) {
-    data.sortOrder = getNextSubAppSortOrder_(spreadsheet);
-  }
-
-  for (var row = 1; row < values.length; row++) {
-    var rowId = String(values[row][idIndex] || '');
-    var rowKey = String(values[row][keyIndex] || '').trim().toUpperCase();
-    if (data.id && rowId === data.id) {
-      targetRow = row + 1;
-    } else if (rowKey === data.key) {
-      throw new Error('Dlaždice s tímto klíčem už existuje.');
+    if (!data.id && !data.key) {
+      data.key = makeUniqueSubAppKey_(spreadsheet, data.name);
     }
+    if (!data.id && !data.sortOrder) {
+      data.sortOrder = getNextSubAppSortOrder_(spreadsheet);
+    }
+
+    for (var row = 1; row < values.length; row++) {
+      var rowId = String(values[row][idIndex] || '');
+      var rowKey = String(values[row][keyIndex] || '').trim().toUpperCase();
+      if (data.id && rowId === data.id) {
+        targetRow = row + 1;
+      } else if (rowKey === data.key) {
+        throw new Error('Dlaždice s tímto klíčem už existuje.');
+      }
+    }
+
+    if (data.id && targetRow < 0) throw new Error('Dlaždice nebyla nalezena.');
+
+    var source = targetRow > 0 ? rowToObject_(headers, values[targetRow - 1]) : {};
+    var rowValues = buildSubAppRow_(headers, data, source, now);
+    if (targetRow > 0) {
+      sheet.getRange(targetRow, 1, 1, headers.length).setValues([rowValues]);
+      Logger.log('[SUBAPP_UPDATE] by=%s key=%s', context.user.email, data.key);
+    } else {
+      sheet.appendRow(rowValues);
+      Logger.log('[SUBAPP_CREATE] by=%s key=%s name=%s', context.user.email, data.key, data.name);
+    }
+  } finally {
+    lock.releaseLock();
   }
 
-  if (data.id && targetRow < 0) throw new Error('Dlaždice nebyla nalezena.');
-
-  var source = targetRow > 0 ? rowToObject_(headers, values[targetRow - 1]) : {};
-  var rowValues = buildSubAppRow_(headers, data, source, now);
-  if (targetRow > 0) {
-    sheet.getRange(targetRow, 1, 1, headers.length).setValues([rowValues]);
-  } else {
-    sheet.appendRow(rowValues);
-  }
-
-  return getUsersAdminData();
+  return buildUsersAdminData_(context);
 }
 
 function deleteSubApp(subAppId) {
   var context = requirePermission_('users.manage');
   var spreadsheet = context.database.spreadsheet;
-  var sheet = spreadsheet.getSheetByName('SUBAPPS');
-  var values = sheet.getDataRange().getValues();
-  var headers = values[0];
-  var idIndex = headers.indexOf('id');
   var normalized = String(subAppId || '').trim();
   if (!normalized) throw new Error('Chybí ID dlaždice.');
 
-  for (var row = 1; row < values.length; row++) {
-    if (String(values[row][idIndex] || '') === normalized) {
-      sheet.deleteRow(row + 1);
-      return getUsersAdminData();
+  var lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    var sheet = spreadsheet.getSheetByName('SUBAPPS');
+    var values = sheet.getDataRange().getValues();
+    var headers = values[0];
+    var idIndex = headers.indexOf('id');
+
+    var keyIndex = headers.indexOf('key');
+
+    for (var row = 1; row < values.length; row++) {
+      if (String(values[row][idIndex] || '') === normalized) {
+        var subAppKey = String(values[row][keyIndex] || '');
+        sheet.deleteRow(row + 1);
+
+        if (subAppKey) {
+          var permSheet = spreadsheet.getSheetByName('SUBAPP_PERMISSIONS');
+          var permValues = permSheet.getDataRange().getValues();
+          var permHeaders = permValues[0];
+          var permKeyIndex = permHeaders.indexOf('subAppKey');
+          for (var pr = permValues.length - 1; pr >= 1; pr--) {
+            if (String(permValues[pr][permKeyIndex] || '') === subAppKey) {
+              permSheet.deleteRow(pr + 1);
+            }
+          }
+          Logger.log('[SUBAPP_DELETE] by=%s id=%s key=%s perms_cleaned=true', context.user.email, normalized, subAppKey);
+        } else {
+          Logger.log('[SUBAPP_DELETE] by=%s id=%s', context.user.email, normalized);
+        }
+
+        return buildUsersAdminData_(context);
+      }
     }
+  } finally {
+    lock.releaseLock();
   }
+
   throw new Error('Dlaždice nebyla nalezena.');
 }
 
@@ -618,6 +747,7 @@ function listSubApps_(spreadsheet) {
 
 function listDashboardSubApps_(spreadsheet, auth) {
   var canOpenPreparing = isAdminAuth_(auth);
+  var userAccess = getUserSubAppAccess_(spreadsheet, auth.user || {});
   return listSubApps_(spreadsheet)
     .filter(function(item) { return item.active; })
     .map(function(item) {
@@ -636,6 +766,7 @@ function listDashboardSubApps_(spreadsheet, auth) {
         targetUrl: item.targetUrl,
         enabled: enabled,
         accent: item.status === 'ACTIVE' ? 'blue' : (item.status === 'PREPARING' ? 'red' : 'muted'),
+        accessLevel: userAccess[item.key] || null,
       };
     });
 }
@@ -648,48 +779,86 @@ function saveDepartment(payload) {
   var name = String(data.name || '').trim();
   var locationIds = String(data.locationIds || '').trim();
   var active = data.active === true || data.active === 'true';
-  var now = new Date();
   if (!name) throw new Error('Vyplňte název úseku.');
 
-  var sheet = spreadsheet.getSheetByName('DEPARTMENTS');
-  var values = sheet.getDataRange().getValues();
-  var headers = values[0];
-  var idIndex = headers.indexOf('id');
-  var targetRow = -1;
+  var lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    var now = new Date();
+    var sheet = spreadsheet.getSheetByName('DEPARTMENTS');
+    var values = sheet.getDataRange().getValues();
+    var headers = values[0];
+    var idIndex = headers.indexOf('id');
+    var nameIndex = headers.indexOf('name');
+    var targetRow = -1;
 
-  for (var row = 1; row < values.length; row++) {
-    if (id && String(values[row][idIndex] || '') === id) targetRow = row + 1;
+    for (var row = 1; row < values.length; row++) {
+      if (id && String(values[row][idIndex] || '') === id) {
+        targetRow = row + 1;
+      } else if (String(values[row][nameIndex] || '').trim().toLowerCase() === name.toLowerCase()) {
+        throw new Error('Úsek s tímto názvem již existuje.');
+      }
+    }
+
+    var rowValues = headers.map(function(h) {
+      var map = { id: id || Utilities.getUuid(), name: name, locationIds: locationIds, active: active, updatedAt: now };
+      if (!id) map.createdAt = now;
+      return map[h] !== undefined ? map[h] : (targetRow > 0 && values[targetRow - 1][headers.indexOf(h)] !== undefined ? values[targetRow - 1][headers.indexOf(h)] : '');
+    });
+
+    if (targetRow > 0) {
+      sheet.getRange(targetRow, 1, 1, headers.length).setValues([rowValues]);
+      Logger.log('[DEPT_UPDATE] by=%s id=%s name=%s', context.user.email, id, name);
+    } else {
+      sheet.appendRow(rowValues);
+      Logger.log('[DEPT_CREATE] by=%s name=%s', context.user.email, name);
+    }
+  } finally {
+    lock.releaseLock();
   }
 
-  var rowValues = headers.map(function(h) {
-    var map = { id: id || Utilities.getUuid(), name: name, locationIds: locationIds, active: active, updatedAt: now };
-    if (!id) map.createdAt = now;
-    return map[h] !== undefined ? map[h] : (targetRow > 0 && values[targetRow - 1][headers.indexOf(h)] !== undefined ? values[targetRow - 1][headers.indexOf(h)] : '');
-  });
-
-  if (targetRow > 0) {
-    sheet.getRange(targetRow, 1, 1, headers.length).setValues([rowValues]);
-  } else {
-    sheet.appendRow(rowValues);
-  }
-  return getDepartmentsData();
+  return buildDepartmentsData_(context);
 }
 
 function deleteDepartment(departmentId) {
   var context = requirePermission_('users.manage');
   var spreadsheet = context.database.spreadsheet;
-  var sheet = spreadsheet.getSheetByName('DEPARTMENTS');
-  var values = sheet.getDataRange().getValues();
-  var headers = values[0];
-  var idIndex = headers.indexOf('id');
   var normalized = String(departmentId || '').trim();
   if (!normalized) throw new Error('Chybí ID úseku.');
-  for (var row = 1; row < values.length; row++) {
-    if (String(values[row][idIndex] || '') === normalized) {
-      sheet.deleteRow(row + 1);
-      return getDepartmentsData();
+
+  var lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    var sheet = spreadsheet.getSheetByName('DEPARTMENTS');
+    var values = sheet.getDataRange().getValues();
+    var headers = values[0];
+    var idIndex = headers.indexOf('id');
+    var nameIndex = headers.indexOf('name');
+
+    for (var row = 1; row < values.length; row++) {
+      if (String(values[row][idIndex] || '') === normalized) {
+        var deptName = String(values[row][nameIndex] || '');
+
+        var userRows = getObjects_(spreadsheet.getSheetByName('USERS'));
+        var usersUsing = userRows.filter(function(u) {
+          return String(u.department || '').trim() === deptName && isTruthy_(u.active);
+        });
+        if (usersUsing.length > 0) {
+          throw new Error(
+            'Úsek nelze smazat — je přiřazen ' + usersUsing.length +
+            (usersUsing.length === 1 ? ' uživateli.' : ' uživatelům.')
+          );
+        }
+
+        sheet.deleteRow(row + 1);
+        Logger.log('[DEPT_DELETE] by=%s id=%s name=%s', context.user.email, normalized, deptName);
+        return buildDepartmentsData_(context);
+      }
     }
+  } finally {
+    lock.releaseLock();
   }
+
   throw new Error('Úsek nebyl nalezen.');
 }
 
@@ -709,10 +878,12 @@ function updateUserLastVisit_(spreadsheet, userId) {
   const updatedAtIndex = headers.indexOf('updatedAt');
 
   for (let row = 1; row < values.length; row++) {
-    if (values[row][idIndex] === userId) {
+    if (String(values[row][idIndex] || '') === String(userId || '')) {
       const now = new Date();
-      sheet.getRange(row + 1, lastVisitIndex + 1).setValue(now);
-      sheet.getRange(row + 1, updatedAtIndex + 1).setValue(now);
+      const rowData = values[row].slice();
+      rowData[lastVisitIndex] = now;
+      rowData[updatedAtIndex] = now;
+      sheet.getRange(row + 1, 1, 1, headers.length).setValues([rowData]);
       return;
     }
   }
@@ -776,6 +947,9 @@ function validateUserPayload_(data, spreadsheet) {
   if (!data.locationName) throw new Error('Vyplnte misto zarazeni.');
   if (!data.department) throw new Error('Vyplnte usek.');
 
+  const validSystemRoles = ['SUPERADMIN', 'ADMIN', 'USER'];
+  if (validSystemRoles.indexOf(data.systemRole) < 0) throw new Error('Vybrana systemova role neexistuje.');
+
   const roleKeys = listRoles_(spreadsheet).map((role) => role.value);
   if (roleKeys.indexOf(data.accessRole) < 0) throw new Error('Vybrana role pristupu neexistuje.');
 }
@@ -799,6 +973,12 @@ function normalizeSubAppPayload_(payload) {
 function validateSubAppPayload_(data) {
   if (!data.name) throw new Error('Vyplňte název dlaždice.');
   if (['ACTIVE', 'PREPARING', 'DISABLED'].indexOf(data.status) < 0) throw new Error('Vyberte platný stav dlaždice.');
+  if (data.targetUrl) {
+    var url = String(data.targetUrl).trim().toLowerCase();
+    if (url && !url.startsWith('https://') && !url.startsWith('http://')) {
+      throw new Error('Cílová URL musí začínat https:// nebo http://');
+    }
+  }
 }
 
 function normalizeSubAppKey_(value) {
@@ -934,7 +1114,13 @@ function getFirstNameFromEmail_(email) {
 }
 
 function getSignedInUser_() {
-  return Session.getActiveUser().getEmail()
-    || Session.getEffectiveUser().getEmail()
-    || 'Neznamy uzivatel';
+  const email = Session.getActiveUser().getEmail();
+  if (email) return email;
+  // EffectiveUser vraci vlastnika skriptu, ne navstevnika — nikdy nepouzivat pro autorizaci.
+  // Prazdny ActiveUser nastava pri deploymentu "Execute as: Me"; spravne nastaveni je
+  // "Execute as: User accessing the web app".
+  throw new Error(
+    'Nepodařilo se zjistit identitu přihlášeného uživatele. ' +
+    'Zkontrolujte nastavení nasazení: "Execute as" musí být "User accessing the web app".'
+  );
 }

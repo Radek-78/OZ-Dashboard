@@ -63,7 +63,7 @@
           <span class="avatar" id="sidebarAvatar">?</span>
           <span>
             <strong id="sidebarUser"><?= app.user ?></strong>
-            <small>Superadmin - OZ</small>
+            <small id="sidebarRole"></small>
           </span>
         </div>
       </aside>
@@ -364,6 +364,7 @@
             </select></label>
             <input type="hidden" name="icon" id="subAppIcon" value="briefcase">
             <label style="grid-column:1/-1">Popis<input type="text" name="description" placeholder="Krátký popis modulu"></label>
+            <label style="grid-column:1/-1">Cílová URL<input type="url" name="targetUrl" placeholder="https://"></label>
           </div>
           <section class="icon-picker" aria-label="Výběr ikony">
             <div class="icon-picker-head">
