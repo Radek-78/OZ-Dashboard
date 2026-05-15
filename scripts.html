@@ -1055,19 +1055,45 @@
       const grid = document.querySelector('#iconGrid');
       if (!grid) return;
       const normalized = String(query || '').trim().toLowerCase();
-      const preferred = ['briefcase', 'calendar', 'chart', 'database', 'process-map', 'truck', 'warehouse', 'shopping-list', 'warning', 'team-3', 'settings', 'app-only'];
       const source = this.iconCatalog || [];
-      let icons = normalized
-        ? source.filter(icon => (icon.tags || icon.label || icon.key || '').toLowerCase().includes(normalized))
-        : preferred.map(key => this.findCatalogIcon(key)).filter(Boolean);
-      if (!icons.length && normalized) icons = source.slice(0, 48);
-      icons = icons.slice(0, 48);
+      let groups = [];
+      if (normalized) {
+        const icons = source
+          .filter(icon => (icon.tags || icon.label || icon.key || '').toLowerCase().includes(normalized))
+          .slice(0, 60);
+        groups = [{ title: 'Výsledky hledání', icons }];
+      } else {
+        groups = [
+          {
+            title: 'Doporučené pro OZ reporting',
+            icons: this.getIconGroup([
+              'digital-report', 'diagram-up', 'diagram-down', 'database', 'data-cloud', 'quality-confirmed',
+              'check-list-to-dos', 'process-map', 'time-arrow', 'calendar', 'monitor', 'warning',
+              'calculator', 'budget', 'warehouse', 'truck', 'supply-chain', 'all-process-documents',
+            ]),
+          },
+          {
+            title: 'Sortiment OZ',
+            icons: this.getIconGroup([
+              'vegetables', 'broccoli', 'carrot', 'apple', 'tomato', 'strawberry',
+              'bread', 'bread-roll', 'baguette', 'croissant', 'bake-off-module', 'bag-baked-goods',
+            ]),
+          },
+        ];
+      }
       const selected = document.querySelector('#subAppIcon')?.value || '';
-      grid.innerHTML = icons.map(icon => `
-        <button type="button" class="icon-choice${icon.key === selected ? ' is-selected' : ''}" data-icon="${this.escape(icon.key)}" aria-label="${this.escape(icon.label)}">
-          <svg><use href="#${this.escape(icon.symbol)}"></use></svg>
-          <span>${this.escape(icon.label)}</span>
-        </button>
+      grid.innerHTML = groups.map(group => `
+        <div class="icon-group">
+          <h4>${this.escape(group.title)}</h4>
+          <div class="icon-group-grid">
+            ${group.icons.map(icon => `
+              <button type="button" class="icon-choice${icon.key === selected ? ' is-selected' : ''}" data-icon="${this.escape(icon.key)}" aria-label="${this.escape(icon.label)}">
+                <svg><use href="#${this.escape(icon.symbol)}"></use></svg>
+                <span>${this.escape(icon.label)}</span>
+              </button>
+            `).join('')}
+          </div>
+        </div>
       `).join('');
       grid.querySelectorAll('.icon-choice').forEach(button => {
         button.addEventListener('click', () => {
@@ -1075,6 +1101,10 @@
           this.renderIconPicker(document.querySelector('#iconSearch')?.value || '');
         });
       });
+    },
+
+    getIconGroup(keys) {
+      return keys.map(key => this.findCatalogIcon(key)).filter(Boolean);
     },
 
     setSubAppIcon(iconKey) {
