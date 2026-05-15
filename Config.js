@@ -3,7 +3,7 @@
   appSubtitle: '',
   logoFileId: '18mu_Lq1F_FqqSZcolMjLwG0aaQDPMdyD',
   logoUrl: 'https://drive.google.com/thumbnail?id=18mu_Lq1F_FqqSZcolMjLwG0aaQDPMdyD&sz=w320',
-  version: 'v0.3.3',
+  version: 'v0.4.0',
   theme: {
     blue: '#0050aa',
     darkBlue: '#002466',
@@ -16,6 +16,14 @@
 };
 
 const APP_CHANGELOG = [
+  {
+    version: 'v0.4.0',
+    date: '2026-05-16',
+    changes: [
+      'Přepracován changelog modal — širší layout, verze jako karty, barevné tagy typů změn',
+      'Přidána automatická detekce typů změn (Nové / Oprava / Výkon / Bezpečnost / Interní / Změna)',
+    ],
+  },
   {
     version: 'v0.3.3',
     date: '2026-05-15',
