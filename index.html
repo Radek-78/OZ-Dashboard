@@ -184,7 +184,7 @@
             </div>
             <div class="table-shell">
               <table class="users-table subapps-table" aria-label="Dlaždice subaplikací">
-                <thead><tr><th>Dlaždice</th><th>Klíč</th><th>Stav</th><th>Ikona</th><th>Poslední aktualizace</th><th>Pořadí</th><th></th></tr></thead>
+                <thead><tr><th>Dlaždice</th><th>Stav</th><th>Ikona</th><th>Poslední aktualizace</th><th></th></tr></thead>
                 <tbody id="subAppsRows"></tbody>
               </table>
             </div>
@@ -353,9 +353,9 @@
         </header>
         <div class="modal-body">
           <input type="hidden" name="id">
+          <input type="hidden" name="key">
           <div class="form-grid">
-            <label>Název<input type="text" name="name" placeholder="LiCo" required></label>
-            <label>Klíč<input type="text" name="key" placeholder="LICO" required></label>
+            <label style="grid-column:1/-1">Název dlaždice<input type="text" name="name" placeholder="LiCo" required></label>
             <label>Stav<select name="status" required>
               <option value="ACTIVE">Aktivní</option>
               <option value="PREPARING">V přípravě</option>
@@ -369,9 +369,6 @@
               <option value="list">Seznam</option>
               <option value="settings">Nastavení</option>
             </select></label>
-            <label>Poslední aktualizace<input type="datetime-local" name="lastUpdatedAt"></label>
-            <label>Pořadí<input type="number" name="sortOrder" min="0" step="1" value="0"></label>
-            <label style="grid-column:1/-1">URL / cíl<input type="url" name="targetUrl" placeholder="https://..."></label>
             <label style="grid-column:1/-1">Popis<input type="text" name="description" placeholder="Krátký popis modulu"></label>
           </div>
           <label class="switch-row"><input type="checkbox" name="active" checked> <span>Zobrazit dlaždici na dashboardu</span></label>
@@ -389,8 +386,6 @@
     <?!= include('scripts'); ?>
   </body>
 </html>
-
-
 
 
 

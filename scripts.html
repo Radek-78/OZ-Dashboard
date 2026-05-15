@@ -567,11 +567,9 @@
               <span><strong>${this.escape(item.name || '-')}</strong><small>${this.escape(item.description || 'Bez popisu')}</small></span>
             </div>
           </td>
-          <td><span class="role-chip">${this.escape(item.key || '-')}</span></td>
           <td><span class="state-chip ${this.subAppStatusClass(item.status)}">${this.escape(this.subAppStatusLabel(item.status))}</span></td>
           <td>${this.escape(this.subAppIconLabel(item.icon))}</td>
           <td>${this.escape(this.formatDateTime(item.lastUpdatedAt))}</td>
-          <td>${this.escape(item.sortOrder ?? 0)}</td>
           <td class="table-actions">
             <button type="button" class="icon-button" data-action="edit-subapp" data-id="${this.escape(item.id)}" aria-label="Upravit dlaždici ${this.escape(item.name)}"><svg><use href="#i-pencil"></use></svg></button>
             <button type="button" class="icon-button danger" data-action="delete-subapp" data-id="${this.escape(item.id)}" aria-label="Smazat dlaždici ${this.escape(item.name)}"><svg><use href="#i-trash"></use></svg></button>
@@ -814,9 +812,6 @@
       form.elements.status.value = item ? item.status : 'ACTIVE';
       form.elements.icon.value = item ? (item.icon || 'briefcase') : 'briefcase';
       form.elements.description.value = item ? (item.description || '') : '';
-      form.elements.targetUrl.value = item ? (item.targetUrl || '') : '';
-      form.elements.lastUpdatedAt.value = item && item.lastUpdatedAt ? this.toDateTimeLocalValue(item.lastUpdatedAt) : '';
-      form.elements.sortOrder.value = item ? (item.sortOrder || 0) : 0;
       form.elements.active.checked = item ? Boolean(item.active) : true;
       this.subAppModal.showModal();
     },
@@ -834,9 +829,6 @@
         status: form.elements.status.value,
         icon: form.elements.icon.value,
         description: form.elements.description.value,
-        targetUrl: form.elements.targetUrl.value,
-        lastUpdatedAt: form.elements.lastUpdatedAt.value,
-        sortOrder: form.elements.sortOrder.value,
         active: form.elements.active.checked,
       };
       this.closeSubAppForm();
@@ -851,9 +843,9 @@
             status: payload.status,
             icon: payload.icon,
             description: payload.description,
-            targetUrl: payload.targetUrl,
-            lastUpdatedAt: payload.lastUpdatedAt,
-            sortOrder: Number(payload.sortOrder || 0),
+            targetUrl: '',
+            lastUpdatedAt: '',
+            sortOrder: isNew ? this.nextSubAppSortOrder() : ((this.subAppsState.subApps || []).find(item => item.id === payload.id) || {}).sortOrder || 0,
             active: payload.active,
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString(),
@@ -1054,6 +1046,11 @@
         settings: 'Nastavení',
       };
       return labels[icon] || icon || '-';
+    },
+
+    nextSubAppSortOrder() {
+      const values = (this.subAppsState.subApps || []).map(item => Number(item.sortOrder || 0));
+      return values.length ? Math.max(...values) + 1 : 1;
     },
 
     getUserEmail(user) {

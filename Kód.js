@@ -542,6 +542,14 @@ function saveSubApp(payload) {
 
   validateSubAppPayload_(data);
 
+  if (!data.id && !data.key) {
+    data.key = makeUniqueSubAppKey_(spreadsheet, data.name);
+  }
+
+  if (!data.id && !data.sortOrder) {
+    data.sortOrder = getNextSubAppSortOrder_(spreadsheet);
+  }
+
   for (var row = 1; row < values.length; row++) {
     var rowId = String(values[row][idIndex] || '');
     var rowKey = String(values[row][keyIndex] || '').trim().toUpperCase();
@@ -776,7 +784,7 @@ function normalizeSubAppPayload_(payload) {
   var data = payload || {};
   return {
     id: String(data.id || '').trim(),
-    key: String(data.key || '').trim().toUpperCase().replace(/[^A-Z0-9_]/g, '_'),
+    key: normalizeSubAppKey_(data.key),
     name: String(data.name || '').trim(),
     status: normalizeSubAppStatus_(data.status),
     icon: String(data.icon || 'briefcase').trim(),
@@ -789,9 +797,30 @@ function normalizeSubAppPayload_(payload) {
 }
 
 function validateSubAppPayload_(data) {
-  if (!data.key) throw new Error('Vyplňte klíč dlaždice.');
   if (!data.name) throw new Error('Vyplňte název dlaždice.');
   if (['ACTIVE', 'PREPARING', 'DISABLED'].indexOf(data.status) < 0) throw new Error('Vyberte platný stav dlaždice.');
+}
+
+function normalizeSubAppKey_(value) {
+  return String(value || '').trim().toUpperCase().replace(/[^A-Z0-9_]/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '');
+}
+
+function makeUniqueSubAppKey_(spreadsheet, name) {
+  var base = normalizeSubAppKey_(removeDiacritics_(name).toUpperCase()) || 'SUBAPP';
+  var existing = listSubApps_(spreadsheet).map(function(item) { return String(item.key || '').toUpperCase(); });
+  var candidate = base;
+  var suffix = 2;
+  while (existing.indexOf(candidate) >= 0) {
+    candidate = base + '_' + suffix;
+    suffix += 1;
+  }
+  return candidate;
+}
+
+function getNextSubAppSortOrder_(spreadsheet) {
+  var values = listSubApps_(spreadsheet).map(function(item) { return Number(item.sortOrder || 0); });
+  if (!values.length) return 1;
+  return Math.max.apply(null, values) + 1;
 }
 
 function buildSubAppRow_(headers, data, original, now) {
