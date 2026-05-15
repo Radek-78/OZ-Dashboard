@@ -157,7 +157,11 @@
           this.applySettingsState(data);
           this.renderCurrentSettingsView();
         })
-        .catch(() => {});
+        .catch((err) => {
+          console.error('loadAllSettings failed:', err);
+          if (err && err.message && err.message.indexOf('opravneni') >= 0) return;
+          this.toast('Nepodařilo se načíst nastavení: ' + (err && err.message ? err.message : 'Neznámá chyba'), 'error');
+        });
     },
 
     applySettingsState(data) {
@@ -230,50 +234,6 @@
         .catch((error) => this.toast(error.message, 'error'));
     },
 
-    loadUsers() {
-      this.setUsersLoading();
-      this.callServer('getUsersAdminData')
-        .then((data) => {
-          this.applyAuth(data.auth || { hasAccess: true });
-          this.usersState = {
-            users: data.users || [],
-            roles: data.roles || [],
-            systemRoles: data.systemRoles || [],
-            locations: data.locations || [],
-            departments: data.departments || [],
-            currentUserId: data.currentUserId || '',
-          };
-          this.renderUserOptions();
-          this.renderUsers();
-          this.toast('Seznam uživatelů byl načten.');
-        })
-        .catch((error) => {
-          this.renderUsersError(error.message);
-          this.toast(error.message, 'error');
-        });
-    },
-
-    loadLocations() {
-      this.callServer('getLocationsData')
-        .then(data => {
-          this.applyAuth(data.auth || { hasAccess: true });
-          this.locationsState = { locations: data.locations || [] };
-          this.renderLocations();
-          this.toast('Umístění načtena.');
-        })
-        .catch(error => this.toast(error.message, 'error'));
-    },
-
-    loadDepartments() {
-      this.callServer('getDepartmentsData')
-        .then(data => {
-          this.applyAuth(data.auth || { hasAccess: true });
-          this.departmentsState = { departments: data.departments || [] };
-          this.renderDepartments();
-          this.toast('Úseky načteny.');
-        })
-        .catch(error => this.toast(error.message, 'error'));
-    },
 
     callServer(functionName, payload, options) {
       const settings = options || {};
@@ -296,13 +256,16 @@
       const user = this.getUserEmail(data.user);
       const version = data.version || '';
       const loadedAt = data.loadedAt || data.renderedAt || '';
+      const auth = data.auth || {};
+      const role = auth.accessRole || auth.systemRole || '';
 
       this.setText('#sidebarUser', user);
       this.setText('#sidebarAvatar', this.getInitials(user));
       this.setText('#welcomeName', this.getDisplayName(user));
+      this.setText('#sidebarRole', role);
       this.setText('#version', version);
       this.setText('#updatedAt', this.formatDateTime(loadedAt));
-      this.applyAuth(data.auth || { hasAccess: true });
+      this.applyAuth(auth.hasAccess !== undefined ? auth : { hasAccess: true });
     },
 
     applyAuth(auth) {
@@ -374,7 +337,7 @@
       grid.innerHTML = modules.map((item) => `
         <article class="dashboard-card${item.enabled ? '' : ' is-disabled'}" data-accent="${this.escape(item.accent || 'blue')}">
           <span class="dashboard-card-icon">
-            <svg><use href="#${this.iconId(item.icon)}"></use></svg>
+            <svg><use href="#${this.iconSymbol(item.icon)}"></use></svg>
           </span>
           <div>
             <h2>${this.escape(item.title)}</h2>
@@ -816,6 +779,7 @@
       form.elements.key.value = item ? item.key : '';
       form.elements.status.value = item ? item.status : 'ACTIVE';
       form.elements.description.value = item ? (item.description || '') : '';
+      form.elements.targetUrl.value = item ? (item.targetUrl || '') : '';
       form.elements.active.checked = item ? Boolean(item.active) : true;
       this.setSubAppIcon(item ? (item.icon || 'briefcase') : 'briefcase');
       const iconSearch = document.querySelector('#iconSearch');
@@ -837,6 +801,7 @@
         status: form.elements.status.value,
         icon: form.elements.icon.value,
         description: form.elements.description.value,
+        targetUrl: form.elements.targetUrl.value,
         active: form.elements.active.checked,
       };
       this.closeSubAppForm();
@@ -851,7 +816,7 @@
             status: payload.status,
             icon: payload.icon,
             description: payload.description,
-            targetUrl: '',
+            targetUrl: payload.targetUrl,
             lastUpdatedAt: '',
             sortOrder: isNew ? this.nextSubAppSortOrder() : ((this.subAppsState.subApps || []).find(item => item.id === payload.id) || {}).sortOrder || 0,
             active: payload.active,
@@ -1170,18 +1135,6 @@
         hour: '2-digit',
         minute: '2-digit',
       });
-    },
-
-    toDateTimeLocalValue(value) {
-      if (!value) return '';
-      const date = new Date(value);
-      if (Number.isNaN(date.getTime())) return '';
-      const pad = (num) => String(num).padStart(2, '0');
-      return [
-        date.getFullYear(),
-        pad(date.getMonth() + 1),
-        pad(date.getDate()),
-      ].join('-') + 'T' + [pad(date.getHours()), pad(date.getMinutes())].join(':');
     },
 
     escape(value) {
