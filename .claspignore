@@ -3,3 +3,5 @@ vzhled/**
 .claude/**
 CLAUDE.md
 README.md
+deploy.ps1
+AUDIT_REPORT.md
