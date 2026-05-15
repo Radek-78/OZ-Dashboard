@@ -1,3 +1,6 @@
+const DATABASE_SCHEMA_VERSION = '1';
+const DATABASE_CACHE_TTL_SECONDS = 21600;
+
 function doGet() {
   const bootstrap = getAppBootstrap();
 
@@ -235,25 +238,35 @@ function getCurrentUserContext_() {
 
 function ensureDatabase_() {
   const cache = CacheService.getScriptCache();
+  const props = PropertiesService.getScriptProperties();
   const cachedId = cache.get('DATABASE_SPREADSHEET_ID');
 
   if (cachedId) {
-    const spreadsheet = SpreadsheetApp.openById(cachedId);
-    return { spreadsheet, spreadsheetId: cachedId, spreadsheetUrl: spreadsheet.getUrl() };
+    try {
+      const spreadsheet = SpreadsheetApp.openById(cachedId);
+      ensureDatabaseSchema_(spreadsheet, props);
+      return { spreadsheet, spreadsheetId: cachedId, spreadsheetUrl: spreadsheet.getUrl() };
+    } catch (e) {
+      cache.remove('DATABASE_SPREADSHEET_ID');
+      Logger.log('[DATABASE_CACHE_INVALID] id=%s error=%s', cachedId, e && e.message ? e.message : e);
+    }
   }
 
-  const props = PropertiesService.getScriptProperties();
   const storedId = props.getProperty('DATABASE_SPREADSHEET_ID');
 
   if (storedId) {
     try {
       const spreadsheet = SpreadsheetApp.openById(storedId);
-      cache.put('DATABASE_SPREADSHEET_ID', storedId, 21600);
+      cache.put('DATABASE_SPREADSHEET_ID', storedId, DATABASE_CACHE_TTL_SECONDS);
+      ensureDatabaseSchema_(spreadsheet, props);
       return { spreadsheet, spreadsheetId: storedId, spreadsheetUrl: spreadsheet.getUrl() };
     } catch (e) {
       // Spreadsheet byl smazán — znovu inicializujeme
       props.deleteProperty('DATABASE_SPREADSHEET_ID');
       props.deleteProperty('DATABASE_SPREADSHEET_URL');
+      props.deleteProperty('DATABASE_SCHEMA_VERSION');
+      cache.remove('DATABASE_SPREADSHEET_ID');
+      Logger.log('[DATABASE_MISSING] id=%s error=%s', storedId, e && e.message ? e.message : e);
     }
   }
 
@@ -264,7 +277,11 @@ function ensureDatabase_() {
     const recheckId = props.getProperty('DATABASE_SPREADSHEET_ID');
     if (recheckId) {
       const spreadsheet = SpreadsheetApp.openById(recheckId);
-      cache.put('DATABASE_SPREADSHEET_ID', recheckId, 21600);
+      cache.put('DATABASE_SPREADSHEET_ID', recheckId, DATABASE_CACHE_TTL_SECONDS);
+      if (props.getProperty('DATABASE_SCHEMA_VERSION') !== DATABASE_SCHEMA_VERSION) {
+        setupDatabaseSheets_(spreadsheet);
+        props.setProperty('DATABASE_SCHEMA_VERSION', DATABASE_SCHEMA_VERSION);
+      }
       return { spreadsheet, spreadsheetId: recheckId, spreadsheetUrl: spreadsheet.getUrl() };
     }
 
@@ -272,12 +289,29 @@ function ensureDatabase_() {
     const spreadsheetId = spreadsheet.getId();
     props.setProperty('DATABASE_SPREADSHEET_ID', spreadsheetId);
     props.setProperty('DATABASE_SPREADSHEET_URL', spreadsheet.getUrl());
-    cache.put('DATABASE_SPREADSHEET_ID', spreadsheetId, 21600);
+    cache.put('DATABASE_SPREADSHEET_ID', spreadsheetId, DATABASE_CACHE_TTL_SECONDS);
 
     setupDatabaseSheets_(spreadsheet);
+    props.setProperty('DATABASE_SCHEMA_VERSION', DATABASE_SCHEMA_VERSION);
     seedInitialUserIfNeeded_(spreadsheet);
 
     return { spreadsheet, spreadsheetId, spreadsheetUrl: spreadsheet.getUrl() };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function ensureDatabaseSchema_(spreadsheet, props) {
+  if (props.getProperty('DATABASE_SCHEMA_VERSION') === DATABASE_SCHEMA_VERSION) return;
+
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    if (props.getProperty('DATABASE_SCHEMA_VERSION') === DATABASE_SCHEMA_VERSION) return;
+    setupDatabaseSheets_(spreadsheet);
+    props.setProperty('DATABASE_SCHEMA_VERSION', DATABASE_SCHEMA_VERSION);
+    props.setProperty('DATABASE_SPREADSHEET_URL', spreadsheet.getUrl());
+    Logger.log('[DATABASE_SCHEMA] migrated to version %s', DATABASE_SCHEMA_VERSION);
   } finally {
     lock.releaseLock();
   }
@@ -289,7 +323,7 @@ function setupDatabaseSheets_(spreadsheet) {
   ], [
     ['appName', APP_CONFIG.appName, 'Nazev aplikace', new Date(), getSignedInUser_()],
     ['appVersion', APP_CONFIG.version, 'Verze aplikace', new Date(), getSignedInUser_()],
-    ['databaseSchemaVersion', '1', 'Verze databazove struktury', new Date(), getSignedInUser_()],
+    ['databaseSchemaVersion', DATABASE_SCHEMA_VERSION, 'Verze databazove struktury', new Date(), getSignedInUser_()],
   ]);
 
   ensureSheet_(spreadsheet, 'USERS', [
@@ -582,6 +616,21 @@ function deleteLocation(locationId) {
           );
         }
 
+        var location = rowToObject_(headers, values[row]);
+        var locationName = location.type === 'CENTRALA'
+          ? 'Centrála'
+          : [location.code, location.abbreviation, location.city].filter(Boolean).join(' ');
+        var userRows = getObjects_(spreadsheet.getSheetByName('USERS'));
+        var usersUsing = userRows.filter(function(user) {
+          return String(user.locationName || '').trim() === locationName;
+        });
+        if (usersUsing.length > 0) {
+          throw new Error(
+            'Umístění nelze smazat — je přiřazeno ' + usersUsing.length +
+            (usersUsing.length === 1 ? ' uživateli.' : ' uživatelům.')
+          );
+        }
+
         sheet.deleteRow(row + 1);
         Logger.log('[LOCATION_DELETE] by=%s id=%s', context.user.email, normalized);
         return buildLocationsData_(context);
@@ -747,9 +796,13 @@ function listSubApps_(spreadsheet) {
 
 function listDashboardSubApps_(spreadsheet, auth) {
   var canOpenPreparing = isAdminAuth_(auth);
-  var userAccess = getUserSubAppAccess_(spreadsheet, auth.user || {});
+  var userAccess = auth && auth.subApps ? auth.subApps : {};
   return listSubApps_(spreadsheet)
     .filter(function(item) { return item.active; })
+    .filter(function(item) {
+      var accessKey = String(item.key || '').trim().toUpperCase();
+      return canOpenPreparing || (item.status === 'ACTIVE' && Boolean(userAccess[accessKey]));
+    })
     .map(function(item) {
       var isActive = item.status === 'ACTIVE';
       var isPreparing = item.status === 'PREPARING';
@@ -766,7 +819,7 @@ function listDashboardSubApps_(spreadsheet, auth) {
         targetUrl: item.targetUrl,
         enabled: enabled,
         accent: item.status === 'ACTIVE' ? 'blue' : (item.status === 'PREPARING' ? 'red' : 'muted'),
-        accessLevel: userAccess[item.key] || null,
+        accessLevel: userAccess[String(item.key || '').trim().toUpperCase()] || null,
       };
     });
 }
@@ -900,13 +953,14 @@ function getRolePermissions_(spreadsheet, accessRole) {
 function getUserSubAppAccess_(spreadsheet, user) {
   const rows = getObjects_(spreadsheet.getSheetByName('SUBAPP_PERMISSIONS'));
   const byUser = rows.filter((row) => {
-    const sameId = row.userId && row.userId === user.id;
+    const sameId = row.userId && String(row.userId) === String(user.id);
     const sameEmail = String(row.email || '').trim().toLowerCase() === String(user.email || '').trim().toLowerCase();
     return (sameId || sameEmail) && isTruthy_(row.active);
   });
 
   return byUser.reduce((result, row) => {
-    result[row.subAppKey] = row.accessLevel;
+    const key = String(row.subAppKey || '').trim().toUpperCase();
+    if (key) result[key] = row.accessLevel;
     return result;
   }, {});
 }
