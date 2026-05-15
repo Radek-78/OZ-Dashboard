@@ -24,7 +24,7 @@ const APP_CHANGELOG = [
     ],
   },
   {
-    version: 'v0.3.1',
+    version: 'v0.3.0',
     date: '2026-05-15',
     changes: [
       'Opravena diakritika v chybových zprávách, popiscích a seed datech',

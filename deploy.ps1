@@ -86,7 +86,9 @@ $changeLines
 "@
 
 # Nahraď číslo verze pouze v APP_CONFIG (první výskyt), ne v changelog záznamech
-$config = [regex]::Replace($config, "version:\s*'$([regex]::Escape($curVersion))'", "version: '$newVersion'", 1)
+# Instance metoda Regex.Replace(input, replacement, count) — nahradí právě 1 výskyt
+$versionRegex = [System.Text.RegularExpressions.Regex]::new("version:\s*'$([regex]::Escape($curVersion))'")
+$config = $versionRegex.Replace($config, "version: '$newVersion'", 1)
 
 # Vlož nový záznam na začátek APP_CHANGELOG
 $config = $config -replace '(const APP_CHANGELOG\s*=\s*\[)', "`$1`n$newEntry"
