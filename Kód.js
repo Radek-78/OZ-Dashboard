@@ -56,6 +56,7 @@ function getHomeData() {
   }
 
   const loadedAt = new Date();
+  const modules = listDashboardSubApps_(context.database.spreadsheet, context.auth);
 
   return {
     auth: context.auth,
@@ -69,7 +70,7 @@ function getHomeData() {
       { label: 'Prihlaseny uzivatel', value: context.user.email, tone: 'neutral', icon: 'user' },
       { label: 'Role pristupu', value: context.auth.accessRole || '-', tone: 'neutral', icon: 'info' },
     ],
-    modules: [],
+    modules: modules,
     team: [],
   };
 }
@@ -90,6 +91,7 @@ function getUsersAdminData() {
     ],
     locations: listLocations_(spreadsheet),
     departments: listDepartments_(spreadsheet),
+    subApps: listSubApps_(spreadsheet),
   };
 }
 
@@ -280,6 +282,11 @@ function setupDatabaseSheets_(spreadsheet) {
 
   ensureSheet_(spreadsheet, 'SUBAPP_PERMISSIONS', [
     'userId', 'email', 'subAppKey', 'accessLevel', 'active', 'updatedAt', 'updatedBy',
+  ]);
+
+  ensureSheet_(spreadsheet, 'SUBAPPS', [
+    'id', 'key', 'name', 'status', 'icon', 'description', 'targetUrl', 'lastUpdatedAt',
+    'sortOrder', 'active', 'createdAt', 'updatedAt',
   ]);
 
   ensureSheet_(spreadsheet, 'LOCATIONS', [
@@ -512,6 +519,119 @@ function getDepartmentsData() {
   };
 }
 
+function getSubAppsData() {
+  var context = requirePermission_('users.manage');
+  var spreadsheet = context.database.spreadsheet;
+  return {
+    auth: context.auth,
+    subApps: listSubApps_(spreadsheet),
+  };
+}
+
+function saveSubApp(payload) {
+  var context = requirePermission_('users.manage');
+  var spreadsheet = context.database.spreadsheet;
+  var data = normalizeSubAppPayload_(payload);
+  var sheet = spreadsheet.getSheetByName('SUBAPPS');
+  var values = sheet.getDataRange().getValues();
+  var headers = values[0];
+  var idIndex = headers.indexOf('id');
+  var keyIndex = headers.indexOf('key');
+  var now = new Date();
+  var targetRow = -1;
+
+  validateSubAppPayload_(data);
+
+  for (var row = 1; row < values.length; row++) {
+    var rowId = String(values[row][idIndex] || '');
+    var rowKey = String(values[row][keyIndex] || '').trim().toUpperCase();
+    if (data.id && rowId === data.id) {
+      targetRow = row + 1;
+    } else if (rowKey === data.key) {
+      throw new Error('Dlaždice s tímto klíčem už existuje.');
+    }
+  }
+
+  if (data.id && targetRow < 0) throw new Error('Dlaždice nebyla nalezena.');
+
+  var source = targetRow > 0 ? rowToObject_(headers, values[targetRow - 1]) : {};
+  var rowValues = buildSubAppRow_(headers, data, source, now);
+  if (targetRow > 0) {
+    sheet.getRange(targetRow, 1, 1, headers.length).setValues([rowValues]);
+  } else {
+    sheet.appendRow(rowValues);
+  }
+
+  return getUsersAdminData();
+}
+
+function deleteSubApp(subAppId) {
+  var context = requirePermission_('users.manage');
+  var spreadsheet = context.database.spreadsheet;
+  var sheet = spreadsheet.getSheetByName('SUBAPPS');
+  var values = sheet.getDataRange().getValues();
+  var headers = values[0];
+  var idIndex = headers.indexOf('id');
+  var normalized = String(subAppId || '').trim();
+  if (!normalized) throw new Error('Chybí ID dlaždice.');
+
+  for (var row = 1; row < values.length; row++) {
+    if (String(values[row][idIndex] || '') === normalized) {
+      sheet.deleteRow(row + 1);
+      return getUsersAdminData();
+    }
+  }
+  throw new Error('Dlaždice nebyla nalezena.');
+}
+
+function listSubApps_(spreadsheet) {
+  return getObjects_(spreadsheet.getSheetByName('SUBAPPS'))
+    .map(function(item) {
+      return {
+        id: item.id,
+        key: String(item.key || ''),
+        name: String(item.name || ''),
+        status: normalizeSubAppStatus_(item.status),
+        icon: String(item.icon || 'briefcase'),
+        description: String(item.description || ''),
+        targetUrl: String(item.targetUrl || ''),
+        lastUpdatedAt: formatDateValue_(item.lastUpdatedAt),
+        sortOrder: Number(item.sortOrder || 0),
+        active: isTruthy_(item.active),
+        createdAt: formatDateValue_(item.createdAt),
+        updatedAt: formatDateValue_(item.updatedAt),
+      };
+    })
+    .sort(function(a, b) {
+      if (a.sortOrder !== b.sortOrder) return a.sortOrder - b.sortOrder;
+      return String(a.name).localeCompare(String(b.name), 'cs');
+    });
+}
+
+function listDashboardSubApps_(spreadsheet, auth) {
+  var canOpenPreparing = isAdminAuth_(auth);
+  return listSubApps_(spreadsheet)
+    .filter(function(item) { return item.active; })
+    .map(function(item) {
+      var isActive = item.status === 'ACTIVE';
+      var isPreparing = item.status === 'PREPARING';
+      var enabled = isActive || (isPreparing && canOpenPreparing);
+      return {
+        id: item.id,
+        key: item.key,
+        title: item.name,
+        status: subAppStatusLabel_(item.status),
+        statusKey: item.status,
+        icon: isPreparing ? 'briefcase' : item.icon,
+        description: item.description,
+        updated: item.lastUpdatedAt ? 'Aktualizováno: ' + item.lastUpdatedAt : 'Aktualizace zatím není uvedena',
+        targetUrl: item.targetUrl,
+        enabled: enabled,
+        accent: item.status === 'ACTIVE' ? 'blue' : (item.status === 'PREPARING' ? 'red' : 'muted'),
+      };
+    });
+}
+
 function saveDepartment(payload) {
   var context = requirePermission_('users.manage');
   var spreadsheet = context.database.spreadsheet;
@@ -652,6 +772,66 @@ function validateUserPayload_(data, spreadsheet) {
   if (roleKeys.indexOf(data.accessRole) < 0) throw new Error('Vybrana role pristupu neexistuje.');
 }
 
+function normalizeSubAppPayload_(payload) {
+  var data = payload || {};
+  return {
+    id: String(data.id || '').trim(),
+    key: String(data.key || '').trim().toUpperCase().replace(/[^A-Z0-9_]/g, '_'),
+    name: String(data.name || '').trim(),
+    status: normalizeSubAppStatus_(data.status),
+    icon: String(data.icon || 'briefcase').trim(),
+    description: String(data.description || '').trim(),
+    targetUrl: String(data.targetUrl || '').trim(),
+    lastUpdatedAt: String(data.lastUpdatedAt || '').trim(),
+    sortOrder: Number(data.sortOrder || 0),
+    active: data.active === true || data.active === 'true' || data.active === '1',
+  };
+}
+
+function validateSubAppPayload_(data) {
+  if (!data.key) throw new Error('Vyplňte klíč dlaždice.');
+  if (!data.name) throw new Error('Vyplňte název dlaždice.');
+  if (['ACTIVE', 'PREPARING', 'DISABLED'].indexOf(data.status) < 0) throw new Error('Vyberte platný stav dlaždice.');
+}
+
+function buildSubAppRow_(headers, data, original, now) {
+  var source = original || {};
+  var values = {
+    id: data.id || Utilities.getUuid(),
+    key: data.key,
+    name: data.name,
+    status: data.status,
+    icon: data.icon,
+    description: data.description,
+    targetUrl: data.targetUrl,
+    lastUpdatedAt: data.lastUpdatedAt,
+    sortOrder: data.sortOrder,
+    active: data.active,
+    createdAt: source.createdAt || now,
+    updatedAt: now,
+  };
+  return headers.map(function(header) { return values[header] !== undefined ? values[header] : ''; });
+}
+
+function normalizeSubAppStatus_(value) {
+  var normalized = String(value || 'DISABLED').trim().toUpperCase();
+  if (['ACTIVE', 'AKTIVNI', 'AKTIVNÍ'].indexOf(normalized) >= 0) return 'ACTIVE';
+  if (['PREPARING', 'V_PRIPRAVE', 'V_PŘÍPRAVĚ', 'V PRIPRAVE', 'V PŘÍPRAVĚ'].indexOf(normalized) >= 0) return 'PREPARING';
+  return 'DISABLED';
+}
+
+function subAppStatusLabel_(status) {
+  if (status === 'ACTIVE') return 'Aktivní';
+  if (status === 'PREPARING') return 'V přípravě';
+  return 'Vypnuto';
+}
+
+function isAdminAuth_(auth) {
+  var systemRole = String(auth && auth.systemRole || '').toUpperCase();
+  var accessRole = String(auth && auth.accessRole || '').toUpperCase();
+  return ['SUPERADMIN', 'ADMIN'].indexOf(systemRole) >= 0 || ['SUPERADMIN', 'ADMIN'].indexOf(accessRole) >= 0;
+}
+
 function buildUserRow_(headers, data, original, now) {
   const source = original || {};
   const values = {
@@ -729,4 +909,3 @@ function getSignedInUser_() {
     || Session.getEffectiveUser().getEmail()
     || 'Neznamy uzivatel';
 }
-

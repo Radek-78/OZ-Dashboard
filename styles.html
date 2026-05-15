@@ -2935,15 +2935,83 @@
     flex: 0 0 9px !important;
   }
   .app[data-view="locations"] .dashboard-topbar,
-  .app[data-view="departments"] .dashboard-topbar {
+  .app[data-view="departments"] .dashboard-topbar,
+  .app[data-view="subapps"] .dashboard-topbar {
     display: none;
   }
   .app[data-view="locations"] .main,
-  .app[data-view="departments"] .main {
+  .app[data-view="departments"] .main,
+  .app[data-view="subapps"] .main {
     grid-template-rows: 1fr auto;
   }
   #locationsPage,
-  #departmentsPage {
+  #departmentsPage,
+  #subappsPage {
     padding-top: 26px;
+  }
+
+  .tile-cell {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 260px;
+  }
+
+  .tile-cell strong {
+    display: block;
+    font-size: 13px;
+  }
+
+  .tile-icon-preview {
+    width: 34px;
+    height: 34px;
+    flex: 0 0 34px;
+    display: grid;
+    place-items: center;
+    color: var(--blue);
+    background: linear-gradient(135deg, rgba(0,80,170,.1), rgba(255,240,0,.16));
+    border: 1px solid rgba(0,80,170,.13);
+    border-radius: 8px;
+  }
+
+  .tile-icon-preview svg {
+    width: 17px;
+    height: 17px;
+  }
+
+  .state-chip.is-preparing {
+    color: #b84200;
+    background: rgba(255, 240, 0, .2);
+  }
+
+  .dashboard-card[data-accent="muted"] {
+    background: #f2f5f9;
+    border-color: #dce4ee;
+    border-top-color: #d1dae6;
+    box-shadow: none;
+    color: #9aa6b7;
+    opacity: .82;
+  }
+
+  .dashboard-card[data-accent="muted"] .dashboard-card-icon {
+    background: #edf1f6;
+    border-color: #dce4ee;
+    color: #a5afbd;
+  }
+
+  .dashboard-card[data-accent="red"] .pill {
+    color: var(--lidl-red);
+    background: rgba(230, 10, 20, .09);
+  }
+
+  .dashboard-card[data-accent="muted"] .pill {
+    color: #8a96a8;
+    background: transparent;
+    padding-left: 0;
+  }
+
+  .card-arrow:disabled {
+    cursor: default;
+    opacity: .35;
   }
 </style>

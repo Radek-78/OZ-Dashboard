@@ -26,6 +26,7 @@
       <symbol id="i-mail" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16v16H4z"/><path d="m4 7 8 6 8-6"/></symbol>
       <symbol id="i-pencil" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/></symbol>
       <symbol id="i-trash" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 15H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></symbol>
+      <symbol id="i-layout" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></symbol>
     </svg>
 
     <div class="app">
@@ -45,6 +46,7 @@
           <button class="nav-link nav-link-child" type="button" data-section="users" data-tooltip="Uživatelé"><svg><use href="#i-users"></use></svg><span>Uživatelé</span></button>
           <button class="nav-link nav-link-child" type="button" data-section="locations" data-tooltip="Umístění"><svg><use href="#i-briefcase"></use></svg><span>Umístění</span></button>
           <button class="nav-link nav-link-child" type="button" data-section="departments" data-tooltip="Úseky"><svg><use href="#i-list"></use></svg><span>Úseky</span></button>
+          <button class="nav-link nav-link-child" type="button" data-section="subapps" data-tooltip="Dlaždice"><svg><use href="#i-layout"></use></svg><span>Dlaždice</span></button>
         </nav>
 
         <div class="team-panel">
@@ -166,6 +168,30 @@
               <svg><use href="#i-list"></use></svg>
               <strong>Žádné úseky</strong>
               <span>Přidejte organizační úseky.</span>
+            </div>
+          </section>
+        </section>
+
+        <section class="page settings-page" id="subappsPage" hidden>
+          <section class="admin-panel">
+            <div class="admin-panel-head">
+              <span class="admin-panel-icon"><svg><use href="#i-layout"></use></svg></span>
+              <div class="admin-panel-title">
+                <h3>Dlaždice subaplikací</h3>
+                <p><strong id="subAppsCount">0</strong> dlaždic pro hlavní dashboard</p>
+              </div>
+              <button class="button button-primary admin-add-user" type="button" data-action="create-subapp"><svg><use href="#i-layout"></use></svg>Nová dlaždice</button>
+            </div>
+            <div class="table-shell">
+              <table class="users-table subapps-table" aria-label="Dlaždice subaplikací">
+                <thead><tr><th>Dlaždice</th><th>Klíč</th><th>Stav</th><th>Ikona</th><th>Poslední aktualizace</th><th>Pořadí</th><th></th></tr></thead>
+                <tbody id="subAppsRows"></tbody>
+              </table>
+            </div>
+            <div class="empty-state users-empty" id="subAppsEmpty" hidden>
+              <svg><use href="#i-layout"></use></svg>
+              <strong>Zatím nejsou nastavené žádné dlaždice</strong>
+              <span>Přidejte první subaplikaci, která se má zobrazit na dashboardu.</span>
             </div>
           </section>
         </section>
@@ -315,13 +341,54 @@
       </form>
     </dialog>
 
+    <dialog class="modal user-modal" id="subAppModal">
+      <form id="subAppForm">
+        <header class="modal-header">
+          <span class="modal-icon"><svg><use href="#i-layout"></use></svg></span>
+          <div class="modal-header-text">
+            <p class="kicker">Nastavení dashboardu</p>
+            <h2 id="subAppModalTitle">Nová dlaždice</h2>
+          </div>
+          <button class="modal-close" type="button" data-action="close-subapp-modal" aria-label="Zavřít"><svg><use href="#i-close"></use></svg></button>
+        </header>
+        <div class="modal-body">
+          <input type="hidden" name="id">
+          <div class="form-grid">
+            <label>Název<input type="text" name="name" placeholder="LiCo" required></label>
+            <label>Klíč<input type="text" name="key" placeholder="LICO" required></label>
+            <label>Stav<select name="status" required>
+              <option value="ACTIVE">Aktivní</option>
+              <option value="PREPARING">V přípravě</option>
+              <option value="DISABLED">Vypnuto</option>
+            </select></label>
+            <label>Ikona<select name="icon">
+              <option value="briefcase">Aktovka</option>
+              <option value="activity">Aktivita</option>
+              <option value="chart">Graf</option>
+              <option value="megaphone">Megafon</option>
+              <option value="list">Seznam</option>
+              <option value="settings">Nastavení</option>
+            </select></label>
+            <label>Poslední aktualizace<input type="datetime-local" name="lastUpdatedAt"></label>
+            <label>Pořadí<input type="number" name="sortOrder" min="0" step="1" value="0"></label>
+            <label style="grid-column:1/-1">URL / cíl<input type="url" name="targetUrl" placeholder="https://..."></label>
+            <label style="grid-column:1/-1">Popis<input type="text" name="description" placeholder="Krátký popis modulu"></label>
+          </div>
+          <label class="switch-row"><input type="checkbox" name="active" checked> <span>Zobrazit dlaždici na dashboardu</span></label>
+        </div>
+        <footer class="modal-actions">
+          <button class="button button-secondary" type="button" data-action="close-subapp-modal"><svg><use href="#i-close"></use></svg>Zrušit</button>
+          <button class="button button-primary" type="submit"><svg><use href="#i-check"></use></svg>Uložit</button>
+        </footer>
+      </form>
+    </dialog>
+
     <script>
       window.APP_BOOTSTRAP = <?!= JSON.stringify(app) ?>;
     </script>
     <?!= include('scripts'); ?>
   </body>
 </html>
-
 
 
 

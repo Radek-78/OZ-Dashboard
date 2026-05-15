@@ -6,6 +6,7 @@
     userModal: null,
     locationModal: null,
     departmentModal: null,
+    subAppModal: null,
     clockTimer: null,
     loadingCount: 0,
     currentView: 'home',
@@ -22,6 +23,7 @@
     },
     locationsState: { locations: [] },
     departmentsState: { departments: [] },
+    subAppsState: { subApps: [] },
 
     init() {
       this.loader = document.querySelector('#appLoader');
@@ -30,6 +32,7 @@
       this.userModal = document.querySelector('#userModal');
       this.locationModal = document.querySelector('#locationModal');
       this.departmentModal = document.querySelector('#departmentModal');
+      this.subAppModal = document.querySelector('#subAppModal');
       this.applyBootstrap(window.APP_BOOTSTRAP || {});
       this.bindEvents();
       this.startClock();
@@ -72,6 +75,7 @@
           if (section === 'users') { this.showView('users'); this.renderUserOptions(); this.renderUsers(); return; }
           if (section === 'locations') { this.showView('locations'); this.renderLocations(); return; }
           if (section === 'departments') { this.showView('departments'); this.renderDepartments(); return; }
+          if (section === 'subapps') { this.showView('subapps'); this.renderSubApps(); return; }
           this.showView('home');
           this.loadHome();
         });
@@ -126,6 +130,14 @@
       if (departmentForm) departmentForm.addEventListener('submit', (e) => { e.preventDefault(); this.saveDepartmentFromForm(); });
 
       document.querySelectorAll('[data-action="close-department-modal"]').forEach(b => b.addEventListener('click', () => this.closeDepartmentForm()));
+
+      const createSubApp = document.querySelector('[data-action="create-subapp"]');
+      if (createSubApp) createSubApp.addEventListener('click', () => this.openSubAppForm());
+
+      const subAppForm = document.querySelector('#subAppForm');
+      if (subAppForm) subAppForm.addEventListener('submit', (e) => { e.preventDefault(); this.saveSubAppFromForm(); });
+
+      document.querySelectorAll('[data-action="close-subapp-modal"]').forEach(b => b.addEventListener('click', () => this.closeSubAppForm()));
     },
 
     loadBootstrap() {
@@ -154,6 +166,7 @@
       };
       this.locationsState = { locations: data.locations || [] };
       this.departmentsState = { departments: data.departments || [] };
+      this.subAppsState = { subApps: data.subApps || [] };
       this.settingsReady = true;
     },
 
@@ -162,6 +175,7 @@
         usersState: JSON.parse(JSON.stringify(this.usersState)),
         locationsState: JSON.parse(JSON.stringify(this.locationsState)),
         departmentsState: JSON.parse(JSON.stringify(this.departmentsState)),
+        subAppsState: JSON.parse(JSON.stringify(this.subAppsState)),
       };
     },
 
@@ -169,6 +183,7 @@
       this.usersState = snapshot.usersState;
       this.locationsState = snapshot.locationsState;
       this.departmentsState = snapshot.departmentsState;
+      this.subAppsState = snapshot.subAppsState;
     },
 
     optimisticUpdate(mutateFn, serverFn, onSuccess, successMsg) {
@@ -192,6 +207,7 @@
       if (this.currentView === 'users') { this.renderUserOptions(); this.renderUsers(); }
       else if (this.currentView === 'locations') this.renderLocations();
       else if (this.currentView === 'departments') this.renderDepartments();
+      else if (this.currentView === 'subapps') this.renderSubApps();
     },
 
     loadHome() {
@@ -305,7 +321,7 @@
       if (app) app.dataset.view = view;
       const denied = document.querySelector('#accessDenied');
       if (denied && !denied.hidden) return;
-      const pages = { home: '#dashboardPage', users: '#usersPage', locations: '#locationsPage', departments: '#departmentsPage' };
+      const pages = { home: '#dashboardPage', users: '#usersPage', locations: '#locationsPage', departments: '#departmentsPage', subapps: '#subappsPage' };
       Object.entries(pages).forEach(([k, sel]) => {
         const el = document.querySelector(sel);
         if (el) el.hidden = k !== view;
@@ -362,12 +378,23 @@
           </div>
           <footer>
             <span class="pill">${this.escape(item.status)}</span>
-            <button class="card-arrow" type="button" data-title="${this.escape(item.title)}" data-enabled="${item.enabled ? '1' : '0'}" aria-label="Otevřít ${this.escape(item.title)}">
+            <button class="card-arrow" type="button" data-title="${this.escape(item.title)}" data-url="${this.escape(item.targetUrl || '')}" data-enabled="${item.enabled ? '1' : '0'}" ${item.enabled ? '' : 'disabled'} aria-label="Otevřít ${this.escape(item.title)}">
               <svg><use href="#i-chevron-right"></use></svg>
             </button>
           </footer>
         </article>
       `).join('');
+
+      grid.querySelectorAll('.card-arrow').forEach((button) => {
+        button.addEventListener('click', () => {
+          if (button.dataset.enabled !== '1') return;
+          if (button.dataset.url) {
+            window.open(button.dataset.url, '_blank', 'noopener');
+          } else {
+            this.openModal(button.dataset.title || 'Subaplikace', 'Dlaždice je aktivní, ale zatím nemá nastavenou cílovou URL.');
+          }
+        });
+      });
     },
 
     renderTeam(team) {
@@ -516,6 +543,46 @@
       });
       rows.querySelectorAll('[data-action="delete-department"]').forEach(b => {
         b.addEventListener('click', () => this.confirmDeleteDepartment(b.dataset.id));
+      });
+    },
+
+    renderSubApps() {
+      const rows = document.querySelector('#subAppsRows');
+      const empty = document.querySelector('#subAppsEmpty');
+      const counter = document.querySelector('#subAppsCount');
+      const subApps = (this.subAppsState || {}).subApps || [];
+      if (!rows) return;
+      if (counter) counter.textContent = String(subApps.length);
+      if (!subApps.length) {
+        rows.innerHTML = '';
+        if (empty) empty.hidden = false;
+        return;
+      }
+      if (empty) empty.hidden = true;
+      rows.innerHTML = subApps.map(item => `
+        <tr>
+          <td>
+            <div class="tile-cell">
+              <span class="tile-icon-preview"><svg><use href="#${this.iconId(item.icon)}"></use></svg></span>
+              <span><strong>${this.escape(item.name || '-')}</strong><small>${this.escape(item.description || 'Bez popisu')}</small></span>
+            </div>
+          </td>
+          <td><span class="role-chip">${this.escape(item.key || '-')}</span></td>
+          <td><span class="state-chip ${this.subAppStatusClass(item.status)}">${this.escape(this.subAppStatusLabel(item.status))}</span></td>
+          <td>${this.escape(this.subAppIconLabel(item.icon))}</td>
+          <td>${this.escape(this.formatDateTime(item.lastUpdatedAt))}</td>
+          <td>${this.escape(item.sortOrder ?? 0)}</td>
+          <td class="table-actions">
+            <button type="button" class="icon-button" data-action="edit-subapp" data-id="${this.escape(item.id)}" aria-label="Upravit dlaždici ${this.escape(item.name)}"><svg><use href="#i-pencil"></use></svg></button>
+            <button type="button" class="icon-button danger" data-action="delete-subapp" data-id="${this.escape(item.id)}" aria-label="Smazat dlaždici ${this.escape(item.name)}"><svg><use href="#i-trash"></use></svg></button>
+          </td>
+        </tr>
+      `).join('');
+      rows.querySelectorAll('[data-action="edit-subapp"]').forEach(b => {
+        b.addEventListener('click', () => this.openSubAppForm((this.subAppsState.subApps || []).find(item => item.id === b.dataset.id)));
+      });
+      rows.querySelectorAll('[data-action="delete-subapp"]').forEach(b => {
+        b.addEventListener('click', () => this.confirmDeleteSubApp(b.dataset.id));
       });
     },
 
@@ -736,6 +803,87 @@
       });
     },
 
+    openSubAppForm(item) {
+      const form = document.querySelector('#subAppForm');
+      if (!form) return;
+      form.reset();
+      this.setText('#subAppModalTitle', item ? 'Upravit dlaždici' : 'Nová dlaždice');
+      form.elements.id.value = item ? item.id : '';
+      form.elements.name.value = item ? item.name : '';
+      form.elements.key.value = item ? item.key : '';
+      form.elements.status.value = item ? item.status : 'ACTIVE';
+      form.elements.icon.value = item ? (item.icon || 'briefcase') : 'briefcase';
+      form.elements.description.value = item ? (item.description || '') : '';
+      form.elements.targetUrl.value = item ? (item.targetUrl || '') : '';
+      form.elements.lastUpdatedAt.value = item && item.lastUpdatedAt ? this.toDateTimeLocalValue(item.lastUpdatedAt) : '';
+      form.elements.sortOrder.value = item ? (item.sortOrder || 0) : 0;
+      form.elements.active.checked = item ? Boolean(item.active) : true;
+      this.subAppModal.showModal();
+    },
+
+    closeSubAppForm() {
+      this.subAppModal.close();
+    },
+
+    saveSubAppFromForm() {
+      const form = document.querySelector('#subAppForm');
+      const payload = {
+        id: form.elements.id.value,
+        key: form.elements.key.value,
+        name: form.elements.name.value,
+        status: form.elements.status.value,
+        icon: form.elements.icon.value,
+        description: form.elements.description.value,
+        targetUrl: form.elements.targetUrl.value,
+        lastUpdatedAt: form.elements.lastUpdatedAt.value,
+        sortOrder: form.elements.sortOrder.value,
+        active: form.elements.active.checked,
+      };
+      this.closeSubAppForm();
+      const isNew = !payload.id;
+      const tempId = isNew ? 'temp_' + Date.now() : payload.id;
+      this.optimisticUpdate(
+        () => {
+          const optimistic = {
+            id: tempId,
+            key: payload.key.toUpperCase().replace(/[^A-Z0-9_]/g, '_'),
+            name: payload.name,
+            status: payload.status,
+            icon: payload.icon,
+            description: payload.description,
+            targetUrl: payload.targetUrl,
+            lastUpdatedAt: payload.lastUpdatedAt,
+            sortOrder: Number(payload.sortOrder || 0),
+            active: payload.active,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          };
+          if (isNew) {
+            this.subAppsState.subApps = [...this.subAppsState.subApps, optimistic]
+              .sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0) || (a.name || '').localeCompare(b.name || '', 'cs'));
+          } else {
+            this.subAppsState.subApps = this.subAppsState.subApps.map(item => item.id === payload.id ? { ...item, ...optimistic } : item);
+          }
+        },
+        () => this.callServer('saveSubApp', payload, { silent: true }),
+        (data) => { this.applySettingsState(data); this.renderSubApps(); this.loadHome(); },
+        'Dlaždice byla uložena.',
+      );
+    },
+
+    confirmDeleteSubApp(id) {
+      const item = (this.subAppsState.subApps || []).find(subApp => subApp.id === id);
+      if (!item) return;
+      this.openModal('Smazat dlaždici', 'Opravdu chcete smazat dlaždici ' + item.name + '?', () => {
+        this.optimisticUpdate(
+          () => { this.subAppsState.subApps = this.subAppsState.subApps.filter(subApp => subApp.id !== id); },
+          () => this.callServer('deleteSubApp', id, { silent: true }),
+          (data) => { this.applySettingsState(data); this.renderSubApps(); this.loadHome(); },
+          'Dlaždice byla smazána.',
+        );
+      });
+    },
+
     filterDepartmentsByLocation(locationName) {
       const loc = (this.usersState.locations || []).find(l => l.displayName === locationName);
       const locId = loc ? loc.id : null;
@@ -796,6 +944,9 @@
         getDepartmentsData: 'Načítám úseky...',
         saveDepartment: 'Ukládám úsek...',
         deleteDepartment: 'Mažu úsek...',
+        getSubAppsData: 'Načítám dlaždice...',
+        saveSubApp: 'Ukládám dlaždici...',
+        deleteSubApp: 'Mažu dlaždici...',
       };
       return labels[functionName] || 'Načítám data...';
     },
@@ -873,12 +1024,36 @@
         check: 'i-check',
         info: 'i-info',
         list: 'i-list',
+        layout: 'i-layout',
         megaphone: 'i-megaphone',
         settings: 'i-settings',
         user: 'i-user',
         users: 'i-users',
       };
       return icons[name] || 'i-info';
+    },
+
+    subAppStatusLabel(status) {
+      const labels = { ACTIVE: 'Aktivní', PREPARING: 'V přípravě', DISABLED: 'Vypnuto' };
+      return labels[status] || 'Vypnuto';
+    },
+
+    subAppStatusClass(status) {
+      if (status === 'ACTIVE') return 'is-active';
+      if (status === 'PREPARING') return 'is-preparing';
+      return 'is-muted';
+    },
+
+    subAppIconLabel(icon) {
+      const labels = {
+        activity: 'Aktivita',
+        briefcase: 'Aktovka',
+        chart: 'Graf',
+        list: 'Seznam',
+        megaphone: 'Megafon',
+        settings: 'Nastavení',
+      };
+      return labels[icon] || icon || '-';
     },
 
     getUserEmail(user) {
@@ -918,6 +1093,18 @@
         hour: '2-digit',
         minute: '2-digit',
       });
+    },
+
+    toDateTimeLocalValue(value) {
+      if (!value) return '';
+      const date = new Date(value);
+      if (Number.isNaN(date.getTime())) return '';
+      const pad = (num) => String(num).padStart(2, '0');
+      return [
+        date.getFullYear(),
+        pad(date.getMonth() + 1),
+        pad(date.getDate()),
+      ].join('-') + 'T' + [pad(date.getHours()), pad(date.getMinutes())].join(':');
     },
 
     escape(value) {
