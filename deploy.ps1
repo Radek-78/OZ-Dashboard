@@ -85,8 +85,8 @@ $changeLines
   },
 "@
 
-# Nahraď číslo verze
-$config = $config -replace "version:\s*'$([regex]::Escape($curVersion))'", "version: '$newVersion'"
+# Nahraď číslo verze pouze v APP_CONFIG (první výskyt), ne v changelog záznamech
+$config = [regex]::Replace($config, "version:\s*'$([regex]::Escape($curVersion))'", "version: '$newVersion'", 1)
 
 # Vlož nový záznam na začátek APP_CHANGELOG
 $config = $config -replace '(const APP_CHANGELOG\s*=\s*\[)', "`$1`n$newEntry"

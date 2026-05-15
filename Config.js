@@ -27,7 +27,7 @@ const APP_CHANGELOG = [
     ],
   },
   {
-    version: 'v0.3.0',
+    version: 'v0.2.0',
     date: '2026-05-15',
     changes: [
       'Přidána správa rolí přístupu a jejich oprávnění',
