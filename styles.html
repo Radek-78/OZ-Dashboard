@@ -3014,4 +3014,109 @@
     cursor: default;
     opacity: .35;
   }
+
+  .icon-picker {
+    display: grid;
+    gap: 12px;
+    padding: 14px;
+    border: 1px solid rgba(0,36,102,.1);
+    border-radius: 8px;
+    background: linear-gradient(135deg, rgba(0,80,170,.035), rgba(255,240,0,.045));
+  }
+
+  .icon-picker-head {
+    display: grid;
+    grid-template-columns: 50px 1fr;
+    gap: 12px;
+    align-items: end;
+  }
+
+  .icon-picker-preview {
+    width: 50px;
+    height: 50px;
+    display: grid;
+    place-items: center;
+    border: 1px solid rgba(0,80,170,.18);
+    border-radius: 8px;
+    background: #fff;
+    box-shadow: 0 10px 24px rgba(0,36,102,.08);
+  }
+
+  .icon-picker-preview svg {
+    width: 26px;
+    height: 26px;
+  }
+
+  .icon-picker-head label {
+    display: grid;
+    gap: 7px;
+    color: #65758f;
+    font-size: 11px;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+  }
+
+  .icon-picker-head input {
+    width: 100%;
+    height: 40px;
+    border: 1px solid rgba(0,36,102,.12);
+    border-radius: 7px;
+    padding: 0 12px;
+    color: var(--ink);
+    background: #fff;
+    font: inherit;
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0;
+    outline: none;
+  }
+
+  .icon-picker-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(86px, 1fr));
+    gap: 8px;
+    max-height: 238px;
+    overflow: auto;
+    padding-right: 4px;
+  }
+
+  .icon-choice {
+    height: 72px;
+    display: grid;
+    grid-template-rows: 28px 1fr;
+    place-items: center;
+    gap: 5px;
+    border: 1px solid rgba(0,36,102,.1);
+    border-radius: 8px;
+    color: var(--blue-dark);
+    background: rgba(255,255,255,.82);
+    cursor: pointer;
+  }
+
+  .icon-choice.is-selected {
+    border-color: rgba(0,80,170,.55);
+    background: linear-gradient(135deg, rgba(0,80,170,.08), rgba(255,240,0,.2));
+    box-shadow: inset 0 0 0 2px rgba(255,240,0,.55);
+  }
+
+  .icon-choice svg {
+    width: 24px;
+    height: 24px;
+  }
+
+  .icon-choice span {
+    width: 100%;
+    padding: 0 6px;
+    color: #5f6f89;
+    font-size: 9px;
+    font-weight: 800;
+    line-height: 1.15;
+    text-align: center;
+    text-transform: uppercase;
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+  }
 </style>

@@ -24,6 +24,7 @@
     locationsState: { locations: [] },
     departmentsState: { departments: [] },
     subAppsState: { subApps: [] },
+    iconCatalog: [],
 
     init() {
       this.loader = document.querySelector('#appLoader');
@@ -33,6 +34,7 @@
       this.locationModal = document.querySelector('#locationModal');
       this.departmentModal = document.querySelector('#departmentModal');
       this.subAppModal = document.querySelector('#subAppModal');
+      this.iconCatalog = window.LIDL_ICON_CATALOG || [];
       this.applyBootstrap(window.APP_BOOTSTRAP || {});
       this.bindEvents();
       this.startClock();
@@ -138,6 +140,9 @@
       if (subAppForm) subAppForm.addEventListener('submit', (e) => { e.preventDefault(); this.saveSubAppFromForm(); });
 
       document.querySelectorAll('[data-action="close-subapp-modal"]').forEach(b => b.addEventListener('click', () => this.closeSubAppForm()));
+
+      const iconSearch = document.querySelector('#iconSearch');
+      if (iconSearch) iconSearch.addEventListener('input', () => this.renderIconPicker(iconSearch.value));
     },
 
     loadBootstrap() {
@@ -343,7 +348,7 @@
       grid.innerHTML = stats.map((item) => `
         <div class="status-card" data-tone="${this.escape(item.tone || 'neutral')}">
           <span class="status-icon">
-            <svg><use href="#${this.iconId(item.icon)}"></use></svg>
+            <svg><use href="#${this.iconSymbol(item.icon)}"></use></svg>
           </span>
           <div>
             <span>${this.escape(item.label)}</span>
@@ -563,7 +568,7 @@
         <tr>
           <td>
             <div class="tile-cell">
-              <span class="tile-icon-preview"><svg><use href="#${this.iconId(item.icon)}"></use></svg></span>
+              <span class="tile-icon-preview"><svg><use href="#${this.iconSymbol(item.icon)}"></use></svg></span>
               <span><strong>${this.escape(item.name || '-')}</strong><small>${this.escape(item.description || 'Bez popisu')}</small></span>
             </div>
           </td>
@@ -810,9 +815,12 @@
       form.elements.name.value = item ? item.name : '';
       form.elements.key.value = item ? item.key : '';
       form.elements.status.value = item ? item.status : 'ACTIVE';
-      form.elements.icon.value = item ? (item.icon || 'briefcase') : 'briefcase';
       form.elements.description.value = item ? (item.description || '') : '';
       form.elements.active.checked = item ? Boolean(item.active) : true;
+      this.setSubAppIcon(item ? (item.icon || 'briefcase') : 'briefcase');
+      const iconSearch = document.querySelector('#iconSearch');
+      if (iconSearch) iconSearch.value = '';
+      this.renderIconPicker('');
       this.subAppModal.showModal();
     },
 
@@ -1037,15 +1045,57 @@
     },
 
     subAppIconLabel(icon) {
-      const labels = {
-        activity: 'Aktivita',
-        briefcase: 'Aktovka',
-        chart: 'Graf',
-        list: 'Seznam',
-        megaphone: 'Megafon',
-        settings: 'Nastavení',
-      };
+      const found = this.findCatalogIcon(icon);
+      if (found) return found.label;
+      const labels = { activity: 'Aktivita', briefcase: 'Aktovka', chart: 'Graf', list: 'Seznam', megaphone: 'Megafon', settings: 'Nastavení' };
       return labels[icon] || icon || '-';
+    },
+
+    renderIconPicker(query) {
+      const grid = document.querySelector('#iconGrid');
+      if (!grid) return;
+      const normalized = String(query || '').trim().toLowerCase();
+      const preferred = ['briefcase', 'calendar', 'chart', 'database', 'process-map', 'truck', 'warehouse', 'shopping-list', 'warning', 'team-3', 'settings', 'app-only'];
+      const source = this.iconCatalog || [];
+      let icons = normalized
+        ? source.filter(icon => (icon.tags || icon.label || icon.key || '').toLowerCase().includes(normalized))
+        : preferred.map(key => this.findCatalogIcon(key)).filter(Boolean);
+      if (!icons.length && normalized) icons = source.slice(0, 48);
+      icons = icons.slice(0, 48);
+      const selected = document.querySelector('#subAppIcon')?.value || '';
+      grid.innerHTML = icons.map(icon => `
+        <button type="button" class="icon-choice${icon.key === selected ? ' is-selected' : ''}" data-icon="${this.escape(icon.key)}" aria-label="${this.escape(icon.label)}">
+          <svg><use href="#${this.escape(icon.symbol)}"></use></svg>
+          <span>${this.escape(icon.label)}</span>
+        </button>
+      `).join('');
+      grid.querySelectorAll('.icon-choice').forEach(button => {
+        button.addEventListener('click', () => {
+          this.setSubAppIcon(button.dataset.icon);
+          this.renderIconPicker(document.querySelector('#iconSearch')?.value || '');
+        });
+      });
+    },
+
+    setSubAppIcon(iconKey) {
+      const icon = this.findCatalogIcon(iconKey) || this.findCatalogIcon('briefcase');
+      const key = icon ? icon.key : (iconKey || 'briefcase');
+      const symbol = icon ? icon.symbol : this.iconId(key);
+      const input = document.querySelector('#subAppIcon');
+      const preview = document.querySelector('#subAppIconPreview use');
+      if (input) input.value = key;
+      if (preview) preview.setAttribute('href', '#' + symbol);
+    },
+
+    findCatalogIcon(key) {
+      const normalized = String(key || '').trim();
+      if (!normalized) return null;
+      return (this.iconCatalog || []).find(icon => icon.key === normalized || icon.symbol === normalized || icon.symbol === 'li-' + normalized) || null;
+    },
+
+    iconSymbol(name) {
+      const found = this.findCatalogIcon(name);
+      return found ? found.symbol : this.iconId(name);
     },
 
     nextSubAppSortOrder() {
