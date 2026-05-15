@@ -1,0 +1,7 @@
+.claude/
+záloha/
+vzhled/
+*.tmp
+*.log
+.DS_Store
+Thumbs.db
