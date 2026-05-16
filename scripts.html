@@ -30,6 +30,8 @@
     rolesModal: null,
     changelogModal: null,
     iconCatalog: [],
+    usersFilter: { query: '', role: '', status: '' },
+    usersSort: { field: 'fullName', dir: 'asc' },
 
     init() {
       this.loader = document.querySelector('#appLoader');
@@ -168,6 +170,38 @@
 
       const integrityBtn = document.querySelector('[data-action="run-integrity-check"]');
       if (integrityBtn) integrityBtn.addEventListener('click', () => this.runIntegrityCheck());
+
+      // Vyhledávání a filtry uživatelů
+      const usersSearch = document.querySelector('#usersSearch');
+      if (usersSearch) {
+        let debounceTimer = null;
+        usersSearch.addEventListener('input', () => {
+          clearTimeout(debounceTimer);
+          debounceTimer = setTimeout(() => {
+            this.usersFilter.query = usersSearch.value.trim().toLowerCase();
+            this.renderUsers();
+          }, 250);
+        });
+      }
+      const usersRoleFilter = document.querySelector('#usersRoleFilter');
+      if (usersRoleFilter) usersRoleFilter.addEventListener('change', () => {
+        this.usersFilter.role = usersRoleFilter.value;
+        this.renderUsers();
+      });
+      const usersStatusFilter = document.querySelector('#usersStatusFilter');
+      if (usersStatusFilter) usersStatusFilter.addEventListener('change', () => {
+        this.usersFilter.status = usersStatusFilter.value;
+        this.renderUsers();
+      });
+
+      // Řazení podle sloupce
+      document.querySelectorAll('[data-sort-field]').forEach((th) => {
+        th.addEventListener('click', () => this.sortUsers(th.dataset.sortField));
+      });
+
+      // Export CSV
+      const exportCsvBtn = document.querySelector('[data-action="export-users-csv"]');
+      if (exportCsvBtn) exportCsvBtn.addEventListener('click', () => this.exportUsersCsv());
     },
 
     loadInitData() {
@@ -432,6 +466,16 @@
       this.setSelectOptions('#userAccessRole', this.usersState.roles);
       this.setSelectOptions('#userLocationName', (this.usersState.locations || []).map(l => ({ value: l.displayName, label: l.displayName })));
       this.setSelectOptions('#userDepartment', (this.usersState.departments || []).map(d => ({ value: d.name, label: d.name })));
+      // Synchronizace filtru rolí v toolbaru
+      const roleFilter = document.querySelector('#usersRoleFilter');
+      if (roleFilter) {
+        const current = roleFilter.value;
+        roleFilter.innerHTML = '<option value="">Všechny role</option>' +
+          (this.usersState.roles || []).map((r) =>
+            `<option value="${this.escape(r.value)}">${this.escape(r.label)}</option>`
+          ).join('');
+        roleFilter.value = current;
+      }
     },
 
     setUsersLoading() {
@@ -447,20 +491,122 @@
       }
     },
 
+    getFilteredUsers() {
+      const { query, role, status } = this.usersFilter;
+      const { field, dir } = this.usersSort;
+      let users = (this.usersState.users || []).filter((u) => {
+        if (query) {
+          const haystack = [u.fullName, u.email, u.locationName, u.department]
+            .join(' ').toLowerCase();
+          if (!haystack.includes(query)) return false;
+        }
+        if (role && u.accessRole !== role) return false;
+        if (status === 'active' && !u.active) return false;
+        if (status === 'inactive' && u.active) return false;
+        return true;
+      });
+      if (field) {
+        users = users.slice().sort((a, b) => {
+          const va = field === 'active' ? String(a[field]) : String(a[field] || '');
+          const vb = field === 'active' ? String(b[field]) : String(b[field] || '');
+          const cmp = va.localeCompare(vb, 'cs');
+          return dir === 'asc' ? cmp : -cmp;
+        });
+      }
+      return users;
+    },
+
+    sortUsers(field) {
+      if (this.usersSort.field === field) {
+        this.usersSort.dir = this.usersSort.dir === 'asc' ? 'desc' : 'asc';
+      } else {
+        this.usersSort.field = field;
+        this.usersSort.dir = 'asc';
+      }
+      this.renderUsers();
+    },
+
+    updateSortHeaders() {
+      const { field, dir } = this.usersSort;
+      document.querySelectorAll('[data-sort-field]').forEach((th) => {
+        if (th.dataset.sortField === field) {
+          th.setAttribute('aria-sort', dir === 'asc' ? 'ascending' : 'descending');
+          th.classList.add('is-sorted');
+          th.classList.toggle('is-sorted-desc', dir === 'desc');
+        } else {
+          th.removeAttribute('aria-sort');
+          th.classList.remove('is-sorted', 'is-sorted-desc');
+        }
+      });
+    },
+
+    exportUsersCsv() {
+      const users = this.getFilteredUsers();
+      if (!users.length) { this.toast('Žádní uživatelé k exportu.', 'error'); return; }
+      const BOM = '﻿';
+      const headers = ['Jméno', 'E-mail', 'Umístění', 'Typ', 'Úsek', 'Systémová role', 'Role přístupu', 'Stav', 'Poslední návštěva', 'Vytvořen'];
+      const rows = users.map((u) => [
+        u.fullName || '',
+        u.email || '',
+        u.locationName || '',
+        u.locationType || '',
+        u.department || '',
+        u.systemRole || '',
+        u.accessRole || '',
+        u.active ? 'Aktivní' : 'Neaktivní',
+        this.formatDateTime(u.lastVisitAt),
+        this.formatDateTime(u.createdAt),
+      ]);
+      const csv = [headers, ...rows]
+        .map((row) => row.map((cell) => '"' + String(cell).replace(/"/g, '""') + '"').join(';'))
+        .join('\r\n');
+      const blob = new Blob([BOM + csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'uzivatele_' + new Date().toISOString().slice(0, 10) + '.csv';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      this.toast('Exportováno ' + users.length + ' uživatelů.');
+    },
+
     renderUsers() {
       const rows = document.querySelector('#usersRows');
       const empty = document.querySelector('#usersEmpty');
       const counter = document.querySelector('#usersCount');
-      const users = this.usersState.users || [];
-      if (counter) counter.textContent = String(users.length);
+      const counterLabel = document.querySelector('#usersCountLabel');
+      const total = (this.usersState.users || []).length;
+      const users = this.getFilteredUsers();
 
-      if (!users.length) {
+      if (counter) counter.textContent = String(users.length);
+      if (counterLabel) {
+        counterLabel.textContent = users.length === total
+          ? 'účtů v databázi aplikace'
+          : 'z ' + total + ' (filtrováno)';
+      }
+
+      if (!total) {
         rows.innerHTML = '';
         empty.hidden = false;
         return;
       }
 
-      empty.hidden = true;
+      if (!users.length) {
+        rows.innerHTML = '';
+        if (empty) {
+          empty.hidden = false;
+          const strong = empty.querySelector('strong');
+          const span = empty.querySelector('span');
+          if (strong) strong.textContent = 'Filtr neodpovídá žádnému uživateli';
+          if (span) span.textContent = 'Zkuste upravit nebo resetovat vyhledávání.';
+        }
+        this.updateSortHeaders();
+        return;
+      }
+
+      if (empty) empty.hidden = true;
       rows.innerHTML = users.map((user) => `
         <tr>
           <td>
@@ -488,6 +634,7 @@
       rows.querySelectorAll('[data-action="delete-user"]').forEach((button) => {
         button.addEventListener('click', () => this.confirmDeleteUser(button.dataset.id));
       });
+      this.updateSortHeaders();
     },
 
     renderUsersError(message) {
@@ -496,8 +643,10 @@
       if (rows) rows.innerHTML = '';
       if (empty) {
         empty.hidden = false;
-        empty.querySelector('strong').textContent = 'Seznam uživatelů nelze načíst';
-        empty.querySelector('span').textContent = message || 'Zkontrolujte oprávnění nebo připojení ke spreadsheetu.';
+        const strong = empty.querySelector('strong');
+        const span = empty.querySelector('span');
+        if (strong) strong.textContent = 'Seznam uživatelů nelze načíst';
+        if (span) span.textContent = message || 'Zkontrolujte oprávnění nebo připojení ke spreadsheetu.';
       }
     },
 

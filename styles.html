@@ -2166,8 +2166,79 @@
     height: 21px;
   }
 
+  /* ── Toolbar nad tabulkou (vyhledávání, filtry, export) ── */
+  .table-toolbar {
+    align-items: center;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 14px 20px 10px;
+    border-bottom: 1px solid var(--line-soft);
+  }
+
+  .table-search {
+    background: var(--bg);
+    border: 1.5px solid var(--line-soft);
+    border-radius: 8px;
+    color: var(--text);
+    flex: 1;
+    font-size: 13.5px;
+    min-width: 180px;
+    padding: 7px 12px;
+    transition: border-color .15s;
+  }
+
+  .table-search:focus {
+    border-color: var(--lidl-blue);
+    outline: none;
+  }
+
+  .table-search::placeholder { color: var(--muted); }
+
+  .table-filter-select {
+    background: var(--bg);
+    border: 1.5px solid var(--line-soft);
+    border-radius: 8px;
+    color: var(--text);
+    font-size: 13.5px;
+    padding: 7px 10px;
+    cursor: pointer;
+  }
+
+  .table-filter-select:focus {
+    border-color: var(--lidl-blue);
+    outline: none;
+  }
+
+  /* ── Sortovatelné hlavičky tabulky ── */
   .table-shell {
     overflow-x: auto;
+  }
+
+  .users-table th.sortable {
+    cursor: pointer;
+    user-select: none;
+    white-space: nowrap;
+  }
+
+  .users-table th.sortable:hover { background: #f0f4fb; }
+
+  .users-table th.sortable::after {
+    content: ' ↕';
+    color: #bbb;
+    font-size: 11px;
+  }
+
+  .users-table th.sortable.is-sorted::after {
+    content: ' ↑';
+    color: var(--lidl-blue);
+    font-weight: 700;
+  }
+
+  .users-table th.sortable.is-sorted.is-sorted-desc::after {
+    content: ' ↓';
+    color: var(--lidl-blue);
+    font-weight: 700;
   }
 
   .users-table {

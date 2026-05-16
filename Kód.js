@@ -446,6 +446,7 @@ function setupDatabaseSheets_(spreadsheet) {
     ['SUPERADMIN', '*', true, 'Všechna oprávnění', new Date()],
     ['ADMIN', 'dashboard.view', true, 'Zobrazení dashboardu', new Date()],
     ['ADMIN', 'users.manage', true, 'Správa uživatelů', new Date()],
+    ['ADMIN', 'roles.manage', true, 'Správa rolí a oprávnění', new Date()],
     ['EDITOR', 'dashboard.view', true, 'Zobrazení dashboardu', new Date()],
     ['VIEWER', 'dashboard.view', true, 'Zobrazení dashboardu', new Date()],
   ]);
