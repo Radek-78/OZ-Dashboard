@@ -3,7 +3,7 @@
   appSubtitle: '',
   logoFileId: '18mu_Lq1F_FqqSZcolMjLwG0aaQDPMdyD',
   logoUrl: 'https://drive.google.com/thumbnail?id=18mu_Lq1F_FqqSZcolMjLwG0aaQDPMdyD&sz=w320',
-  version: 'v0.6.0',
+  version: 'v0.7.0',
   theme: {
     blue: '#0050aa',
     darkBlue: '#002466',
@@ -16,6 +16,16 @@
 };
 
 const APP_CHANGELOG = [
+  {
+    version: 'v0.7.0',
+    date: '2026-05-16',
+    changes: [
+      'Refaktoring: Kod.js rozdelenm na 9 modularnych souboru',
+      'Refaktoring: scripts.html preorganizovan do 15 sekci s JSDoc',
+      'Odstranen mrtvy kod: setUsersLoading, renderUsersError, getLoaderText',
+      'Interni: LOADER_TEXTS a SYSTEM_ROLE_KEYS jako modulove konstanty',
+    ],
+  },
   {
     version: 'v0.6.0',
     date: '2026-05-16',
