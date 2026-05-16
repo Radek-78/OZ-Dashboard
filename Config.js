@@ -3,7 +3,7 @@
   appSubtitle: '',
   logoFileId: '18mu_Lq1F_FqqSZcolMjLwG0aaQDPMdyD',
   logoUrl: 'https://drive.google.com/thumbnail?id=18mu_Lq1F_FqqSZcolMjLwG0aaQDPMdyD&sz=w320',
-  version: 'v0.4.1',
+  version: 'v0.4.2',
   theme: {
     blue: '#0050aa',
     darkBlue: '#002466',
@@ -16,6 +16,15 @@
 };
 
 const APP_CHANGELOG = [
+  {
+    version: 'v0.4.2',
+    date: '2026-05-16',
+    changes: [
+      'Opravena chybějící diakritika v chybových hlášeních validateUserPayload_ (systémová role, role přístupu)',
+      'Opraven bug saveRole() — createdAt se nyní správně nastavuje při vytvoření nové role',
+      'Opravena diakritika v seed datech a logu prvního superadmina',
+    ],
+  },
   {
     version: 'v0.4.1',
     date: '2026-05-16',
