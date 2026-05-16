@@ -3,7 +3,7 @@
   appSubtitle: '',
   logoFileId: '18mu_Lq1F_FqqSZcolMjLwG0aaQDPMdyD',
   logoUrl: 'https://drive.google.com/thumbnail?id=18mu_Lq1F_FqqSZcolMjLwG0aaQDPMdyD&sz=w320',
-  version: 'v0.4.2',
+  version: 'v0.5.0',
   theme: {
     blue: '#0050aa',
     darkBlue: '#002466',
@@ -16,6 +16,20 @@
 };
 
 const APP_CHANGELOG = [
+  {
+    version: 'v0.5.0',
+    date: '2026-05-16',
+    changes: [
+      'Bezpečnost: saveRolePermission() validuje permissionKey proti whitelist, wildcard * blokován přes UI',
+      'Bezpečnost: race condition v deleteRole() opravena — kontrola uživatelů probíhá uvnitř locku',
+      'Bezpečnost: saveSubAppPermission() ověřuje existenci uživatele a dlaždice před zápisem',
+      'Resilience: ensureDatabase_() rozlišuje transientní chyby od trvalých — reference se nesmaže při výpadku API',
+      'Přidána funkce checkDataIntegrity() — audit konzistence dat napříč všemi sheety',
+      'UI: tlačítko Audit dat v sekci Role spustí kontrolu integrity a zobrazí výsledky',
+      'UX: openModal() podporuje víceřádkový text; focus se po zavření vrátí na spouštěcí element',
+      'UX: renderRolePerms() odstraněn wildcard * z editovatelných oprávnění; přidáno roles.manage',
+    ],
+  },
   {
     version: 'v0.4.2',
     date: '2026-05-16',
