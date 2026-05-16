@@ -523,7 +523,7 @@ function seedInitialUserIfNeeded_(spreadsheet) {
     '',
     now,
     'CENTRALA',
-    'Centrala',
+    'Centrála',
     'OZ',
     'SUPERADMIN',
     'SUPERADMIN',
@@ -531,7 +531,7 @@ function seedInitialUserIfNeeded_(spreadsheet) {
     now,
     now,
   ]);
-  Logger.log('[SEED] Prvni superadmin vytvoren: %s v %s', email, now.toISOString());
+  Logger.log('[SEED] První superadmin vytvořen: %s v %s', email, now.toISOString());
 }
 
 function listUsers_(spreadsheet) {
@@ -1121,10 +1121,10 @@ function validateUserPayload_(data, spreadsheet) {
   if (!data.department) throw new Error('Vyplňte úsek.');
 
   const validSystemRoles = ['SUPERADMIN', 'ADMIN', 'USER'];
-  if (validSystemRoles.indexOf(data.systemRole) < 0) throw new Error('Vybrana systemova role neexistuje.');
+  if (validSystemRoles.indexOf(data.systemRole) < 0) throw new Error('Vybraná systémová role neexistuje.');
 
   const roleKeys = listRoles_(spreadsheet).map((role) => role.value);
-  if (roleKeys.indexOf(data.accessRole) < 0) throw new Error('Vybrana role pristupu neexistuje.');
+  if (roleKeys.indexOf(data.accessRole) < 0) throw new Error('Vybraná role přístupu neexistuje.');
 }
 
 function normalizeSubAppPayload_(payload) {
@@ -1470,7 +1470,7 @@ function saveRole(payload) {
 
     const rowValues = headers.map(function(h) {
       const map = { roleKey: roleKey, roleName: roleName, description: description, active: active, updatedAt: now };
-      if (!targetRow) map.createdAt = now;
+      if (targetRow <= 0) map.createdAt = now;
       if (map[h] !== undefined) return map[h];
       return targetRow > 0 && values[targetRow - 1] ? values[targetRow - 1][headers.indexOf(h)] : '';
     });
