@@ -221,6 +221,7 @@ const App = {
     if (permForm) permForm.addEventListener('submit', (e) => { e.preventDefault(); this.savePermissionFromForm(); });
 
     // Role
+    document.querySelectorAll('[data-action="close-role-form"]').forEach((b) => b.addEventListener('click', () => this.closeRoleForm()));
     document.querySelectorAll('[data-action="close-roles-modal"]').forEach((b) => b.addEventListener('click', () => this.closeRolesModal()));
     const createRole = document.querySelector('[data-action="create-role"]');
     if (createRole) createRole.addEventListener('click', () => this.openRoleForm());
