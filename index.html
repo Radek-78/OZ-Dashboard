@@ -206,7 +206,10 @@
                 <h3>Role a oprávnění</h3>
                 <p>Správa přístupových rolí a jejich oprávnění</p>
               </div>
-              <button class="button button-primary admin-add-user" type="button" data-action="create-role"><svg><use href="#i-settings"></use></svg>Nová role</button>
+              <div style="display:flex;gap:.5rem">
+                <button class="button button-secondary" type="button" data-action="run-integrity-check" title="Audit datové integrity — prověří konzistenci dat napříč databází"><svg><use href="#i-check"></use></svg>Audit dat</button>
+                <button class="button button-primary admin-add-user" type="button" data-action="create-role"><svg><use href="#i-settings"></use></svg>Nová role</button>
+              </div>
             </div>
             <div class="table-shell">
               <table class="users-table" aria-label="Role">

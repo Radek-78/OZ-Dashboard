@@ -165,6 +165,9 @@
 
       const versionLink = document.querySelector('#version');
       if (versionLink) versionLink.addEventListener('click', (e) => { e.preventDefault(); this.openChangelog(); });
+
+      const integrityBtn = document.querySelector('[data-action="run-integrity-check"]');
+      if (integrityBtn) integrityBtn.addEventListener('click', () => this.runIntegrityCheck());
     },
 
     loadInitData() {
@@ -1098,10 +1101,10 @@
       const container = document.querySelector('#rolePermsContent');
       if (!container) return;
       const permsByRole = this.rolesState.permsByRole || {};
-      const knownPerms = this.rolesState.knownPermissions || ['*', 'dashboard.view', 'users.manage'];
+      const knownPerms = this.rolesState.knownPermissions || ['dashboard.view', 'users.manage', 'roles.manage'];
       const current = permsByRole[roleKey] || [];
       const SYSTEM_ROLES = ['SUPERADMIN', 'ADMIN', 'EDITOR', 'VIEWER'];
-      const isSystem = SYSTEM_ROLES.indexOf(roleKey) >= 0;
+      const isSystem = SYSTEM_ROLES.indexOf(roleKey) >= 0; // použito pro styling (read-only indikátor)
 
       container.innerHTML = knownPerms.map(perm => {
         const has = current.indexOf(perm) >= 0;
@@ -1203,6 +1206,7 @@
         deleteRole: 'Mažu roli...',
         saveRolePermission: 'Ukládám oprávnění role...',
         deleteRolePermission: 'Mažu oprávnění role...',
+        checkDataIntegrity: 'Kontroluji integritu dat...',
       };
       return labels[functionName] || 'Načítám data...';
     },
@@ -1234,21 +1238,39 @@
 
     openModal(title, body, onConfirm) {
       this.setText('#modalTitle', title);
-      this.setText('#modalBody', body);
+      const bodyEl = document.querySelector('#modalBody');
+      if (bodyEl) {
+        // Podpora víceřádkového textu (integrity report, potvrzovací dialogy s \n)
+        bodyEl.textContent = '';
+        if (body && body.includes('\n')) {
+          body.split('\n').forEach((line, i, arr) => {
+            bodyEl.appendChild(document.createTextNode(line));
+            if (i < arr.length - 1) bodyEl.appendChild(document.createElement('br'));
+          });
+        } else {
+          bodyEl.textContent = body || '';
+        }
+      }
       this.pendingConfirm = typeof onConfirm === 'function' ? onConfirm : null;
       const confirmButton = document.querySelector('#modalConfirmButton');
       if (confirmButton) confirmButton.hidden = !this.pendingConfirm;
+      // UX: uložení triggeru pro obnovení focusu po zavření
+      this._modalTrigger = document.activeElement;
       this.modal.showModal();
     },
 
     closeModal() {
       this.modal.classList.add('is-closing');
+      const trigger = this._modalTrigger;
       const done = () => {
         this.modal.classList.remove('is-closing');
         this.modal.close();
         this.pendingConfirm = null;
+        this._modalTrigger = null;
         const confirmButton = document.querySelector('#modalConfirmButton');
         if (confirmButton) confirmButton.hidden = true;
+        // UX: vrátíme focus na element, který modal otevřel
+        if (trigger && typeof trigger.focus === 'function') trigger.focus();
       };
       const fallback = setTimeout(done, 280);
       this.modal.addEventListener('animationend', () => {
@@ -1304,6 +1326,26 @@
       }
 
       this.changelogModal.showModal();
+    },
+
+    runIntegrityCheck() {
+      this.callServer('checkDataIntegrity', null, {})
+        .then((report) => {
+          const { ok, checkedAt, issues, summary } = report;
+          const date = new Date(checkedAt).toLocaleString('cs-CZ');
+          let body = '';
+          if (ok) {
+            body = `✅ Vše v pořádku — žádné nesrovnalosti nenalezeny.\nKontrolováno: ${date}`;
+          } else {
+            const lines = [`⚠️ Nalezeno ${summary.total} nesrovnalostí (${date}):\n`];
+            issues.forEach((issue) => {
+              lines.push(`• [${issue.sheet}] ${issue.email || issue.name || issue.id} — ${issue.field}: „${issue.value}" → ${issue.reason}`);
+            });
+            body = lines.join('\n');
+          }
+          this.openModal('Audit datové integrity', body);
+        })
+        .catch((err) => this.toast(err.message || 'Audit selhal.', 'error'));
     },
 
     setText(selector, value) {

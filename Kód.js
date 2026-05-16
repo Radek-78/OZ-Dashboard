@@ -1,6 +1,12 @@
 const DATABASE_SCHEMA_VERSION = '1';
 const DATABASE_CACHE_TTL_SECONDS = 21600;
 
+/**
+ * Whitelist platných oprávnění přiřaditelných přes UI.
+ * Wildcard '*' je záměrně vynechán — přiřazuje se pouze přes seed dat (SUPERADMIN).
+ */
+const KNOWN_PERMISSIONS = ['dashboard.view', 'users.manage', 'roles.manage'];
+
 function doGet() {
   const bootstrap = getAppBootstrap();
 
@@ -346,11 +352,21 @@ function ensureDatabase_() {
       cache.put(CACHE_KEY, JSON.stringify({ id: storedId, schemaVersion: DATABASE_SCHEMA_VERSION }), DATABASE_CACHE_TTL_SECONDS);
       return { spreadsheet, spreadsheetId: storedId, spreadsheetUrl: spreadsheet.getUrl() };
     } catch (e) {
-      props.deleteProperty('DATABASE_SPREADSHEET_ID');
-      props.deleteProperty('DATABASE_SPREADSHEET_URL');
-      props.deleteProperty('DATABASE_SCHEMA_VERSION');
       cache.remove(CACHE_KEY);
-      Logger.log('[DATABASE_MISSING] id=%s error=%s', storedId, e && e.message ? e.message : e);
+      const msg = String(e && e.message ? e.message : e).toLowerCase();
+      const isPermanent = msg.includes('not found') || msg.includes('does not exist') ||
+                          msg.includes('unable to find') || msg.includes('no item with the given id');
+      if (isPermanent) {
+        // Spreadsheet skutečně neexistuje — smažeme referenci a vytvoříme nový
+        props.deleteProperty('DATABASE_SPREADSHEET_ID');
+        props.deleteProperty('DATABASE_SPREADSHEET_URL');
+        props.deleteProperty('DATABASE_SCHEMA_VERSION');
+        Logger.log('[DATABASE_MISSING] id=%s error=%s — reference smazána, bude vytvořena nová DB', storedId, e.message);
+      } else {
+        // Přechodná chyba (výpadek API, timeout) — referenci zachováme, chybu přehodíme
+        Logger.log('[DATABASE_ERROR] id=%s error=%s — transientní chyba, reference zachována', storedId, e.message);
+        throw new Error('Databáze je dočasně nedostupná. Zkuste to znovu za chvíli.');
+      }
     }
   }
 
@@ -1327,6 +1343,20 @@ function saveSubAppPermission(payload) {
   if (!subAppKey) throw new Error('Vyberte dlaždici.');
   if (['READ', 'WRITE', 'ADMIN'].indexOf(accessLevel) < 0) accessLevel = 'READ';
 
+  // Ověření existence uživatele a dlaždice
+  const usersSheet = spreadsheet.getSheetByName('USERS');
+  const userExists = getObjects_(usersSheet).some(function(u) {
+    return (userId && String(u.id || '') === userId) ||
+           (email && String(u.email || '').trim().toLowerCase() === email);
+  });
+  if (!userExists) throw new Error('Vybraný uživatel neexistuje v databázi.');
+
+  const subAppsSheet = spreadsheet.getSheetByName('SUBAPPS');
+  const subAppExists = getObjects_(subAppsSheet).some(function(s) {
+    return String(s.key || '').trim().toUpperCase() === subAppKey && isTruthy_(s.active);
+  });
+  if (!subAppExists) throw new Error('Vybraná dlaždice neexistuje nebo není aktivní.');
+
   const lock = LockService.getScriptLock();
   lock.waitLock(10000);
   try {
@@ -1435,7 +1465,7 @@ function buildRolesAdminData_(context) {
     auth: context.auth,
     roles: roles,
     permsByRole: permsByRole,
-    knownPermissions: ['*', 'dashboard.view', 'users.manage'],
+    knownPermissions: KNOWN_PERMISSIONS,
   };
 }
 
@@ -1498,18 +1528,18 @@ function deleteRole(roleKey) {
   const SYSTEM_ROLES = ['SUPERADMIN', 'ADMIN', 'EDITOR', 'VIEWER'];
   if (SYSTEM_ROLES.indexOf(normalized) >= 0) throw new Error('Systémové role nelze smazat.');
 
-  // Kontrola: neexistují uživatelé s touto rolí?
-  const userRows = getObjects_(spreadsheet.getSheetByName('USERS'));
-  const usersUsing = userRows.filter(function(u) {
-    return String(u.accessRole || '').trim().toUpperCase() === normalized && isTruthy_(u.active);
-  });
-  if (usersUsing.length > 0) {
-    throw new Error('Roli nelze smazat — je přiřazena ' + usersUsing.length + (usersUsing.length === 1 ? ' uživateli.' : ' uživatelům.'));
-  }
-
   const lock = LockService.getScriptLock();
   lock.waitLock(10000);
   try {
+    // Kontrola uživatelů UVNITŘ locku — zabraňuje race condition
+    const userRows = getObjects_(spreadsheet.getSheetByName('USERS'));
+    const usersUsing = userRows.filter(function(u) {
+      return String(u.accessRole || '').trim().toUpperCase() === normalized && isTruthy_(u.active);
+    });
+    if (usersUsing.length > 0) {
+      throw new Error('Roli nelze smazat — je přiřazena ' + usersUsing.length + (usersUsing.length === 1 ? ' uživateli.' : ' uživatelům.'));
+    }
+
     const sheet = spreadsheet.getSheetByName('ROLES');
     const values = sheet.getDataRange().getValues();
     const headers = values[0];
@@ -1549,6 +1579,14 @@ function saveRolePermission(payload) {
   const permissionKey = String(data.permissionKey || '').trim();
   if (!roleKey) throw new Error('Chybí klíč role.');
   if (!permissionKey) throw new Error('Chybí klíč oprávnění.');
+
+  // Bezpečnostní validace — pouze whitelisted oprávnění, wildcard blokován
+  if (permissionKey === '*') {
+    throw new Error('Oprávnění * (wildcard) nelze přiřadit přes rozhraní aplikace.');
+  }
+  if (KNOWN_PERMISSIONS.indexOf(permissionKey) < 0) {
+    throw new Error('Neznámé oprávnění: ' + permissionKey + '. Povolená oprávnění: ' + KNOWN_PERMISSIONS.join(', ') + '.');
+  }
 
   const lock = LockService.getScriptLock();
   lock.waitLock(10000);
@@ -1625,4 +1663,101 @@ function getSignedInUser_() {
     'Nepodařilo se zjistit identitu přihlášeného uživatele. ' +
     'Zkontrolujte nastavení nasazení: "Execute as" musí být "User accessing the web app".'
   );
+}
+
+/**
+ * Provede audit datové integrity napříč všemi sheety databáze.
+ * Vrátí strukturovaný report s naleze nými nesrovnalostmi.
+ * Vyžaduje oprávnění users.manage.
+ * @returns {{ ok: boolean, checkedAt: string, issues: Array, summary: Object }}
+ */
+function checkDataIntegrity() {
+  const context = requirePermission_('users.manage');
+  const spreadsheet = context.database.spreadsheet;
+  const issues = [];
+  const now = new Date().toISOString();
+
+  const users = getObjects_(spreadsheet.getSheetByName('USERS'));
+  const locations = getObjects_(spreadsheet.getSheetByName('LOCATIONS'));
+  const departments = getObjects_(spreadsheet.getSheetByName('DEPARTMENTS'));
+  const roles = getObjects_(spreadsheet.getSheetByName('ROLES'));
+  const subApps = getObjects_(spreadsheet.getSheetByName('SUBAPPS'));
+  const subAppPerms = getObjects_(spreadsheet.getSheetByName('SUBAPP_PERMISSIONS'));
+
+  // Sady validních hodnot
+  const validLocationNames = new Set(locations.filter(function(l) { return isTruthy_(l.active); }).map(function(l) {
+    return l.type === 'CENTRALA' ? 'Centrála'
+      : [l.code, l.abbreviation, l.city].filter(Boolean).join(' ');
+  }));
+  const validDeptNames = new Set(departments.filter(function(d) { return isTruthy_(d.active); }).map(function(d) { return String(d.name || ''); }));
+  const validRoleKeys = new Set(roles.filter(function(r) { return isTruthy_(r.active); }).map(function(r) { return String(r.roleKey || '').toUpperCase(); }));
+  const validUserIds = new Set(users.map(function(u) { return String(u.id || ''); }));
+  const validUserEmails = new Set(users.map(function(u) { return String(u.email || '').toLowerCase(); }));
+  const validSubAppKeys = new Set(subApps.filter(function(s) { return isTruthy_(s.active); }).map(function(s) { return String(s.key || '').toUpperCase(); }));
+
+  // 1. Kontrola USERS
+  users.forEach(function(user) {
+    if (!isTruthy_(user.active)) return;
+    const loc = String(user.locationName || '').trim();
+    if (loc && !validLocationNames.has(loc)) {
+      issues.push({ sheet: 'USERS', id: user.id, email: user.email, field: 'locationName',
+        value: loc, reason: 'Umístění neexistuje nebo není aktivní' });
+    }
+    const dept = String(user.department || '').trim();
+    if (dept && !validDeptNames.has(dept)) {
+      issues.push({ sheet: 'USERS', id: user.id, email: user.email, field: 'department',
+        value: dept, reason: 'Úsek neexistuje nebo není aktivní' });
+    }
+    const role = String(user.accessRole || '').toUpperCase();
+    if (role && !validRoleKeys.has(role)) {
+      issues.push({ sheet: 'USERS', id: user.id, email: user.email, field: 'accessRole',
+        value: role, reason: 'Role přístupu neexistuje nebo není aktivní' });
+    }
+  });
+
+  // 2. Kontrola SUBAPP_PERMISSIONS
+  subAppPerms.forEach(function(perm) {
+    const uid = String(perm.userId || '').trim();
+    const mail = String(perm.email || '').trim().toLowerCase();
+    if (uid && !validUserIds.has(uid)) {
+      issues.push({ sheet: 'SUBAPP_PERMISSIONS', id: perm.id, field: 'userId',
+        value: uid, reason: 'Uživatel s tímto ID neexistuje' });
+    }
+    if (mail && !validUserEmails.has(mail)) {
+      issues.push({ sheet: 'SUBAPP_PERMISSIONS', id: perm.id, field: 'email',
+        value: mail, reason: 'Uživatel s tímto e-mailem neexistuje' });
+    }
+    const key = String(perm.subAppKey || '').toUpperCase();
+    if (key && !validSubAppKeys.has(key)) {
+      issues.push({ sheet: 'SUBAPP_PERMISSIONS', id: perm.id, field: 'subAppKey',
+        value: key, reason: 'Dlaždice s tímto klíčem neexistuje nebo není aktivní' });
+    }
+  });
+
+  // 3. Kontrola DEPARTMENTS — locationIds odkazují na existující lokace
+  const validLocationIds = new Set(locations.filter(function(l) { return isTruthy_(l.active); }).map(function(l) { return String(l.id || ''); }));
+  departments.forEach(function(dept) {
+    if (!isTruthy_(dept.active)) return;
+    const ids = String(dept.locationIds || '').split(',').map(function(s) { return s.trim(); }).filter(Boolean);
+    ids.forEach(function(lid) {
+      if (!validLocationIds.has(lid)) {
+        issues.push({ sheet: 'DEPARTMENTS', id: dept.id, name: dept.name, field: 'locationIds',
+          value: lid, reason: 'Umístění s tímto ID neexistuje nebo není aktivní' });
+      }
+    });
+  });
+
+  Logger.log('[DATA_INTEGRITY] by=%s issues=%d checkedAt=%s', context.user.email, issues.length, now);
+
+  return {
+    ok: issues.length === 0,
+    checkedAt: now,
+    issues: issues,
+    summary: {
+      total: issues.length,
+      users: issues.filter(function(i) { return i.sheet === 'USERS'; }).length,
+      subAppPermissions: issues.filter(function(i) { return i.sheet === 'SUBAPP_PERMISSIONS'; }).length,
+      departments: issues.filter(function(i) { return i.sheet === 'DEPARTMENTS'; }).length,
+    },
+  };
 }
