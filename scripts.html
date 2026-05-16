@@ -1,1467 +1,1555 @@
 <script>
-  const App = {
-    loader: null,
-    toastRegion: null,
-    modal: null,
-    userModal: null,
-    locationModal: null,
-    departmentModal: null,
-    subAppModal: null,
-    clockTimer: null,
-    loadingCount: 0,
-    currentView: 'home',
-    startupLoading: true,
-    pendingConfirm: null,
-    settingsReady: false,
-    usersState: {
-      users: [],
-      roles: [],
-      systemRoles: [],
-      locations: [],
-      departments: [],
-      currentUserId: '',
-    },
-    locationsState: { locations: [] },
-    departmentsState: { departments: [] },
-    subAppsState: { subApps: [] },
-    permissionsState: { permissions: [], users: [], subApps: [], currentSubAppKey: '' },
-    permissionsModal: null,
-    rolesState: { roles: [], permsByRole: {}, knownPermissions: [] },
-    rolesModal: null,
-    changelogModal: null,
-    iconCatalog: [],
-    usersFilter: { query: '', role: '', status: '' },
-    usersSort: { field: 'fullName', dir: 'asc' },
+'use strict';
 
-    init() {
-      this.loader = document.querySelector('#appLoader');
-      this.toastRegion = document.querySelector('#toastRegion');
-      this.modal = document.querySelector('#appModal');
-      this.userModal = document.querySelector('#userModal');
-      this.locationModal = document.querySelector('#locationModal');
-      this.departmentModal = document.querySelector('#departmentModal');
-      this.subAppModal = document.querySelector('#subAppModal');
-      this.permissionsModal = document.querySelector('#permissionsModal');
-      this.rolesModal = document.querySelector('#rolesModal');
-      this.changelogModal = document.querySelector('#changelogModal');
-      this.iconCatalog = window.LIDL_ICON_CATALOG || [];
-      this.applyBootstrap(window.APP_BOOTSTRAP || {});
-      this.bindEvents();
-      this.startClock();
-      this.loadInitData();
-    },
+// ---------------------------------------------------------------------------
+// Konstanty sdílené napříč App objektem
+// ---------------------------------------------------------------------------
 
-    bindEvents() {
-      if (localStorage.getItem('sidebarCollapsed') === '1') {
-        document.querySelector('.app').classList.add('sidebar-collapsed');
-      }
-      this.syncSidebarToggle();
+/** Klíče systémových rolí, které nelze smazat. */
+const SYSTEM_ROLE_KEYS = ['SUPERADMIN', 'ADMIN', 'EDITOR', 'VIEWER'];
 
-      document.querySelector('#sidebarToggle').addEventListener('click', () => {
-        const app = document.querySelector('.app');
-        app.classList.toggle('sidebar-collapsed');
-        localStorage.setItem('sidebarCollapsed', app.classList.contains('sidebar-collapsed') ? '1' : '0');
-        this.syncSidebarToggle();
-      });
+/** Texty loaderu dle názvu serverové funkce. */
+const LOADER_TEXTS = {
+  getInitData:              'Načítám aplikaci...',
+  getHomeData:              'Načítám dashboard...',
+  getUsersAdminData:        'Načítám uživatele...',
+  saveUser:                 'Ukládám uživatele...',
+  deleteUser:               'Mažu uživatele...',
+  getLocationsData:         'Načítám umístění...',
+  saveLocation:             'Ukládám umístění...',
+  deleteLocation:           'Mažu umístění...',
+  getDepartmentsData:       'Načítám úseky...',
+  saveDepartment:           'Ukládám úsek...',
+  deleteDepartment:         'Mažu úsek...',
+  saveSubApp:               'Ukládám dlaždici...',
+  deleteSubApp:             'Mažu dlaždici...',
+  getSubAppPermissionsData: 'Načítám oprávnění...',
+  saveSubAppPermission:     'Ukládám oprávnění...',
+  deleteSubAppPermission:   'Mažu oprávnění...',
+  getRolesAdminData:        'Načítám role...',
+  saveRole:                 'Ukládám roli...',
+  deleteRole:               'Mažu roli...',
+  saveRolePermission:       'Ukládám oprávnění role...',
+  deleteRolePermission:     'Mažu oprávnění role...',
+  checkDataIntegrity:       'Kontroluji integritu dat...',
+};
 
-      this.modal.querySelector('form').addEventListener('submit', (event) => {
-        event.preventDefault();
-        this.closeModal();
-      });
+// ===========================================================================
+// App — hlavní objekt aplikace
+// ===========================================================================
 
-      const modalConfirm = document.querySelector('#modalConfirmButton');
-      if (modalConfirm) {
-        modalConfirm.addEventListener('click', () => {
-          const action = this.pendingConfirm;
-          this.closeModal();
-          if (typeof action === 'function') action();
-        });
-      }
+const App = {
 
-      document.querySelectorAll('.nav-link').forEach((button) => {
-        button.addEventListener('click', () => {
-          const section = button.dataset.section || 'home';
-          this.setActiveNav(section);
-          if (section === 'users') { this.showView('users'); this.renderUserOptions(); this.renderUsers(); return; }
-          if (section === 'locations') { this.showView('locations'); this.renderLocations(); return; }
-          if (section === 'departments') { this.showView('departments'); this.renderDepartments(); return; }
-          if (section === 'subapps') { this.showView('subapps'); this.renderSubApps(); return; }
-          if (section === 'roles') { this.showView('roles'); this.loadRoles(); return; }
-          this.showView('home');
-          this.loadHome();
-        });
-      });
+  // ── Odkazy na DOM elementy ────────────────────────────────────────────────
+  loader:           null,
+  toastRegion:      null,
+  modal:            null,
+  userModal:        null,
+  locationModal:    null,
+  departmentModal:  null,
+  subAppModal:      null,
+  permissionsModal: null,
+  rolesModal:       null,
+  changelogModal:   null,
 
-      const createUser = document.querySelector('[data-action="create-user"]');
-      if (createUser) createUser.addEventListener('click', () => this.openUserForm());
+  // ── Stav aplikace ─────────────────────────────────────────────────────────
+  clockTimer:       null,
+  loadingCount:     0,
+  currentView:      'home',
+  startupLoading:   true,
+  pendingConfirm:   null,
+  settingsReady:    false,
+  iconCatalog:      [],
 
-      const userForm = document.querySelector('#userForm');
-      if (userForm) {
-        userForm.addEventListener('submit', (event) => {
-          event.preventDefault();
-          this.saveUserFromForm();
-        });
-      }
+  /** Přihlášený uživatel, filtry a řazení tabulky uživatelů */
+  usersState: {
+    users: [], roles: [], systemRoles: [], locations: [], departments: [], currentUserId: '',
+  },
+  usersFilter: { query: '', role: '', status: '' },
+  usersSort:   { field: 'fullName', dir: 'asc' },
 
-      document.querySelectorAll('[data-action="close-user-modal"]').forEach((button) => {
-        button.addEventListener('click', () => this.closeUserForm());
-      });
+  /** Stavové objekty pro jednotlivé sekce nastavení */
+  locationsState:   { locations: [] },
+  departmentsState: { departments: [] },
+  subAppsState:     { subApps: [] },
+  permissionsState: { permissions: [], users: [], subApps: [], currentSubAppKey: '' },
+  rolesState:       { roles: [], permsByRole: {}, knownPermissions: [] },
 
-      const firstNameInput = document.querySelector('[name="firstName"]');
-      const lastNameInput = document.querySelector('[name="lastName"]');
-      const generateEmail = () => {
-        const form = document.querySelector('#userForm');
-        if (!form || form.elements.id.value) return;
-        const first = this.removeDiacritics(form.elements.firstName.value);
-        const last = this.removeDiacritics(form.elements.lastName.value);
-        if (first && last) form.elements.email.value = first + '.' + last + '@lidl.cz';
-      };
-      if (firstNameInput) firstNameInput.addEventListener('input', generateEmail);
-      if (lastNameInput) lastNameInput.addEventListener('input', generateEmail);
+  // =========================================================================
+  // SEKCE: Inicializace
+  // =========================================================================
 
-      const locationNameSelect = document.querySelector('#userLocationName');
-      if (locationNameSelect) {
-        locationNameSelect.addEventListener('change', () => {
-          this.filterDepartmentsByLocation(locationNameSelect.value);
-        });
-      }
+  /** Inicializace aplikace — spouští se po DOMContentLoaded. */
+  init() {
+    this.loader          = document.querySelector('#appLoader');
+    this.toastRegion     = document.querySelector('#toastRegion');
+    this.modal           = document.querySelector('#appModal');
+    this.userModal       = document.querySelector('#userModal');
+    this.locationModal   = document.querySelector('#locationModal');
+    this.departmentModal = document.querySelector('#departmentModal');
+    this.subAppModal     = document.querySelector('#subAppModal');
+    this.permissionsModal = document.querySelector('#permissionsModal');
+    this.rolesModal      = document.querySelector('#rolesModal');
+    this.changelogModal  = document.querySelector('#changelogModal');
+    this.iconCatalog     = window.LIDL_ICON_CATALOG || [];
+    this.applyBootstrap(window.APP_BOOTSTRAP || {});
+    this.bindEvents();
+    this.startClock();
+    this.loadInitData();
+  },
 
-      const createLocation = document.querySelector('[data-action="create-location"]');
-      if (createLocation) createLocation.addEventListener('click', () => this.openLocationForm());
-
-      const locationForm = document.querySelector('#locationForm');
-      if (locationForm) locationForm.addEventListener('submit', (e) => { e.preventDefault(); this.saveLocationFromForm(); });
-
-      document.querySelectorAll('[data-action="close-location-modal"]').forEach(b => b.addEventListener('click', () => this.closeLocationForm()));
-
-      const createDepartment = document.querySelector('[data-action="create-department"]');
-      if (createDepartment) createDepartment.addEventListener('click', () => this.openDepartmentForm());
-
-      const departmentForm = document.querySelector('#departmentForm');
-      if (departmentForm) departmentForm.addEventListener('submit', (e) => { e.preventDefault(); this.saveDepartmentFromForm(); });
-
-      document.querySelectorAll('[data-action="close-department-modal"]').forEach(b => b.addEventListener('click', () => this.closeDepartmentForm()));
-
-      const createSubApp = document.querySelector('[data-action="create-subapp"]');
-      if (createSubApp) createSubApp.addEventListener('click', () => this.openSubAppForm());
-
-      const subAppForm = document.querySelector('#subAppForm');
-      if (subAppForm) subAppForm.addEventListener('submit', (e) => { e.preventDefault(); this.saveSubAppFromForm(); });
-
-      document.querySelectorAll('[data-action="close-subapp-modal"]').forEach(b => b.addEventListener('click', () => this.closeSubAppForm()));
-
-      document.querySelectorAll('[data-action="close-permissions-modal"]').forEach(b => b.addEventListener('click', () => this.closePermissionsModal()));
-      const addPermBtn = document.querySelector('[data-action="add-permission"]');
-      if (addPermBtn) addPermBtn.addEventListener('click', () => this.openPermissionForm());
-      const permForm = document.querySelector('#permissionForm');
-      if (permForm) permForm.addEventListener('submit', (e) => { e.preventDefault(); this.savePermissionFromForm(); });
-
-      document.querySelectorAll('[data-action="close-roles-modal"]').forEach(b => b.addEventListener('click', () => this.closeRolesModal()));
-      const createRole = document.querySelector('[data-action="create-role"]');
-      if (createRole) createRole.addEventListener('click', () => this.openRoleForm());
-      const roleForm = document.querySelector('#roleForm');
-      if (roleForm) roleForm.addEventListener('submit', (e) => { e.preventDefault(); this.saveRoleFromForm(); });
-
-      const iconSearch = document.querySelector('#iconSearch');
-      if (iconSearch) iconSearch.addEventListener('input', () => this.renderIconPicker(iconSearch.value));
-
-      const versionLink = document.querySelector('#version');
-      if (versionLink) versionLink.addEventListener('click', (e) => { e.preventDefault(); this.openChangelog(); });
-
-      const integrityBtn = document.querySelector('[data-action="run-integrity-check"]');
-      if (integrityBtn) integrityBtn.addEventListener('click', () => this.runIntegrityCheck());
-
-      // Vyhledávání a filtry uživatelů
-      const usersSearch = document.querySelector('#usersSearch');
-      if (usersSearch) {
-        let debounceTimer = null;
-        usersSearch.addEventListener('input', () => {
-          clearTimeout(debounceTimer);
-          debounceTimer = setTimeout(() => {
-            this.usersFilter.query = usersSearch.value.trim().toLowerCase();
-            this.renderUsers();
-          }, 250);
-        });
-      }
-      const usersRoleFilter = document.querySelector('#usersRoleFilter');
-      if (usersRoleFilter) usersRoleFilter.addEventListener('change', () => {
-        this.usersFilter.role = usersRoleFilter.value;
-        this.renderUsers();
-      });
-      const usersStatusFilter = document.querySelector('#usersStatusFilter');
-      if (usersStatusFilter) usersStatusFilter.addEventListener('change', () => {
-        this.usersFilter.status = usersStatusFilter.value;
-        this.renderUsers();
-      });
-
-      // Řazení podle sloupce
-      document.querySelectorAll('[data-sort-field]').forEach((th) => {
-        th.addEventListener('click', () => this.sortUsers(th.dataset.sortField));
-      });
-
-      // Export CSV
-      const exportCsvBtn = document.querySelector('[data-action="export-users-csv"]');
-      if (exportCsvBtn) exportCsvBtn.addEventListener('click', () => this.exportUsersCsv());
-    },
-
-    loadInitData() {
-      this.callServer('getInitData', null, { loaderText: 'Načítám dashboard...' })
-        .then((data) => {
-          if (data.bootstrap) this.applyBootstrap(data.bootstrap);
-          if (data.homeData) {
-            this.applyAuth(data.homeData.auth || { hasAccess: true });
-            if (data.homeData.auth && data.homeData.auth.hasAccess) {
-              this.renderStats(data.homeData.stats || []);
-              this.renderModules(data.homeData.modules || []);
-              this.renderTeam(data.homeData.team || []);
-            } else {
-              this.hideLoader();
-            }
-          } else {
-            this.hideLoader();
-          }
-          if (data.settingsData) {
-            this.applySettingsState(data.settingsData);
-            this.renderCurrentSettingsView();
-          }
-        })
-        .catch((err) => {
-          const msg = (err && err.message) ? err.message : 'Nepodařilo se načíst data.';
-          if (/session expired|přihlášení|sign.*in/i.test(msg)) {
-            this.showSessionExpired();
-          } else {
-            this.toast(msg, 'error');
-          }
-        });
-    },
-
-    showSessionExpired() {
-      this.openModal(
-        'Platnost sezení vypršela',
-        'Vaše přihlášení vypršelo. Stránku obnovte pro pokračování v práci.',
-        () => window.location.reload(),
-      );
-    },
-
-    applySettingsState(data) {
-      this.usersState = {
-        users: data.users || [],
-        roles: data.roles || [],
-        systemRoles: data.systemRoles || [],
-        locations: data.locations || [],
-        departments: data.departments || [],
-        currentUserId: data.currentUserId || '',
-      };
-      this.locationsState = { locations: data.locations || [] };
-      this.departmentsState = { departments: data.departments || [] };
-      this.subAppsState = { subApps: data.subApps || [] };
-      this.settingsReady = true;
-    },
-
-    snapshotState() {
-      return {
-        usersState: JSON.parse(JSON.stringify(this.usersState)),
-        locationsState: JSON.parse(JSON.stringify(this.locationsState)),
-        departmentsState: JSON.parse(JSON.stringify(this.departmentsState)),
-        subAppsState: JSON.parse(JSON.stringify(this.subAppsState)),
-      };
-    },
-
-    restoreSnapshot(snapshot) {
-      this.usersState = snapshot.usersState;
-      this.locationsState = snapshot.locationsState;
-      this.departmentsState = snapshot.departmentsState;
-      this.subAppsState = snapshot.subAppsState;
-    },
-
-    optimisticUpdate(mutateFn, serverFn, onSuccess, successMsg) {
-      const snapshot = this.snapshotState();
-      mutateFn();
-      this.renderCurrentSettingsView();
-      serverFn()
-        .then((data) => {
-          if (onSuccess) onSuccess(data);
-          else this.renderCurrentSettingsView();
-          if (successMsg) this.toast(successMsg);
-        })
-        .catch((err) => {
-          this.restoreSnapshot(snapshot);
-          this.renderCurrentSettingsView();
-          this.toast(err.message || 'Operace se nezdařila.', 'error');
-        });
-    },
-
-    renderCurrentSettingsView() {
-      if (this.currentView === 'users') { this.renderUserOptions(); this.renderUsers(); }
-      else if (this.currentView === 'locations') this.renderLocations();
-      else if (this.currentView === 'departments') this.renderDepartments();
-      else if (this.currentView === 'subapps') this.renderSubApps();
-    },
-
-    loadHome() {
-      this.callServer('getHomeData')
-        .then((data) => {
-          this.applyAuth(data.auth || { hasAccess: true });
-          if (data.auth && !data.auth.hasAccess) {
-            this.hideLoader();
-            return;
-          }
-          this.renderStats(data.stats || []);
-          this.renderModules(data.modules || []);
-          this.renderTeam(data.team || []);
-        })
-        .catch((error) => this.toast(error.message, 'error'));
-    },
-
-
-    callServer(functionName, payload, options) {
-      const settings = options || {};
-      if (!settings.silent) this.showLoader(settings.loaderText || this.getLoaderText(functionName));
-
-      return new Promise((resolve, reject) => {
-        google.script.run
-          .withSuccessHandler((result) => {
-            if (!settings.silent) this.hideLoader();
-            resolve(result);
-          })
-          .withFailureHandler((error) => {
-            if (!settings.silent) this.hideLoader();
-            reject(error);
-          })[functionName](payload);
-      });
-    },
-
-    applyBootstrap(data) {
-      const user = this.getUserEmail(data.user);
-      const version = data.version || '';
-      const loadedAt = data.loadedAt || data.renderedAt || '';
-      const auth = data.auth || {};
-      const role = auth.accessRole || auth.systemRole || '';
-
-      this.setText('#sidebarUser', user);
-      this.setText('#sidebarAvatar', this.getInitials(user));
-      this.setText('#welcomeName', this.getDisplayName(user));
-      this.setText('#sidebarRole', role);
-      this.setText('#version', version);
-      this.setText('#updatedAt', this.formatDateTime(loadedAt));
-      this.applyAuth(auth.hasAccess !== undefined ? auth : { hasAccess: true });
-    },
-
-    applyAuth(auth) {
-      const hasAccess = !auth || auth.hasAccess !== false;
-      const appEl = document.querySelector('.app');
-      const denied = document.querySelector('#accessDenied');
-      if (!hasAccess) {
-        if (appEl) appEl.hidden = true;
-        if (denied) denied.hidden = false;
-        this.setText('#accessDeniedReason', auth.reason || 'Váš účet není uveden v seznamu aktivních uživatelů aplikace.');
-        this.setText('#accessDeniedUser', this.getUserEmail(auth._user || window.APP_BOOTSTRAP && window.APP_BOOTSTRAP.user));
-        return;
-      }
-      if (appEl) appEl.hidden = false;
-      if (denied) denied.hidden = true;
-    },
-
-    showView(view) {
-      this.currentView = view;
+  /** Registrace všech event listenerů. */
+  bindEvents() {
+    // Sidebar
+    if (localStorage.getItem('sidebarCollapsed') === '1') {
+      document.querySelector('.app').classList.add('sidebar-collapsed');
+    }
+    this.syncSidebarToggle();
+    document.querySelector('#sidebarToggle').addEventListener('click', () => {
       const app = document.querySelector('.app');
-      if (app) app.dataset.view = view;
-      const denied = document.querySelector('#accessDenied');
-      if (denied && !denied.hidden) return;
-      const pages = { home: '#dashboardPage', users: '#usersPage', locations: '#locationsPage', departments: '#departmentsPage', subapps: '#subappsPage', roles: '#rolesPage' };
-      Object.entries(pages).forEach(([k, sel]) => {
-        const el = document.querySelector(sel);
-        if (el) el.hidden = k !== view;
+      app.classList.toggle('sidebar-collapsed');
+      localStorage.setItem('sidebarCollapsed', app.classList.contains('sidebar-collapsed') ? '1' : '0');
+      this.syncSidebarToggle();
+    });
+
+    // Potvrzovací modal
+    this.modal.querySelector('form').addEventListener('submit', (e) => { e.preventDefault(); this.closeModal(); });
+    const modalConfirm = document.querySelector('#modalConfirmButton');
+    if (modalConfirm) {
+      modalConfirm.addEventListener('click', () => {
+        const action = this.pendingConfirm;
+        this.closeModal();
+        if (typeof action === 'function') action();
       });
-      const topbar = document.querySelector('.dashboard-topbar');
-      if (topbar) topbar.hidden = view !== 'home';
-    },
+    }
 
-    setActiveNav(section) {
-      document.querySelectorAll('.nav-link').forEach((item) => {
-        const itemSection = item.dataset.section || '';
-        const active = itemSection === section;
-        item.classList.toggle('is-active', active);
+    // Navigace
+    document.querySelectorAll('.nav-link').forEach((button) => {
+      button.addEventListener('click', () => {
+        const section = button.dataset.section || 'home';
+        this.setActiveNav(section);
+        if (section === 'users')       { this.showView('users');       this.renderUserOptions(); this.renderUsers(); return; }
+        if (section === 'locations')   { this.showView('locations');   this.renderLocations();   return; }
+        if (section === 'departments') { this.showView('departments'); this.renderDepartments(); return; }
+        if (section === 'subapps')     { this.showView('subapps');     this.renderSubApps();     return; }
+        if (section === 'roles')       { this.showView('roles');       this.loadRoles();         return; }
+        this.showView('home');
+        this.loadHome();
       });
-    },
+    });
 
-    renderStats(stats) {
-      const grid = document.querySelector('#statusGrid');
-      grid.innerHTML = stats.map((item) => `
-        <div class="status-card" data-tone="${this.escape(item.tone || 'neutral')}">
-          <span class="status-icon">
-            <svg><use href="#${this.iconSymbol(item.icon)}"></use></svg>
-          </span>
-          <div>
-            <span>${this.escape(item.label)}</span>
-            <strong>${this.escape(item.value)}</strong>
-          </div>
-        </div>
-      `).join('');
-    },
+    // Uživatelé — formulář
+    const createUser = document.querySelector('[data-action="create-user"]');
+    if (createUser) createUser.addEventListener('click', () => this.openUserForm());
+    const userForm = document.querySelector('#userForm');
+    if (userForm) userForm.addEventListener('submit', (e) => { e.preventDefault(); this.saveUserFromForm(); });
+    document.querySelectorAll('[data-action="close-user-modal"]').forEach((b) => b.addEventListener('click', () => this.closeUserForm()));
 
-    renderModules(modules) {
-      const grid = document.querySelector('#moduleGrid');
-      if (!modules.length) {
-        grid.innerHTML = `
-          <div class="empty-state module-empty">
-            <svg><use href="#i-info"></use></svg>
-            <strong>Moduly zatím nejsou nastavené</strong>
-            <span>Dlaždice dashboardu doplníme podle skutečných částí OZ agendy.</span>
-          </div>
-        `;
-        return;
-      }
+    // Uživatelé — auto-generace e-mailu z jména
+    const firstNameInput = document.querySelector('[name="firstName"]');
+    const lastNameInput  = document.querySelector('[name="lastName"]');
+    const generateEmail  = () => {
+      const form = document.querySelector('#userForm');
+      if (!form || form.elements.id.value) return;
+      const first = this.removeDiacritics(form.elements.firstName.value);
+      const last  = this.removeDiacritics(form.elements.lastName.value);
+      if (first && last) form.elements.email.value = first + '.' + last + '@lidl.cz';
+    };
+    if (firstNameInput) firstNameInput.addEventListener('input', generateEmail);
+    if (lastNameInput)  lastNameInput.addEventListener('input', generateEmail);
 
-      grid.innerHTML = modules.map((item) => `
-        <article class="dashboard-card${item.enabled ? '' : ' is-disabled'}" data-accent="${this.escape(item.accent || 'blue')}">
-          <span class="dashboard-card-icon">
-            <svg><use href="#${this.iconSymbol(item.icon)}"></use></svg>
-          </span>
-          <div>
-            <h2>${this.escape(item.title)}</h2>
-            <p>${this.escape(item.updated)}</p>
-            <small>${this.escape(item.description)}</small>
-          </div>
-          <footer>
-            <span class="pill">${this.escape(item.status)}</span>
-            <button class="card-arrow" type="button" data-title="${this.escape(item.title)}" data-url="${this.escape(item.targetUrl || '')}" data-enabled="${item.enabled ? '1' : '0'}" ${item.enabled ? '' : 'disabled'} aria-label="Otevřít ${this.escape(item.title)}">
-              <svg><use href="#i-chevron-right"></use></svg>
-            </button>
-          </footer>
-        </article>
-      `).join('');
+    // Uživatelé — filtr úseků dle lokace
+    const locationNameSelect = document.querySelector('#userLocationName');
+    if (locationNameSelect) {
+      locationNameSelect.addEventListener('change', () => this.filterDepartmentsByLocation(locationNameSelect.value));
+    }
 
-      grid.querySelectorAll('.card-arrow').forEach((button) => {
-        button.addEventListener('click', () => {
-          if (button.dataset.enabled !== '1') return;
-          if (button.dataset.url) {
-            window.open(button.dataset.url, '_blank', 'noopener');
-          } else {
-            this.openModal(button.dataset.title || 'Subaplikace', 'Dlaždice je aktivní, ale zatím nemá nastavenou cílovou URL.');
-          }
-        });
+    // Uživatelé — toolbar (vyhledávání, filtry, řazení, export)
+    const usersSearch = document.querySelector('#usersSearch');
+    if (usersSearch) {
+      let debounceTimer = null;
+      usersSearch.addEventListener('input', () => {
+        clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(() => {
+          this.usersFilter.query = usersSearch.value.trim().toLowerCase();
+          this.renderUsers();
+        }, 250);
       });
-    },
-
-    renderTeam(team) {
-      const list = document.querySelector('#teamList');
-      if (!team.length) {
-        list.innerHTML = '<div class="team-empty">Tým bude doplněn</div>';
-        return;
-      }
-
-      list.innerHTML = team.map((member) => `
-        <div class="team-member">
-          <span></span>
-          <strong>${this.escape(member.name)}</strong>
-          <small>${this.escape(member.role)}</small>
-          <svg><use href="#i-mail"></use></svg>
-        </div>
-      `).join('');
-    },
-
-    renderUserOptions() {
-      this.setSelectOptions('#userSystemRole', this.usersState.systemRoles);
-      this.setSelectOptions('#userAccessRole', this.usersState.roles);
-      this.setSelectOptions('#userLocationName', (this.usersState.locations || []).map(l => ({ value: l.displayName, label: l.displayName })));
-      this.setSelectOptions('#userDepartment', (this.usersState.departments || []).map(d => ({ value: d.name, label: d.name })));
-      // Synchronizace filtru rolí v toolbaru
-      const roleFilter = document.querySelector('#usersRoleFilter');
-      if (roleFilter) {
-        const current = roleFilter.value;
-        roleFilter.innerHTML = '<option value="">Všechny role</option>' +
-          (this.usersState.roles || []).map((r) =>
-            `<option value="${this.escape(r.value)}">${this.escape(r.label)}</option>`
-          ).join('');
-        roleFilter.value = current;
-      }
-    },
-
-    setUsersLoading() {
-      const rows = document.querySelector('#usersRows');
-      const empty = document.querySelector('#usersEmpty');
-      const counter = document.querySelector('#usersCount');
-      if (counter) counter.textContent = '-';
-      if (rows) rows.innerHTML = '';
-      if (empty) {
-        empty.hidden = false;
-        empty.querySelector('strong').textContent = 'Načítám uživatele';
-        empty.querySelector('span').textContent = 'Připravuji administraci a ověřuji oprávnění.';
-      }
-    },
-
-    getFilteredUsers() {
-      const { query, role, status } = this.usersFilter;
-      const { field, dir } = this.usersSort;
-      let users = (this.usersState.users || []).filter((u) => {
-        if (query) {
-          const haystack = [u.fullName, u.email, u.locationName, u.department]
-            .join(' ').toLowerCase();
-          if (!haystack.includes(query)) return false;
-        }
-        if (role && u.accessRole !== role) return false;
-        if (status === 'active' && !u.active) return false;
-        if (status === 'inactive' && u.active) return false;
-        return true;
-      });
-      if (field) {
-        users = users.slice().sort((a, b) => {
-          const va = field === 'active' ? String(a[field]) : String(a[field] || '');
-          const vb = field === 'active' ? String(b[field]) : String(b[field] || '');
-          const cmp = va.localeCompare(vb, 'cs');
-          return dir === 'asc' ? cmp : -cmp;
-        });
-      }
-      return users;
-    },
-
-    sortUsers(field) {
-      if (this.usersSort.field === field) {
-        this.usersSort.dir = this.usersSort.dir === 'asc' ? 'desc' : 'asc';
-      } else {
-        this.usersSort.field = field;
-        this.usersSort.dir = 'asc';
-      }
+    }
+    const usersRoleFilter = document.querySelector('#usersRoleFilter');
+    if (usersRoleFilter) usersRoleFilter.addEventListener('change', () => {
+      this.usersFilter.role = usersRoleFilter.value;
       this.renderUsers();
-    },
+    });
+    const usersStatusFilter = document.querySelector('#usersStatusFilter');
+    if (usersStatusFilter) usersStatusFilter.addEventListener('change', () => {
+      this.usersFilter.status = usersStatusFilter.value;
+      this.renderUsers();
+    });
+    document.querySelectorAll('[data-sort-field]').forEach((th) => {
+      th.addEventListener('click', () => this.sortUsers(th.dataset.sortField));
+    });
+    const exportCsvBtn = document.querySelector('[data-action="export-users-csv"]');
+    if (exportCsvBtn) exportCsvBtn.addEventListener('click', () => this.exportUsersCsv());
 
-    updateSortHeaders() {
-      const { field, dir } = this.usersSort;
-      document.querySelectorAll('[data-sort-field]').forEach((th) => {
-        if (th.dataset.sortField === field) {
-          th.setAttribute('aria-sort', dir === 'asc' ? 'ascending' : 'descending');
-          th.classList.add('is-sorted');
-          th.classList.toggle('is-sorted-desc', dir === 'desc');
+    // Umístění
+    const createLocation = document.querySelector('[data-action="create-location"]');
+    if (createLocation) createLocation.addEventListener('click', () => this.openLocationForm());
+    const locationForm = document.querySelector('#locationForm');
+    if (locationForm) locationForm.addEventListener('submit', (e) => { e.preventDefault(); this.saveLocationFromForm(); });
+    document.querySelectorAll('[data-action="close-location-modal"]').forEach((b) => b.addEventListener('click', () => this.closeLocationForm()));
+
+    // Úseky
+    const createDepartment = document.querySelector('[data-action="create-department"]');
+    if (createDepartment) createDepartment.addEventListener('click', () => this.openDepartmentForm());
+    const departmentForm = document.querySelector('#departmentForm');
+    if (departmentForm) departmentForm.addEventListener('submit', (e) => { e.preventDefault(); this.saveDepartmentFromForm(); });
+    document.querySelectorAll('[data-action="close-department-modal"]').forEach((b) => b.addEventListener('click', () => this.closeDepartmentForm()));
+
+    // Dlaždice
+    const createSubApp = document.querySelector('[data-action="create-subapp"]');
+    if (createSubApp) createSubApp.addEventListener('click', () => this.openSubAppForm());
+    const subAppForm = document.querySelector('#subAppForm');
+    if (subAppForm) subAppForm.addEventListener('submit', (e) => { e.preventDefault(); this.saveSubAppFromForm(); });
+    document.querySelectorAll('[data-action="close-subapp-modal"]').forEach((b) => b.addEventListener('click', () => this.closeSubAppForm()));
+
+    // Dlaždice — přístupy
+    document.querySelectorAll('[data-action="close-permissions-modal"]').forEach((b) => b.addEventListener('click', () => this.closePermissionsModal()));
+    const addPermBtn = document.querySelector('[data-action="add-permission"]');
+    if (addPermBtn) addPermBtn.addEventListener('click', () => this.openPermissionForm());
+    const permForm = document.querySelector('#permissionForm');
+    if (permForm) permForm.addEventListener('submit', (e) => { e.preventDefault(); this.savePermissionFromForm(); });
+
+    // Role
+    document.querySelectorAll('[data-action="close-roles-modal"]').forEach((b) => b.addEventListener('click', () => this.closeRolesModal()));
+    const createRole = document.querySelector('[data-action="create-role"]');
+    if (createRole) createRole.addEventListener('click', () => this.openRoleForm());
+    const roleForm = document.querySelector('#roleForm');
+    if (roleForm) roleForm.addEventListener('submit', (e) => { e.preventDefault(); this.saveRoleFromForm(); });
+
+    // Ikony
+    const iconSearch = document.querySelector('#iconSearch');
+    if (iconSearch) iconSearch.addEventListener('input', () => this.renderIconPicker(iconSearch.value));
+
+    // Changelog & Audit
+    const versionLink = document.querySelector('#version');
+    if (versionLink) versionLink.addEventListener('click', (e) => { e.preventDefault(); this.openChangelog(); });
+    const integrityBtn = document.querySelector('[data-action="run-integrity-check"]');
+    if (integrityBtn) integrityBtn.addEventListener('click', () => this.runIntegrityCheck());
+  },
+
+  // =========================================================================
+  // SEKCE: Načítání dat ze serveru
+  // =========================================================================
+
+  /**
+   * Jeden round-trip při startu: bootstrap + domovská stránka + nastavení.
+   * Minimalizuje latenci při inicializaci aplikace.
+   */
+  loadInitData() {
+    this.callServer('getInitData', null, { loaderText: 'Načítám dashboard...' })
+      .then((data) => {
+        if (data.bootstrap) this.applyBootstrap(data.bootstrap);
+
+        if (data.homeData) {
+          this.applyAuth(data.homeData.auth || { hasAccess: true });
+          if (data.homeData.auth && data.homeData.auth.hasAccess) {
+            this.renderStats(data.homeData.stats || []);
+            this.renderModules(data.homeData.modules || []);
+            this.renderTeam(data.homeData.team || []);
+          } else {
+            this.hideLoader();
+          }
         } else {
-          th.removeAttribute('aria-sort');
-          th.classList.remove('is-sorted', 'is-sorted-desc');
+          this.hideLoader();
+        }
+
+        if (data.settingsData) {
+          this.applySettingsState(data.settingsData);
+          this.renderCurrentSettingsView();
+        }
+      })
+      .catch((err) => {
+        const msg = (err && err.message) ? err.message : 'Nepodařilo se načíst data.';
+        if (/session expired|přihlášení|sign.*in/i.test(msg)) {
+          this.showSessionExpired();
+        } else {
+          this.toast(msg, 'error');
         }
       });
-    },
+  },
 
-    exportUsersCsv() {
-      const users = this.getFilteredUsers();
-      if (!users.length) { this.toast('Žádní uživatelé k exportu.', 'error'); return; }
-      const BOM = '﻿';
-      const headers = ['Jméno', 'E-mail', 'Umístění', 'Typ', 'Úsek', 'Systémová role', 'Role přístupu', 'Stav', 'Poslední návštěva', 'Vytvořen'];
-      const rows = users.map((u) => [
-        u.fullName || '',
-        u.email || '',
-        u.locationName || '',
-        u.locationType || '',
-        u.department || '',
-        u.systemRole || '',
-        u.accessRole || '',
-        u.active ? 'Aktivní' : 'Neaktivní',
-        this.formatDateTime(u.lastVisitAt),
-        this.formatDateTime(u.createdAt),
-      ]);
-      const csv = [headers, ...rows]
-        .map((row) => row.map((cell) => '"' + String(cell).replace(/"/g, '""') + '"').join(';'))
-        .join('\r\n');
-      const blob = new Blob([BOM + csv], { type: 'text/csv;charset=utf-8;' });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = 'uzivatele_' + new Date().toISOString().slice(0, 10) + '.csv';
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
-      this.toast('Exportováno ' + users.length + ' uživatelů.');
-    },
+  /** Obnoví data domovské stránky (při přechodu na "Domů"). */
+  loadHome() {
+    this.callServer('getHomeData')
+      .then((data) => {
+        this.applyAuth(data.auth || { hasAccess: true });
+        if (data.auth && !data.auth.hasAccess) { this.hideLoader(); return; }
+        this.renderStats(data.stats || []);
+        this.renderModules(data.modules || []);
+        this.renderTeam(data.team || []);
+      })
+      .catch((err) => this.toast(err.message, 'error'));
+  },
 
-    renderUsers() {
-      const rows = document.querySelector('#usersRows');
-      const empty = document.querySelector('#usersEmpty');
-      const counter = document.querySelector('#usersCount');
-      const counterLabel = document.querySelector('#usersCountLabel');
-      const total = (this.usersState.users || []).length;
-      const users = this.getFilteredUsers();
+  /**
+   * Volá serverovou funkci via google.script.run.
+   * Vrátí Promise; při options.silent nezobrazuje loader.
+   * @param {string} functionName
+   * @param {*} payload
+   * @param {{ silent?: boolean, loaderText?: string }} options
+   * @returns {Promise}
+   */
+  callServer(functionName, payload, options) {
+    const settings = options || {};
+    if (!settings.silent) this.showLoader(settings.loaderText || LOADER_TEXTS[functionName] || 'Načítám data...');
 
-      if (counter) counter.textContent = String(users.length);
-      if (counterLabel) {
-        counterLabel.textContent = users.length === total
-          ? 'účtů v databázi aplikace'
-          : 'z ' + total + ' (filtrováno)';
-      }
+    return new Promise((resolve, reject) => {
+      google.script.run
+        .withSuccessHandler((result) => { if (!settings.silent) this.hideLoader(); resolve(result); })
+        .withFailureHandler((error)  => { if (!settings.silent) this.hideLoader(); reject(error);  })
+        [functionName](payload);
+    });
+  },
 
-      if (!total) {
-        rows.innerHTML = '';
-        empty.hidden = false;
-        return;
-      }
+  // =========================================================================
+  // SEKCE: Bootstrap a navigace
+  // =========================================================================
 
-      if (!users.length) {
-        rows.innerHTML = '';
-        if (empty) {
-          empty.hidden = false;
-          const strong = empty.querySelector('strong');
-          const span = empty.querySelector('span');
-          if (strong) strong.textContent = 'Filtr neodpovídá žádnému uživateli';
-          if (span) span.textContent = 'Zkuste upravit nebo resetovat vyhledávání.';
+  applyBootstrap(data) {
+    const user    = this.getUserEmail(data.user);
+    const version = data.version || '';
+    const auth    = data.auth || {};
+    const role    = auth.accessRole || auth.systemRole || '';
+
+    this.setText('#sidebarUser',  user);
+    this.setText('#sidebarAvatar', this.getInitials(user));
+    this.setText('#welcomeName',  this.getDisplayName(user));
+    this.setText('#sidebarRole',  role);
+    this.setText('#version',      version);
+    this.setText('#updatedAt',    this.formatDateTime(data.loadedAt || data.renderedAt || ''));
+    this.applyAuth(auth.hasAccess !== undefined ? auth : { hasAccess: true });
+  },
+
+  applyAuth(auth) {
+    const hasAccess = !auth || auth.hasAccess !== false;
+    const appEl     = document.querySelector('.app');
+    const denied    = document.querySelector('#accessDenied');
+    if (!hasAccess) {
+      if (appEl)  appEl.hidden  = true;
+      if (denied) denied.hidden = false;
+      this.setText('#accessDeniedReason', auth.reason || 'Váš účet není uveden v seznamu aktivních uživatelů aplikace.');
+      this.setText('#accessDeniedUser', this.getUserEmail(auth._user || (window.APP_BOOTSTRAP && window.APP_BOOTSTRAP.user)));
+      return;
+    }
+    if (appEl)  appEl.hidden  = false;
+    if (denied) denied.hidden = true;
+  },
+
+  applySettingsState(data) {
+    this.usersState = {
+      users:         data.users         || [],
+      roles:         data.roles         || [],
+      systemRoles:   data.systemRoles   || [],
+      locations:     data.locations     || [],
+      departments:   data.departments   || [],
+      currentUserId: data.currentUserId || '',
+    };
+    this.locationsState   = { locations:   data.locations   || [] };
+    this.departmentsState = { departments: data.departments || [] };
+    this.subAppsState     = { subApps:     data.subApps     || [] };
+    this.settingsReady    = true;
+  },
+
+  showView(view) {
+    this.currentView = view;
+    const app = document.querySelector('.app');
+    if (app) app.dataset.view = view;
+    const denied = document.querySelector('#accessDenied');
+    if (denied && !denied.hidden) return;
+    const pages = {
+      home:        '#dashboardPage',
+      users:       '#usersPage',
+      locations:   '#locationsPage',
+      departments: '#departmentsPage',
+      subapps:     '#subappsPage',
+      roles:       '#rolesPage',
+    };
+    Object.entries(pages).forEach(([k, sel]) => {
+      const el = document.querySelector(sel);
+      if (el) el.hidden = k !== view;
+    });
+    const topbar = document.querySelector('.dashboard-topbar');
+    if (topbar) topbar.hidden = view !== 'home';
+  },
+
+  setActiveNav(section) {
+    document.querySelectorAll('.nav-link').forEach((item) => {
+      item.classList.toggle('is-active', (item.dataset.section || '') === section);
+    });
+  },
+
+  // =========================================================================
+  // SEKCE: Domovská stránka
+  // =========================================================================
+
+  renderStats(stats) {
+    const grid = document.querySelector('#statusGrid');
+    grid.innerHTML = stats.map((item) => `
+      <div class="status-card" data-tone="${this.escape(item.tone || 'neutral')}">
+        <span class="status-icon">
+          <svg><use href="#${this.iconSymbol(item.icon)}"></use></svg>
+        </span>
+        <div>
+          <span>${this.escape(item.label)}</span>
+          <strong>${this.escape(item.value)}</strong>
+        </div>
+      </div>
+    `).join('');
+  },
+
+  renderModules(modules) {
+    const grid = document.querySelector('#moduleGrid');
+    if (!modules.length) {
+      grid.innerHTML = `
+        <div class="empty-state module-empty">
+          <svg><use href="#i-info"></use></svg>
+          <strong>Moduly zatím nejsou nastavené</strong>
+          <span>Dlaždice dashboardu doplníme podle skutečných částí OZ agendy.</span>
+        </div>
+      `;
+      return;
+    }
+
+    grid.innerHTML = modules.map((item) => `
+      <article class="dashboard-card${item.enabled ? '' : ' is-disabled'}" data-accent="${this.escape(item.accent || 'blue')}">
+        <span class="dashboard-card-icon">
+          <svg><use href="#${this.iconSymbol(item.icon)}"></use></svg>
+        </span>
+        <div>
+          <h2>${this.escape(item.title)}</h2>
+          <p>${this.escape(item.updated)}</p>
+          <small>${this.escape(item.description)}</small>
+        </div>
+        <footer>
+          <span class="pill">${this.escape(item.status)}</span>
+          <button class="card-arrow" type="button"
+            data-title="${this.escape(item.title)}"
+            data-url="${this.escape(item.targetUrl || '')}"
+            data-enabled="${item.enabled ? '1' : '0'}"
+            ${item.enabled ? '' : 'disabled'}
+            aria-label="Otevřít ${this.escape(item.title)}">
+            <svg><use href="#i-chevron-right"></use></svg>
+          </button>
+        </footer>
+      </article>
+    `).join('');
+
+    grid.querySelectorAll('.card-arrow').forEach((button) => {
+      button.addEventListener('click', () => {
+        if (button.dataset.enabled !== '1') return;
+        if (button.dataset.url) {
+          window.open(button.dataset.url, '_blank', 'noopener');
+        } else {
+          this.openModal(button.dataset.title || 'Subaplikace', 'Dlaždice je aktivní, ale zatím nemá nastavenou cílovou URL.');
         }
-        this.updateSortHeaders();
-        return;
+      });
+    });
+  },
+
+  renderTeam(team) {
+    const list = document.querySelector('#teamList');
+    if (!team.length) { list.innerHTML = '<div class="team-empty">Tým bude doplněn</div>'; return; }
+    list.innerHTML = team.map((member) => `
+      <div class="team-member">
+        <span></span>
+        <strong>${this.escape(member.name)}</strong>
+        <small>${this.escape(member.role)}</small>
+        <svg><use href="#i-mail"></use></svg>
+      </div>
+    `).join('');
+  },
+
+  // =========================================================================
+  // SEKCE: Uživatelé
+  // =========================================================================
+
+  /** Synchronizuje výběrové seznamy ve formuláři uživatele a v toolbaru. */
+  renderUserOptions() {
+    this.setSelectOptions('#userSystemRole', this.usersState.systemRoles);
+    this.setSelectOptions('#userAccessRole', this.usersState.roles);
+    this.setSelectOptions('#userLocationName', (this.usersState.locations || []).map((l) => ({ value: l.displayName, label: l.displayName })));
+    this.setSelectOptions('#userDepartment',   (this.usersState.departments || []).map((d) => ({ value: d.name, label: d.name })));
+
+    // Synchronizace filtru rolí v toolbaru (zachovává stávající výběr)
+    const roleFilter = document.querySelector('#usersRoleFilter');
+    if (roleFilter) {
+      const current = roleFilter.value;
+      roleFilter.innerHTML = '<option value="">Všechny role</option>' +
+        (this.usersState.roles || []).map((r) => `<option value="${this.escape(r.value)}">${this.escape(r.label)}</option>`).join('');
+      roleFilter.value = current;
+    }
+  },
+
+  /**
+   * Vrátí filtrovaný a seřazený seznam uživatelů dle aktuálního stavu filtrů.
+   * @returns {Object[]}
+   */
+  getFilteredUsers() {
+    const { query, role, status } = this.usersFilter;
+    const { field, dir } = this.usersSort;
+
+    let users = (this.usersState.users || []).filter((u) => {
+      if (query) {
+        const haystack = [u.fullName, u.email, u.locationName, u.department].join(' ').toLowerCase();
+        if (!haystack.includes(query)) return false;
       }
+      if (role   && u.accessRole !== role)       return false;
+      if (status === 'active'   && !u.active)    return false;
+      if (status === 'inactive' &&  u.active)    return false;
+      return true;
+    });
 
-      if (empty) empty.hidden = true;
-      rows.innerHTML = users.map((user) => `
-        <tr>
-          <td>
-            <div class="user-cell">
-              <span class="user-mini-avatar">${this.escape(this.getInitials(user.fullName || user.email))}</span>
-              <span><strong>${this.escape(user.fullName || '-')}</strong><small>${this.escape(user.email || '-')}</small></span>
-            </div>
-          </td>
-          <td>${this.escape(user.locationName || '-')}<small>${this.escape(user.locationType || '')}</small></td>
-          <td>${this.escape(user.department || '-')}</td>
-          <td><span class="role-chip">${this.escape(user.systemRole || '-')}</span></td>
-          <td><span class="role-chip is-blue">${this.escape(user.accessRole || '-')}</span></td>
-          <td><span class="state-chip ${user.active ? 'is-active' : 'is-muted'}">${user.active ? 'Aktivní' : 'Vypnutý'}</span></td>
-          <td>${this.escape(this.formatDateTime(user.lastVisitAt))}</td>
-          <td class="table-actions">
-            <button type="button" class="icon-button" data-action="edit-user" data-id="${this.escape(user.id)}" aria-label="Upravit uživatele ${this.escape(user.fullName || user.email)}"><svg><use href="#i-pencil"></use></svg></button>
-            <button type="button" class="icon-button danger" data-action="delete-user" data-id="${this.escape(user.id)}" aria-label="Smazat uživatele ${this.escape(user.fullName || user.email)}"><svg><use href="#i-trash"></use></svg></button>
-          </td>
-        </tr>
-      `).join('');
-
-      rows.querySelectorAll('[data-action="edit-user"]').forEach((button) => {
-        button.addEventListener('click', () => this.openUserForm(this.findUser(button.dataset.id)));
+    if (field) {
+      users = users.slice().sort((a, b) => {
+        const va = String(a[field] || '');
+        const vb = String(b[field] || '');
+        const cmp = va.localeCompare(vb, 'cs');
+        return dir === 'asc' ? cmp : -cmp;
       });
-      rows.querySelectorAll('[data-action="delete-user"]').forEach((button) => {
-        button.addEventListener('click', () => this.confirmDeleteUser(button.dataset.id));
-      });
-      this.updateSortHeaders();
-    },
+    }
 
-    renderUsersError(message) {
-      const rows = document.querySelector('#usersRows');
-      const empty = document.querySelector('#usersEmpty');
-      if (rows) rows.innerHTML = '';
+    return users;
+  },
+
+  /** Přepne řazení dle daného sloupce (toggle asc/desc). */
+  sortUsers(field) {
+    this.usersSort.dir   = this.usersSort.field === field && this.usersSort.dir === 'asc' ? 'desc' : 'asc';
+    this.usersSort.field = field;
+    this.renderUsers();
+  },
+
+  /** Aktualizuje aria-sort atributy a CSS třídy záhlaví tabulky. */
+  updateSortHeaders() {
+    const { field, dir } = this.usersSort;
+    document.querySelectorAll('[data-sort-field]').forEach((th) => {
+      if (th.dataset.sortField === field) {
+        th.setAttribute('aria-sort', dir === 'asc' ? 'ascending' : 'descending');
+        th.classList.add('is-sorted');
+        th.classList.toggle('is-sorted-desc', dir === 'desc');
+      } else {
+        th.removeAttribute('aria-sort');
+        th.classList.remove('is-sorted', 'is-sorted-desc');
+      }
+    });
+  },
+
+  /** Exportuje filtrované uživatele jako CSV soubor s BOM (pro správné zobrazení v Excelu). */
+  exportUsersCsv() {
+    const users = this.getFilteredUsers();
+    if (!users.length) { this.toast('Žádní uživatelé k exportu.', 'error'); return; }
+
+    const BOM     = '﻿';
+    const headers = ['Jméno', 'E-mail', 'Umístění', 'Typ', 'Úsek', 'Systémová role', 'Role přístupu', 'Stav', 'Poslední návštěva', 'Vytvořen'];
+    const rows    = users.map((u) => [
+      u.fullName   || '',
+      u.email      || '',
+      u.locationName || '',
+      u.locationType || '',
+      u.department || '',
+      u.systemRole || '',
+      u.accessRole || '',
+      u.active ? 'Aktivní' : 'Neaktivní',
+      this.formatDateTime(u.lastVisitAt),
+      this.formatDateTime(u.createdAt),
+    ]);
+
+    const csv = [headers, ...rows]
+      .map((row) => row.map((cell) => '"' + String(cell).replace(/"/g, '""') + '"').join(';'))
+      .join('\r\n');
+
+    const blob = new Blob([BOM + csv], { type: 'text/csv;charset=utf-8;' });
+    const url  = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href     = url;
+    link.download = 'uzivatele_' + new Date().toISOString().slice(0, 10) + '.csv';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    this.toast('Exportováno ' + users.length + ' uživatelů.');
+  },
+
+  renderUsers() {
+    const rows         = document.querySelector('#usersRows');
+    const empty        = document.querySelector('#usersEmpty');
+    const counter      = document.querySelector('#usersCount');
+    const counterLabel = document.querySelector('#usersCountLabel');
+    const total        = (this.usersState.users || []).length;
+    const users        = this.getFilteredUsers();
+
+    if (counter)      counter.textContent      = String(users.length);
+    if (counterLabel) counterLabel.textContent = users.length === total
+      ? 'účtů v databázi aplikace'
+      : 'z ' + total + ' (filtrováno)';
+
+    // Prázdná databáze
+    if (!total) {
+      rows.innerHTML = '';
+      if (empty) empty.hidden = false;
+      return;
+    }
+
+    // Filtr neodpovídá žádnému záznamu
+    if (!users.length) {
+      rows.innerHTML = '';
       if (empty) {
         empty.hidden = false;
         const strong = empty.querySelector('strong');
-        const span = empty.querySelector('span');
-        if (strong) strong.textContent = 'Seznam uživatelů nelze načíst';
-        if (span) span.textContent = message || 'Zkontrolujte oprávnění nebo připojení ke spreadsheetu.';
+        const span   = empty.querySelector('span');
+        if (strong) strong.textContent = 'Filtr neodpovídá žádnému uživateli';
+        if (span)   span.textContent   = 'Zkuste upravit nebo resetovat vyhledávání.';
       }
-    },
+      this.updateSortHeaders();
+      return;
+    }
 
-    renderLocations() {
-      const rows = document.querySelector('#locationsRows');
-      const empty = document.querySelector('#locationsEmpty');
-      const locations = (this.locationsState || {}).locations || [];
-      if (!rows) return;
-      if (!locations.length) { rows.innerHTML = ''; if (empty) empty.hidden = false; return; }
-      if (empty) empty.hidden = true;
-      rows.innerHTML = locations.map(loc => `
+    if (empty) empty.hidden = true;
+    rows.innerHTML = users.map((user) => `
+      <tr>
+        <td>
+          <div class="user-cell">
+            <span class="user-mini-avatar">${this.escape(this.getInitials(user.fullName || user.email))}</span>
+            <span>
+              <strong>${this.escape(user.fullName || '-')}</strong>
+              <small>${this.escape(user.email || '-')}</small>
+            </span>
+          </div>
+        </td>
+        <td>${this.escape(user.locationName || '-')}<small>${this.escape(user.locationType || '')}</small></td>
+        <td>${this.escape(user.department || '-')}</td>
+        <td><span class="role-chip">${this.escape(user.systemRole || '-')}</span></td>
+        <td><span class="role-chip is-blue">${this.escape(user.accessRole || '-')}</span></td>
+        <td><span class="state-chip ${user.active ? 'is-active' : 'is-muted'}">${user.active ? 'Aktivní' : 'Vypnutý'}</span></td>
+        <td>${this.escape(this.formatDateTime(user.lastVisitAt))}</td>
+        <td class="table-actions">
+          <button type="button" class="icon-button" data-action="edit-user" data-id="${this.escape(user.id)}"
+            aria-label="Upravit uživatele ${this.escape(user.fullName || user.email)}">
+            <svg><use href="#i-pencil"></use></svg>
+          </button>
+          <button type="button" class="icon-button danger" data-action="delete-user" data-id="${this.escape(user.id)}"
+            aria-label="Smazat uživatele ${this.escape(user.fullName || user.email)}">
+            <svg><use href="#i-trash"></use></svg>
+          </button>
+        </td>
+      </tr>
+    `).join('');
+
+    rows.querySelectorAll('[data-action="edit-user"]').forEach((b) =>
+      b.addEventListener('click', () => this.openUserForm(this.findUser(b.dataset.id))));
+    rows.querySelectorAll('[data-action="delete-user"]').forEach((b) =>
+      b.addEventListener('click', () => this.confirmDeleteUser(b.dataset.id)));
+    this.updateSortHeaders();
+  },
+
+  openUserForm(user) {
+    const form = document.querySelector('#userForm');
+    form.reset();
+    this.renderUserOptions();
+    this.setText('#userModalTitle', user ? 'Upravit uživatele' : 'Nový uživatel');
+    form.elements.id.value           = user ? user.id           : '';
+    form.elements.email.value        = user ? user.email        : '';
+    form.elements.firstName.value    = user ? user.firstName    : '';
+    form.elements.lastName.value     = user ? user.lastName     : '';
+    form.elements.locationName.value = user ? (user.locationName || '') : '';
+    this.filterDepartmentsByLocation(form.elements.locationName.value);
+    form.elements.department.value   = user ? (user.department || '') : '';
+    form.elements.systemRole.value   = user ? user.systemRole   : 'USER';
+    form.elements.accessRole.value   = user ? user.accessRole   : 'VIEWER';
+    form.elements.active.checked     = user ? Boolean(user.active) : true;
+    this.userModal.showModal();
+  },
+
+  closeUserForm() { this.userModal.close(); },
+
+  saveUserFromForm() {
+    const form         = document.querySelector('#userForm');
+    const locationName = form.elements.locationName.value;
+    const payload = {
+      id:           form.elements.id.value,
+      email:        form.elements.email.value,
+      firstName:    form.elements.firstName.value,
+      lastName:     form.elements.lastName.value,
+      locationType: this.getLocationTypeByName(locationName),
+      locationName: locationName,
+      department:   form.elements.department.value,
+      systemRole:   form.elements.systemRole.value,
+      accessRole:   form.elements.accessRole.value,
+      active:       form.elements.active.checked,
+    };
+
+    this.closeUserForm();
+    const isNew    = !payload.id;
+    const tempId   = isNew ? 'temp_' + Date.now() : payload.id;
+    const fullName = [payload.firstName, payload.lastName].filter(Boolean).join(' ');
+
+    this.optimisticUpdate(
+      () => {
+        const optimistic = {
+          id: tempId, email: payload.email, firstName: payload.firstName,
+          lastName: payload.lastName, fullName: fullName || payload.email,
+          locationType: payload.locationType, locationName: payload.locationName,
+          department: payload.department, systemRole: payload.systemRole,
+          accessRole: payload.accessRole, active: payload.active,
+          lastVisitAt: '', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+        };
+        if (isNew) {
+          this.usersState.users = [...this.usersState.users, optimistic]
+            .sort((a, b) => (a.fullName || '').localeCompare(b.fullName || '', 'cs'));
+        } else {
+          this.usersState.users = this.usersState.users.map((u) => u.id === payload.id ? { ...u, ...optimistic } : u);
+        }
+        this.renderUserOptions();
+      },
+      () => this.callServer('saveUser', payload, { silent: true }),
+      (data) => { this.applySettingsState(data); this.renderUserOptions(); this.renderUsers(); },
+      'Uživatel byl uložen.',
+    );
+  },
+
+  confirmDeleteUser(id) {
+    const user = this.findUser(id);
+    if (!user) return;
+    this.openModal('Smazat uživatele',
+      'Opravdu chcete smazat uživatele ' + (user.fullName || user.email) + '? Tato akce odebere jeho přístup do aplikace.',
+      () => this.optimisticUpdate(
+        () => { this.usersState.users = this.usersState.users.filter((u) => u.id !== id); },
+        () => this.callServer('deleteUser', id, { silent: true }),
+        (data) => { this.applySettingsState(data); this.renderUsers(); },
+        'Uživatel byl smazán.',
+      ),
+    );
+  },
+
+  filterDepartmentsByLocation(locationName) {
+    const loc      = (this.usersState.locations || []).find((l) => l.displayName === locationName);
+    const locId    = loc ? loc.id : null;
+    const filtered = (this.usersState.departments || []).filter((d) =>
+      !locId || !d.locationIds || d.locationIds.length === 0 || d.locationIds.includes(locId),
+    );
+    this.setSelectOptions('#userDepartment', filtered.map((d) => ({ value: d.name, label: d.name })));
+  },
+
+  getLocationTypeByName(name) {
+    const loc = (this.usersState.locations || []).find((l) => l.displayName === name);
+    return loc ? loc.type : 'CENTRALA';
+  },
+
+  findUser(id) {
+    return (this.usersState.users || []).find((u) => u.id === id) || null;
+  },
+
+  // =========================================================================
+  // SEKCE: Umístění
+  // =========================================================================
+
+  renderLocations() {
+    const rows      = document.querySelector('#locationsRows');
+    const empty     = document.querySelector('#locationsEmpty');
+    const locations = (this.locationsState || {}).locations || [];
+    if (!rows) return;
+    if (!locations.length) { rows.innerHTML = ''; if (empty) empty.hidden = false; return; }
+    if (empty) empty.hidden = true;
+
+    rows.innerHTML = locations.map((loc) => `
+      <tr>
+        <td><strong>${this.escape(loc.displayName)}</strong></td>
+        <td>${this.escape(loc.type === 'CENTRALA' ? 'Centrála' : 'LC')}</td>
+        <td>${this.escape(loc.code ? 'LC' + loc.code : '–')}</td>
+        <td>${this.escape(loc.abbreviation || '–')}</td>
+        <td>${this.escape(loc.city || '–')}</td>
+        <td><span class="state-chip ${loc.active ? 'is-active' : 'is-muted'}">${loc.active ? 'Aktivní' : 'Vypnutý'}</span></td>
+        <td class="table-actions">
+          <button type="button" class="icon-button" data-action="edit-location" data-id="${this.escape(loc.id)}" aria-label="Upravit"><svg><use href="#i-pencil"></use></svg></button>
+          ${loc.type !== 'CENTRALA' ? `<button type="button" class="icon-button danger" data-action="delete-location" data-id="${this.escape(loc.id)}" aria-label="Smazat"><svg><use href="#i-trash"></use></svg></button>` : ''}
+        </td>
+      </tr>
+    `).join('');
+
+    rows.querySelectorAll('[data-action="edit-location"]').forEach((b) =>
+      b.addEventListener('click', () => this.openLocationForm((this.locationsState.locations || []).find((l) => l.id === b.dataset.id))));
+    rows.querySelectorAll('[data-action="delete-location"]').forEach((b) =>
+      b.addEventListener('click', () => this.confirmDeleteLocation(b.dataset.id)));
+  },
+
+  openLocationForm(loc) {
+    const form = document.querySelector('#locationForm');
+    if (!form) return;
+    form.reset();
+    this.setText('#locationModalTitle', loc ? 'Upravit umístění' : 'Nové umístění');
+    form.elements.id.value           = loc ? loc.id                  : '';
+    form.elements.type.value         = loc ? loc.type                : 'LC';
+    form.elements.code.value         = loc ? (loc.code         || '') : '';
+    form.elements.abbreviation.value = loc ? (loc.abbreviation || '') : '';
+    form.elements.city.value         = loc ? (loc.city         || '') : '';
+    form.elements.active.checked     = loc ? loc.active              : true;
+    document.querySelector('#locationModal').showModal();
+  },
+
+  closeLocationForm() { document.querySelector('#locationModal').close(); },
+
+  saveLocationFromForm() {
+    const form    = document.querySelector('#locationForm');
+    const payload = {
+      id:           form.elements.id.value,
+      type:         form.elements.type.value,
+      code:         form.elements.code.value,
+      abbreviation: form.elements.abbreviation.value,
+      city:         form.elements.city.value,
+      active:       form.elements.active.checked,
+    };
+    this.closeLocationForm();
+
+    const isNew       = !payload.id;
+    const tempId      = isNew ? 'temp_' + Date.now() : payload.id;
+    const displayName = payload.type === 'CENTRALA' ? 'Centrála'
+      : [payload.code, payload.abbreviation, payload.city].filter(Boolean).join(' ');
+
+    this.optimisticUpdate(
+      () => {
+        const optimistic = { id: tempId, type: payload.type, code: payload.code,
+          abbreviation: payload.abbreviation, city: payload.city, displayName, active: payload.active,
+          createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
+        if (isNew) {
+          this.locationsState.locations = [...this.locationsState.locations, optimistic]
+            .sort((a, b) => a.type === 'CENTRALA' ? -1 : b.type === 'CENTRALA' ? 1 : parseInt(a.code, 10) - parseInt(b.code, 10));
+        } else {
+          this.locationsState.locations = this.locationsState.locations.map((l) => l.id === payload.id ? { ...l, ...optimistic } : l);
+        }
+        this.usersState.locations = this.locationsState.locations;
+        this.renderUserOptions();
+      },
+      () => this.callServer('saveLocation', payload, { silent: true }),
+      (data) => {
+        this.locationsState = { locations: data.locations || [] };
+        this.usersState.locations = data.locations || [];
+        this.renderLocations();
+        this.renderUserOptions();
+      },
+      'Umístění uloženo.',
+    );
+  },
+
+  confirmDeleteLocation(id) {
+    const loc = (this.locationsState.locations || []).find((l) => l.id === id);
+    if (!loc) return;
+    this.openModal('Smazat umístění', 'Opravdu chcete smazat ' + loc.displayName + '?', () =>
+      this.optimisticUpdate(
+        () => {
+          this.locationsState.locations = this.locationsState.locations.filter((l) => l.id !== id);
+          this.usersState.locations     = this.locationsState.locations;
+          this.renderUserOptions();
+        },
+        () => this.callServer('deleteLocation', id, { silent: true }),
+        (data) => {
+          this.locationsState = { locations: data.locations || [] };
+          this.usersState.locations = data.locations || [];
+          this.renderLocations();
+          this.renderUserOptions();
+        },
+        'Umístění smazáno.',
+      ),
+    );
+  },
+
+  // =========================================================================
+  // SEKCE: Úseky
+  // =========================================================================
+
+  renderDepartments() {
+    const rows        = document.querySelector('#departmentsRows');
+    const empty       = document.querySelector('#departmentsEmpty');
+    const departments = (this.departmentsState || {}).departments || [];
+    if (!rows) return;
+    if (!departments.length) { rows.innerHTML = ''; if (empty) empty.hidden = false; return; }
+    if (empty) empty.hidden = true;
+
+    const locMap = Object.fromEntries((this.usersState.locations || []).map((l) => [l.id, l.displayName]));
+    rows.innerHTML = departments.map((dep) => {
+      const locNames = (dep.locationIds || []).map((id) => locMap[id]).filter(Boolean).join(', ') || '–';
+      return `
         <tr>
-          <td><strong>${this.escape(loc.displayName)}</strong></td>
-          <td>${this.escape(loc.type === 'CENTRALA' ? 'Centrála' : 'LC')}</td>
-          <td>${this.escape(loc.code ? 'LC' + loc.code : '–')}</td>
-          <td>${this.escape(loc.abbreviation || '–')}</td>
-          <td>${this.escape(loc.city || '–')}</td>
-          <td><span class="state-chip ${loc.active ? 'is-active' : 'is-muted'}">${loc.active ? 'Aktivní' : 'Vypnutý'}</span></td>
+          <td><strong>${this.escape(dep.name)}</strong></td>
+          <td>${this.escape(locNames)}</td>
+          <td><span class="state-chip ${dep.active ? 'is-active' : 'is-muted'}">${dep.active ? 'Aktivní' : 'Vypnutý'}</span></td>
           <td class="table-actions">
-            <button type="button" class="icon-button" data-action="edit-location" data-id="${this.escape(loc.id)}" aria-label="Upravit"><svg><use href="#i-pencil"></use></svg></button>
-            ${loc.type !== 'CENTRALA' ? `<button type="button" class="icon-button danger" data-action="delete-location" data-id="${this.escape(loc.id)}" aria-label="Smazat"><svg><use href="#i-trash"></use></svg></button>` : ''}
+            <button type="button" class="icon-button" data-action="edit-department" data-id="${this.escape(dep.id)}" aria-label="Upravit"><svg><use href="#i-pencil"></use></svg></button>
+            <button type="button" class="icon-button danger" data-action="delete-department" data-id="${this.escape(dep.id)}" aria-label="Smazat"><svg><use href="#i-trash"></use></svg></button>
           </td>
-        </tr>
-      `).join('');
-      rows.querySelectorAll('[data-action="edit-location"]').forEach(b => {
-        b.addEventListener('click', () => this.openLocationForm((this.locationsState.locations || []).find(l => l.id === b.dataset.id)));
-      });
-      rows.querySelectorAll('[data-action="delete-location"]').forEach(b => {
-        b.addEventListener('click', () => this.confirmDeleteLocation(b.dataset.id));
-      });
-    },
+        </tr>`;
+    }).join('');
 
-    renderDepartments() {
-      const rows = document.querySelector('#departmentsRows');
-      const empty = document.querySelector('#departmentsEmpty');
-      const departments = (this.departmentsState || {}).departments || [];
-      if (!rows) return;
-      if (!departments.length) { rows.innerHTML = ''; if (empty) empty.hidden = false; return; }
-      if (empty) empty.hidden = true;
-      const locMap = Object.fromEntries((this.usersState.locations || []).map(l => [l.id, l.displayName]));
-      rows.innerHTML = departments.map(dep => {
-        const locNames = (dep.locationIds || []).map(id => locMap[id]).filter(Boolean).join(', ') || '–';
-        return `
-          <tr>
-            <td><strong>${this.escape(dep.name)}</strong></td>
-            <td>${this.escape(locNames)}</td>
-            <td><span class="state-chip ${dep.active ? 'is-active' : 'is-muted'}">${dep.active ? 'Aktivní' : 'Vypnutý'}</span></td>
-            <td class="table-actions">
-              <button type="button" class="icon-button" data-action="edit-department" data-id="${this.escape(dep.id)}" aria-label="Upravit"><svg><use href="#i-pencil"></use></svg></button>
-              <button type="button" class="icon-button danger" data-action="delete-department" data-id="${this.escape(dep.id)}" aria-label="Smazat"><svg><use href="#i-trash"></use></svg></button>
-            </td>
-          </tr>`;
-      }).join('');
-      rows.querySelectorAll('[data-action="edit-department"]').forEach(b => {
-        b.addEventListener('click', () => this.openDepartmentForm((this.departmentsState.departments || []).find(d => d.id === b.dataset.id)));
-      });
-      rows.querySelectorAll('[data-action="delete-department"]').forEach(b => {
-        b.addEventListener('click', () => this.confirmDeleteDepartment(b.dataset.id));
-      });
-    },
+    rows.querySelectorAll('[data-action="edit-department"]').forEach((b) =>
+      b.addEventListener('click', () => this.openDepartmentForm((this.departmentsState.departments || []).find((d) => d.id === b.dataset.id))));
+    rows.querySelectorAll('[data-action="delete-department"]').forEach((b) =>
+      b.addEventListener('click', () => this.confirmDeleteDepartment(b.dataset.id)));
+  },
 
-    renderSubApps() {
-      const rows = document.querySelector('#subAppsRows');
-      const empty = document.querySelector('#subAppsEmpty');
-      const counter = document.querySelector('#subAppsCount');
-      const subApps = (this.subAppsState || {}).subApps || [];
-      if (!rows) return;
-      if (counter) counter.textContent = String(subApps.length);
-      if (!subApps.length) {
-        rows.innerHTML = '';
-        if (empty) empty.hidden = false;
-        return;
-      }
-      if (empty) empty.hidden = true;
-      rows.innerHTML = subApps.map(item => `
-        <tr>
-          <td>
-            <div class="tile-cell">
-              <span class="tile-icon-preview"><svg><use href="#${this.iconSymbol(item.icon)}"></use></svg></span>
-              <span><strong>${this.escape(item.name || '-')}</strong><small>${this.escape(item.description || 'Bez popisu')}</small></span>
-            </div>
-          </td>
-          <td><span class="state-chip ${this.subAppStatusClass(item.status)}">${this.escape(this.subAppStatusLabel(item.status))}</span></td>
-          <td>${this.escape(this.subAppIconLabel(item.icon))}</td>
-          <td>${this.escape(this.formatDateTime(item.lastUpdatedAt))}</td>
-          <td class="table-actions">
-            <button type="button" class="icon-button" data-action="manage-permissions" data-id="${this.escape(item.id)}" data-key="${this.escape(item.key)}" aria-label="Přístupy dlaždice ${this.escape(item.name)}" title="Správa přístupů"><svg><use href="#i-users"></use></svg></button>
-            <button type="button" class="icon-button" data-action="edit-subapp" data-id="${this.escape(item.id)}" aria-label="Upravit dlaždici ${this.escape(item.name)}"><svg><use href="#i-pencil"></use></svg></button>
-            <button type="button" class="icon-button danger" data-action="delete-subapp" data-id="${this.escape(item.id)}" aria-label="Smazat dlaždici ${this.escape(item.name)}"><svg><use href="#i-trash"></use></svg></button>
-          </td>
-        </tr>
-      `).join('');
-      rows.querySelectorAll('[data-action="edit-subapp"]').forEach(b => {
-        b.addEventListener('click', () => this.openSubAppForm((this.subAppsState.subApps || []).find(item => item.id === b.dataset.id)));
-      });
-      rows.querySelectorAll('[data-action="delete-subapp"]').forEach(b => {
-        b.addEventListener('click', () => this.confirmDeleteSubApp(b.dataset.id));
-      });
-      rows.querySelectorAll('[data-action="manage-permissions"]').forEach(b => {
-        b.addEventListener('click', () => this.openPermissionsModal(b.dataset.key, b.dataset.id));
-      });
-    },
+  openDepartmentForm(dep) {
+    const form = document.querySelector('#departmentForm');
+    if (!form) return;
+    form.reset();
+    this.setText('#departmentModalTitle', dep ? 'Upravit úsek' : 'Nový úsek');
+    form.elements.id.value     = dep ? dep.id     : '';
+    form.elements.name.value   = dep ? dep.name   : '';
+    form.elements.active.checked = dep ? dep.active : true;
+    const assignedId  = dep ? (dep.locationIds || [])[0] || '' : '';
+    const locations   = this.usersState.locations || [];
+    this.setSelectOptions('#deptLocationSelect', [
+      { value: '', label: '— bez přiřazení —' },
+      ...locations.map((l) => ({ value: l.id, label: l.displayName })),
+    ]);
+    form.elements.locationId.value = assignedId;
+    document.querySelector('#departmentModal').showModal();
+  },
 
-    openUserForm(user) {
-      const form = document.querySelector('#userForm');
-      form.reset();
-      this.renderUserOptions();
-      this.setText('#userModalTitle', user ? 'Upravit uživatele' : 'Nový uživatel');
-      form.elements.id.value = user ? user.id : '';
-      form.elements.email.value = user ? user.email : '';
-      form.elements.firstName.value = user ? user.firstName : '';
-      form.elements.lastName.value = user ? user.lastName : '';
-      form.elements.locationName.value = user ? (user.locationName || '') : '';
-      this.filterDepartmentsByLocation(form.elements.locationName.value);
-      form.elements.department.value = user ? (user.department || '') : '';
-      form.elements.systemRole.value = user ? user.systemRole : 'USER';
-      form.elements.accessRole.value = user ? user.accessRole : 'VIEWER';
-      form.elements.active.checked = user ? Boolean(user.active) : true;
-      this.userModal.showModal();
-    },
+  closeDepartmentForm() { document.querySelector('#departmentModal').close(); },
 
-    closeUserForm() {
-      this.userModal.close();
-    },
+  saveDepartmentFromForm() {
+    const form       = document.querySelector('#departmentForm');
+    const locationId = form.elements.locationId.value;
+    const payload    = {
+      id:          form.elements.id.value,
+      name:        form.elements.name.value,
+      locationIds: locationId || '',
+      active:      form.elements.active.checked,
+    };
+    this.closeDepartmentForm();
 
-    saveUserFromForm() {
-      const form = document.querySelector('#userForm');
-      const locationName = form.elements.locationName.value;
-      const payload = {
-        id: form.elements.id.value,
-        email: form.elements.email.value,
-        firstName: form.elements.firstName.value,
-        lastName: form.elements.lastName.value,
-        locationType: this.getLocationTypeByName(locationName),
-        locationName: locationName,
-        department: form.elements.department.value,
-        systemRole: form.elements.systemRole.value,
-        accessRole: form.elements.accessRole.value,
-        active: form.elements.active.checked,
-      };
+    const isNew      = !payload.id;
+    const tempId     = isNew ? 'temp_' + Date.now() : payload.id;
+    const locationIds = payload.locationIds ? payload.locationIds.split(',').filter(Boolean) : [];
 
-      this.closeUserForm();
-      const isNew = !payload.id;
-      const tempId = isNew ? 'temp_' + Date.now() : payload.id;
-      const fullName = [payload.firstName, payload.lastName].filter(Boolean).join(' ');
+    this.optimisticUpdate(
+      () => {
+        const optimistic = { id: tempId, name: payload.name, locationIds, active: payload.active,
+          createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
+        if (isNew) {
+          this.departmentsState.departments = [...this.departmentsState.departments, optimistic]
+            .sort((a, b) => (a.name || '').localeCompare(b.name || '', 'cs'));
+        } else {
+          this.departmentsState.departments = this.departmentsState.departments.map((d) => d.id === payload.id ? { ...d, ...optimistic } : d);
+        }
+        this.usersState.departments = this.departmentsState.departments;
+        this.renderUserOptions();
+      },
+      () => this.callServer('saveDepartment', payload, { silent: true }),
+      (data) => {
+        this.departmentsState = { departments: data.departments || [] };
+        this.usersState.departments = data.departments || [];
+        this.renderDepartments();
+        this.renderUserOptions();
+      },
+      'Úsek uložen.',
+    );
+  },
+
+  confirmDeleteDepartment(id) {
+    const dep = (this.departmentsState.departments || []).find((d) => d.id === id);
+    if (!dep) return;
+    this.openModal('Smazat úsek', 'Opravdu chcete smazat úsek ' + dep.name + '?', () =>
       this.optimisticUpdate(
         () => {
-          const optimistic = {
-            id: tempId, email: payload.email, firstName: payload.firstName,
-            lastName: payload.lastName, fullName: fullName || payload.email,
-            locationType: payload.locationType, locationName: payload.locationName,
-            department: payload.department, systemRole: payload.systemRole,
-            accessRole: payload.accessRole, active: payload.active,
-            lastVisitAt: '', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
-          };
-          if (isNew) {
-            this.usersState.users = [...this.usersState.users, optimistic]
-              .sort((a, b) => (a.fullName || '').localeCompare(b.fullName || '', 'cs'));
-          } else {
-            this.usersState.users = this.usersState.users.map(u => u.id === payload.id ? { ...u, ...optimistic } : u);
-          }
+          this.departmentsState.departments = this.departmentsState.departments.filter((d) => d.id !== id);
+          this.usersState.departments       = this.departmentsState.departments;
           this.renderUserOptions();
         },
-        () => this.callServer('saveUser', payload, { silent: true }),
-        (data) => { this.applySettingsState(data); this.renderUserOptions(); this.renderUsers(); },
-        'Uživatel byl uložen.',
-      );
-    },
-
-    confirmDeleteUser(id) {
-      const user = this.findUser(id);
-      if (!user) return;
-      this.openModal('Smazat uživatele', 'Opravdu chcete smazat uživatele ' + (user.fullName || user.email) + '? Tato akce odebere jeho přístup do aplikace.', () => {
-        this.optimisticUpdate(
-          () => { this.usersState.users = this.usersState.users.filter(u => u.id !== id); },
-          () => this.callServer('deleteUser', id, { silent: true }),
-          (data) => { this.applySettingsState(data); this.renderUsers(); },
-          'Uživatel byl smazán.',
-        );
-      });
-    },
-
-    openLocationForm(loc) {
-      const form = document.querySelector('#locationForm');
-      if (!form) return;
-      form.reset();
-      this.setText('#locationModalTitle', loc ? 'Upravit umístění' : 'Nové umístění');
-      form.elements.id.value = loc ? loc.id : '';
-      form.elements.type.value = loc ? loc.type : 'LC';
-      form.elements.code.value = loc ? (loc.code || '') : '';
-      form.elements.abbreviation.value = loc ? (loc.abbreviation || '') : '';
-      form.elements.city.value = loc ? (loc.city || '') : '';
-      form.elements.active.checked = loc ? loc.active : true;
-      document.querySelector('#locationModal').showModal();
-    },
-
-    closeLocationForm() { document.querySelector('#locationModal').close(); },
-
-    saveLocationFromForm() {
-      const form = document.querySelector('#locationForm');
-      const payload = {
-        id: form.elements.id.value,
-        type: form.elements.type.value,
-        code: form.elements.code.value,
-        abbreviation: form.elements.abbreviation.value,
-        city: form.elements.city.value,
-        active: form.elements.active.checked,
-      };
-      this.closeLocationForm();
-      const isNew = !payload.id;
-      const tempId = isNew ? 'temp_' + Date.now() : payload.id;
-      const displayName = payload.type === 'CENTRALA' ? 'Centrála'
-        : [payload.code, payload.abbreviation, payload.city].filter(Boolean).join(' ');
-      this.optimisticUpdate(
-        () => {
-          const optimistic = {
-            id: tempId, type: payload.type, code: payload.code, abbreviation: payload.abbreviation,
-            city: payload.city, displayName, active: payload.active,
-            createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
-          };
-          if (isNew) {
-            this.locationsState.locations = [...this.locationsState.locations, optimistic]
-              .sort((a, b) => a.type === 'CENTRALA' ? -1 : b.type === 'CENTRALA' ? 1 : parseInt(a.code, 10) - parseInt(b.code, 10));
-          } else {
-            this.locationsState.locations = this.locationsState.locations.map(l => l.id === payload.id ? { ...l, ...optimistic } : l);
-          }
-          this.usersState.locations = this.locationsState.locations;
+        () => this.callServer('deleteDepartment', id, { silent: true }),
+        (data) => {
+          this.departmentsState = { departments: data.departments || [] };
+          this.usersState.departments = data.departments || [];
+          this.renderDepartments();
           this.renderUserOptions();
         },
-        () => this.callServer('saveLocation', payload, { silent: true }),
-        (data) => { this.locationsState = { locations: data.locations || [] }; this.usersState.locations = data.locations || []; this.renderLocations(); this.renderUserOptions(); },
-        'Umístění uloženo.',
-      );
-    },
+        'Úsek smazán.',
+      ),
+    );
+  },
 
-    confirmDeleteLocation(id) {
-      const loc = (this.locationsState.locations || []).find(l => l.id === id);
-      if (!loc) return;
-      this.openModal('Smazat umístění', 'Opravdu chcete smazat ' + loc.displayName + '?', () => {
-        this.optimisticUpdate(
-          () => {
-            this.locationsState.locations = this.locationsState.locations.filter(l => l.id !== id);
-            this.usersState.locations = this.locationsState.locations;
-            this.renderUserOptions();
-          },
-          () => this.callServer('deleteLocation', id, { silent: true }),
-          (data) => { this.locationsState = { locations: data.locations || [] }; this.usersState.locations = data.locations || []; this.renderLocations(); this.renderUserOptions(); },
-          'Umístění smazáno.',
-        );
-      });
-    },
+  // =========================================================================
+  // SEKCE: Dlaždice (SubApps)
+  // =========================================================================
 
-    openDepartmentForm(dep) {
-      const form = document.querySelector('#departmentForm');
-      if (!form) return;
-      form.reset();
-      this.setText('#departmentModalTitle', dep ? 'Upravit úsek' : 'Nový úsek');
-      form.elements.id.value = dep ? dep.id : '';
-      form.elements.name.value = dep ? dep.name : '';
-      form.elements.active.checked = dep ? dep.active : true;
-      const assignedId = dep ? (dep.locationIds || [])[0] || '' : '';
-      const locations = this.usersState.locations || [];
-      this.setSelectOptions('#deptLocationSelect', [{ value: '', label: '— bez přiřazení —' }, ...locations.map(l => ({ value: l.id, label: l.displayName }))]);
-      form.elements.locationId.value = assignedId;
-      document.querySelector('#departmentModal').showModal();
-    },
+  renderSubApps() {
+    const rows    = document.querySelector('#subAppsRows');
+    const empty   = document.querySelector('#subAppsEmpty');
+    const counter = document.querySelector('#subAppsCount');
+    const subApps = (this.subAppsState || {}).subApps || [];
+    if (!rows) return;
+    if (counter) counter.textContent = String(subApps.length);
+    if (!subApps.length) { rows.innerHTML = ''; if (empty) empty.hidden = false; return; }
+    if (empty) empty.hidden = true;
 
-    closeDepartmentForm() { document.querySelector('#departmentModal').close(); },
+    rows.innerHTML = subApps.map((item) => `
+      <tr>
+        <td>
+          <div class="tile-cell">
+            <span class="tile-icon-preview"><svg><use href="#${this.iconSymbol(item.icon)}"></use></svg></span>
+            <span>
+              <strong>${this.escape(item.name || '-')}</strong>
+              <small>${this.escape(item.description || 'Bez popisu')}</small>
+            </span>
+          </div>
+        </td>
+        <td><span class="state-chip ${this.subAppStatusClass(item.status)}">${this.escape(this.subAppStatusLabel(item.status))}</span></td>
+        <td>${this.escape(this.subAppIconLabel(item.icon))}</td>
+        <td>${this.escape(this.formatDateTime(item.lastUpdatedAt))}</td>
+        <td class="table-actions">
+          <button type="button" class="icon-button" data-action="manage-permissions"
+            data-id="${this.escape(item.id)}" data-key="${this.escape(item.key)}"
+            aria-label="Přístupy dlaždice ${this.escape(item.name)}" title="Správa přístupů">
+            <svg><use href="#i-users"></use></svg>
+          </button>
+          <button type="button" class="icon-button" data-action="edit-subapp"
+            data-id="${this.escape(item.id)}" aria-label="Upravit dlaždici ${this.escape(item.name)}">
+            <svg><use href="#i-pencil"></use></svg>
+          </button>
+          <button type="button" class="icon-button danger" data-action="delete-subapp"
+            data-id="${this.escape(item.id)}" aria-label="Smazat dlaždici ${this.escape(item.name)}">
+            <svg><use href="#i-trash"></use></svg>
+          </button>
+        </td>
+      </tr>
+    `).join('');
 
-    saveDepartmentFromForm() {
-      const form = document.querySelector('#departmentForm');
-      const locationId = form.elements.locationId.value;
-      const payload = {
-        id: form.elements.id.value,
-        name: form.elements.name.value,
-        locationIds: locationId || '',
-        active: form.elements.active.checked,
-      };
-      this.closeDepartmentForm();
-      const isNew = !payload.id;
-      const tempId = isNew ? 'temp_' + Date.now() : payload.id;
-      const locationIds = payload.locationIds ? payload.locationIds.split(',').filter(Boolean) : [];
+    rows.querySelectorAll('[data-action="edit-subapp"]').forEach((b) =>
+      b.addEventListener('click', () => this.openSubAppForm((this.subAppsState.subApps || []).find((item) => item.id === b.dataset.id))));
+    rows.querySelectorAll('[data-action="delete-subapp"]').forEach((b) =>
+      b.addEventListener('click', () => this.confirmDeleteSubApp(b.dataset.id)));
+    rows.querySelectorAll('[data-action="manage-permissions"]').forEach((b) =>
+      b.addEventListener('click', () => this.openPermissionsModal(b.dataset.key, b.dataset.id)));
+  },
+
+  openSubAppForm(item) {
+    const form = document.querySelector('#subAppForm');
+    if (!form) return;
+    form.reset();
+    this.setText('#subAppModalTitle', item ? 'Upravit dlaždici' : 'Nová dlaždice');
+    form.elements.id.value          = item ? item.id                  : '';
+    form.elements.name.value        = item ? item.name                : '';
+    form.elements.key.value         = item ? item.key                 : '';
+    form.elements.status.value      = item ? item.status              : 'ACTIVE';
+    form.elements.description.value = item ? (item.description || '') : '';
+    form.elements.targetUrl.value   = item ? (item.targetUrl   || '') : '';
+    form.elements.active.checked    = item ? Boolean(item.active)     : true;
+    this.setSubAppIcon(item ? (item.icon || 'briefcase') : 'briefcase');
+    const iconSearch = document.querySelector('#iconSearch');
+    if (iconSearch) iconSearch.value = '';
+    this.renderIconPicker('');
+    this.subAppModal.showModal();
+  },
+
+  closeSubAppForm() { this.subAppModal.close(); },
+
+  saveSubAppFromForm() {
+    const form    = document.querySelector('#subAppForm');
+    const payload = {
+      id:          form.elements.id.value,
+      key:         form.elements.key.value,
+      name:        form.elements.name.value,
+      status:      form.elements.status.value,
+      icon:        form.elements.icon.value,
+      description: form.elements.description.value,
+      targetUrl:   form.elements.targetUrl.value,
+      active:      form.elements.active.checked,
+    };
+    this.closeSubAppForm();
+
+    const isNew  = !payload.id;
+    const tempId = isNew ? 'temp_' + Date.now() : payload.id;
+
+    this.optimisticUpdate(
+      () => {
+        const existing  = (this.subAppsState.subApps || []).find((item) => item.id === payload.id);
+        const optimistic = {
+          id: tempId,
+          key: payload.key.toUpperCase().replace(/[^A-Z0-9_]/g, '_'),
+          name: payload.name, status: payload.status, icon: payload.icon,
+          description: payload.description, targetUrl: payload.targetUrl, lastUpdatedAt: '',
+          sortOrder: isNew ? this.nextSubAppSortOrder() : (existing || {}).sortOrder || 0,
+          active: payload.active,
+          createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+        };
+        if (isNew) {
+          this.subAppsState.subApps = [...this.subAppsState.subApps, optimistic]
+            .sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0) || (a.name || '').localeCompare(b.name || '', 'cs'));
+        } else {
+          this.subAppsState.subApps = this.subAppsState.subApps.map((item) => item.id === payload.id ? { ...item, ...optimistic } : item);
+        }
+      },
+      () => this.callServer('saveSubApp', payload, { silent: true }),
+      (data) => { this.applySettingsState(data); this.renderSubApps(); this.loadHome(); },
+      'Dlaždice byla uložena.',
+    );
+  },
+
+  confirmDeleteSubApp(id) {
+    const item = (this.subAppsState.subApps || []).find((s) => s.id === id);
+    if (!item) return;
+    this.openModal('Smazat dlaždici', 'Opravdu chcete smazat dlaždici ' + item.name + '?', () =>
       this.optimisticUpdate(
-        () => {
-          const optimistic = {
-            id: tempId, name: payload.name, locationIds, active: payload.active,
-            createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
-          };
-          if (isNew) {
-            this.departmentsState.departments = [...this.departmentsState.departments, optimistic]
-              .sort((a, b) => (a.name || '').localeCompare(b.name || '', 'cs'));
-          } else {
-            this.departmentsState.departments = this.departmentsState.departments.map(d => d.id === payload.id ? { ...d, ...optimistic } : d);
-          }
-          this.usersState.departments = this.departmentsState.departments;
-          this.renderUserOptions();
-        },
-        () => this.callServer('saveDepartment', payload, { silent: true }),
-        (data) => { this.departmentsState = { departments: data.departments || [] }; this.usersState.departments = data.departments || []; this.renderDepartments(); this.renderUserOptions(); },
-        'Úsek uložen.',
-      );
-    },
-
-    confirmDeleteDepartment(id) {
-      const dep = (this.departmentsState.departments || []).find(d => d.id === id);
-      if (!dep) return;
-      this.openModal('Smazat úsek', 'Opravdu chcete smazat úsek ' + dep.name + '?', () => {
-        this.optimisticUpdate(
-          () => {
-            this.departmentsState.departments = this.departmentsState.departments.filter(d => d.id !== id);
-            this.usersState.departments = this.departmentsState.departments;
-            this.renderUserOptions();
-          },
-          () => this.callServer('deleteDepartment', id, { silent: true }),
-          (data) => { this.departmentsState = { departments: data.departments || [] }; this.usersState.departments = data.departments || []; this.renderDepartments(); this.renderUserOptions(); },
-          'Úsek smazán.',
-        );
-      });
-    },
-
-    openSubAppForm(item) {
-      const form = document.querySelector('#subAppForm');
-      if (!form) return;
-      form.reset();
-      this.setText('#subAppModalTitle', item ? 'Upravit dlaždici' : 'Nová dlaždice');
-      form.elements.id.value = item ? item.id : '';
-      form.elements.name.value = item ? item.name : '';
-      form.elements.key.value = item ? item.key : '';
-      form.elements.status.value = item ? item.status : 'ACTIVE';
-      form.elements.description.value = item ? (item.description || '') : '';
-      form.elements.targetUrl.value = item ? (item.targetUrl || '') : '';
-      form.elements.active.checked = item ? Boolean(item.active) : true;
-      this.setSubAppIcon(item ? (item.icon || 'briefcase') : 'briefcase');
-      const iconSearch = document.querySelector('#iconSearch');
-      if (iconSearch) iconSearch.value = '';
-      this.renderIconPicker('');
-      this.subAppModal.showModal();
-    },
-
-    closeSubAppForm() {
-      this.subAppModal.close();
-    },
-
-    saveSubAppFromForm() {
-      const form = document.querySelector('#subAppForm');
-      const payload = {
-        id: form.elements.id.value,
-        key: form.elements.key.value,
-        name: form.elements.name.value,
-        status: form.elements.status.value,
-        icon: form.elements.icon.value,
-        description: form.elements.description.value,
-        targetUrl: form.elements.targetUrl.value,
-        active: form.elements.active.checked,
-      };
-      this.closeSubAppForm();
-      const isNew = !payload.id;
-      const tempId = isNew ? 'temp_' + Date.now() : payload.id;
-      this.optimisticUpdate(
-        () => {
-          const optimistic = {
-            id: tempId,
-            key: payload.key.toUpperCase().replace(/[^A-Z0-9_]/g, '_'),
-            name: payload.name,
-            status: payload.status,
-            icon: payload.icon,
-            description: payload.description,
-            targetUrl: payload.targetUrl,
-            lastUpdatedAt: '',
-            sortOrder: isNew ? this.nextSubAppSortOrder() : ((this.subAppsState.subApps || []).find(item => item.id === payload.id) || {}).sortOrder || 0,
-            active: payload.active,
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-          };
-          if (isNew) {
-            this.subAppsState.subApps = [...this.subAppsState.subApps, optimistic]
-              .sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0) || (a.name || '').localeCompare(b.name || '', 'cs'));
-          } else {
-            this.subAppsState.subApps = this.subAppsState.subApps.map(item => item.id === payload.id ? { ...item, ...optimistic } : item);
-          }
-        },
-        () => this.callServer('saveSubApp', payload, { silent: true }),
+        () => { this.subAppsState.subApps = this.subAppsState.subApps.filter((s) => s.id !== id); },
+        () => this.callServer('deleteSubApp', id, { silent: true }),
         (data) => { this.applySettingsState(data); this.renderSubApps(); this.loadHome(); },
-        'Dlaždice byla uložena.',
-      );
-    },
+        'Dlaždice byla smazána.',
+      ),
+    );
+  },
 
-    confirmDeleteSubApp(id) {
-      const item = (this.subAppsState.subApps || []).find(subApp => subApp.id === id);
-      if (!item) return;
-      this.openModal('Smazat dlaždici', 'Opravdu chcete smazat dlaždici ' + item.name + '?', () => {
-        this.optimisticUpdate(
-          () => { this.subAppsState.subApps = this.subAppsState.subApps.filter(subApp => subApp.id !== id); },
-          () => this.callServer('deleteSubApp', id, { silent: true }),
-          (data) => { this.applySettingsState(data); this.renderSubApps(); this.loadHome(); },
-          'Dlaždice byla smazána.',
-        );
+  nextSubAppSortOrder() {
+    const values = (this.subAppsState.subApps || []).map((item) => Number(item.sortOrder || 0));
+    return values.length ? Math.max(...values) + 1 : 1;
+  },
+
+  // ── Icon picker ───────────────────────────────────────────────────────────
+
+  renderIconPicker(query) {
+    const grid       = document.querySelector('#iconGrid');
+    if (!grid) return;
+    const normalized = String(query || '').trim().toLowerCase();
+    const source     = this.iconCatalog || [];
+    let groups       = [];
+
+    if (normalized) {
+      const icons = source
+        .filter((icon) => (icon.tags || icon.label || icon.key || '').toLowerCase().includes(normalized))
+        .slice(0, 60);
+      groups = [{ title: 'Výsledky hledání', icons }];
+    } else {
+      groups = [
+        {
+          title: 'Doporučené pro OZ reporting',
+          icons: this.getIconGroup([
+            'digital-report', 'diagram-up', 'diagram-down', 'database', 'data-cloud', 'quality-confirmed',
+            'check-list-to-dos', 'process-map', 'time-arrow', 'calendar', 'monitor', 'warning',
+            'calculator', 'budget', 'warehouse', 'truck', 'supply-chain', 'all-process-documents',
+          ]),
+        },
+        {
+          title: 'Sortiment OZ',
+          icons: this.getIconGroup([
+            'vegetables', 'broccoli', 'carrot', 'apple', 'tomato', 'strawberry',
+            'bread', 'bread-roll', 'baguette', 'croissant', 'bake-off-module', 'bag-baked-goods',
+          ]),
+        },
+      ];
+    }
+
+    const selected = document.querySelector('#subAppIcon')?.value || '';
+    grid.innerHTML = groups.map((group) => `
+      <div class="icon-group">
+        <h4>${this.escape(group.title)}</h4>
+        <div class="icon-group-grid">
+          ${group.icons.map((icon) => `
+            <button type="button" class="icon-choice${icon.key === selected ? ' is-selected' : ''}"
+              data-icon="${this.escape(icon.key)}" aria-label="${this.escape(icon.label)}">
+              <svg><use href="#${this.escape(icon.symbol)}"></use></svg>
+              <span>${this.escape(icon.label)}</span>
+            </button>
+          `).join('')}
+        </div>
+      </div>
+    `).join('');
+
+    grid.querySelectorAll('.icon-choice').forEach((button) => {
+      button.addEventListener('click', () => {
+        this.setSubAppIcon(button.dataset.icon);
+        this.renderIconPicker(document.querySelector('#iconSearch')?.value || '');
       });
-    },
+    });
+  },
 
-    openPermissionsModal(subAppKey, subAppId) {
-      const subApp = (this.subAppsState.subApps || []).find(s => s.id === subAppId || s.key === subAppKey);
-      const title = subApp ? subApp.name : subAppKey;
-      this.setText('#permissionsModalTitle', 'Přístupy: ' + title);
-      this.permissionsState.currentSubAppKey = subAppKey;
-      this.callServer('getSubAppPermissionsData', subAppKey, { silent: true })
-        .then((data) => {
-          this.permissionsState = { ...data, currentSubAppKey: subAppKey };
-          this.renderPermissions();
-          this.renderPermissionUserOptions();
-          if (this.permissionsModal) this.permissionsModal.showModal();
-        })
-        .catch((err) => this.toast(err.message || 'Nepodařilo se načíst oprávnění.', 'error'));
-    },
+  getIconGroup(keys) {
+    return keys.map((key) => this.findCatalogIcon(key)).filter(Boolean);
+  },
 
-    closePermissionsModal() {
-      if (this.permissionsModal) this.permissionsModal.close();
-    },
+  setSubAppIcon(iconKey) {
+    const icon    = this.findCatalogIcon(iconKey) || this.findCatalogIcon('briefcase');
+    const key     = icon ? icon.key    : (iconKey || 'briefcase');
+    const symbol  = icon ? icon.symbol : this.iconId(key);
+    const input   = document.querySelector('#subAppIcon');
+    const preview = document.querySelector('#subAppIconPreview use');
+    if (input)   input.value                       = key;
+    if (preview) preview.setAttribute('href', '#' + symbol);
+  },
 
-    renderPermissions() {
-      const tbody = document.querySelector('#permissionsRows');
-      const empty = document.querySelector('#permissionsEmpty');
-      const perms = this.permissionsState.permissions || [];
-      if (!tbody) return;
-      if (!perms.length) {
-        tbody.innerHTML = '';
-        if (empty) empty.hidden = false;
-        return;
-      }
-      if (empty) empty.hidden = true;
-      tbody.innerHTML = perms.map(p => `
-        <tr>
-          <td>${this.escape(p.email || p.userId || '–')}</td>
-          <td><span class="role-chip is-blue">${this.escape(p.accessLevel || 'READ')}</span></td>
-          <td><span class="state-chip ${p.active ? 'is-active' : 'is-muted'}">${p.active ? 'Aktivní' : 'Vypnuto'}</span></td>
-          <td>${this.escape(this.formatDateTime(p.updatedAt))}</td>
-          <td class="table-actions">
-            <button type="button" class="icon-button danger" data-action="delete-permission" data-id="${this.escape(p.id)}" aria-label="Odebrat přístup ${this.escape(p.email)}"><svg><use href="#i-trash"></use></svg></button>
-          </td>
-        </tr>
-      `).join('');
-      tbody.querySelectorAll('[data-action="delete-permission"]').forEach(b => {
-        b.addEventListener('click', () => this.confirmDeletePermission(b.dataset.id));
-      });
-    },
+  findCatalogIcon(key) {
+    const normalized = String(key || '').trim();
+    if (!normalized) return null;
+    return (this.iconCatalog || []).find((icon) =>
+      icon.key === normalized || icon.symbol === normalized || icon.symbol === 'li-' + normalized,
+    ) || null;
+  },
 
-    renderPermissionUserOptions() {
-      const users = this.permissionsState.users || [];
-      const existingEmails = (this.permissionsState.permissions || []).map(p => p.email.toLowerCase());
-      const available = users.filter(u => !existingEmails.includes((u.email || '').toLowerCase()));
-      this.setSelectOptions('#permUserSelect', [
-        { value: '', label: '— vyberte uživatele —' },
-        ...available.map(u => ({ value: u.id + '|' + u.email, label: (u.fullName || u.email) + ' (' + u.email + ')' })),
-      ]);
-    },
+  iconSymbol(name) {
+    const found = this.findCatalogIcon(name);
+    return found ? found.symbol : this.iconId(name);
+  },
 
-    openPermissionForm() {
-      const form = document.querySelector('#permissionForm');
-      if (form) form.reset();
-    },
+  /** Fallback mapování pro základní ikony (bez katalogu). */
+  iconId(name) {
+    const icons = {
+      activity: 'i-activity', briefcase: 'i-briefcase', calendar: 'i-calendar',
+      chart: 'i-chart', check: 'i-check', info: 'i-info', list: 'i-list',
+      layout: 'i-layout', megaphone: 'i-megaphone', settings: 'i-settings',
+      user: 'i-user', users: 'i-users',
+    };
+    return icons[name] || 'i-info';
+  },
 
-    savePermissionFromForm() {
-      const form = document.querySelector('#permissionForm');
-      if (!form) return;
-      const userVal = form.elements.userId.value;
-      if (!userVal) { this.toast('Vyberte uživatele.', 'error'); return; }
-      const parts = userVal.split('|');
-      const payload = {
-        userId: parts[0] || '',
-        email: parts[1] || '',
-        subAppKey: this.permissionsState.currentSubAppKey,
-        accessLevel: form.elements.accessLevel.value,
-        active: true,
-      };
-      this.callServer('saveSubAppPermission', payload, { silent: true })
+  subAppStatusLabel(status) {
+    const labels = { ACTIVE: 'Aktivní', PREPARING: 'V přípravě', DISABLED: 'Vypnuto' };
+    return labels[status] || 'Vypnuto';
+  },
+
+  subAppStatusClass(status) {
+    if (status === 'ACTIVE')    return 'is-active';
+    if (status === 'PREPARING') return 'is-preparing';
+    return 'is-muted';
+  },
+
+  subAppIconLabel(icon) {
+    const found = this.findCatalogIcon(icon);
+    if (found) return found.label;
+    const labels = { activity: 'Aktivita', briefcase: 'Aktovka', chart: 'Graf', list: 'Seznam', megaphone: 'Megafon', settings: 'Nastavení' };
+    return labels[icon] || icon || '-';
+  },
+
+  // =========================================================================
+  // SEKCE: Oprávnění k dlaždicím
+  // =========================================================================
+
+  openPermissionsModal(subAppKey, subAppId) {
+    const subApp = (this.subAppsState.subApps || []).find((s) => s.id === subAppId || s.key === subAppKey);
+    this.setText('#permissionsModalTitle', 'Přístupy: ' + (subApp ? subApp.name : subAppKey));
+    this.permissionsState.currentSubAppKey = subAppKey;
+
+    this.callServer('getSubAppPermissionsData', subAppKey, { silent: true })
+      .then((data) => {
+        this.permissionsState = { ...data, currentSubAppKey: subAppKey };
+        this.renderPermissions();
+        this.renderPermissionUserOptions();
+        if (this.permissionsModal) this.permissionsModal.showModal();
+      })
+      .catch((err) => this.toast(err.message || 'Nepodařilo se načíst oprávnění.', 'error'));
+  },
+
+  closePermissionsModal() {
+    if (this.permissionsModal) this.permissionsModal.close();
+  },
+
+  renderPermissions() {
+    const tbody = document.querySelector('#permissionsRows');
+    const empty = document.querySelector('#permissionsEmpty');
+    const perms = this.permissionsState.permissions || [];
+    if (!tbody) return;
+    if (!perms.length) { tbody.innerHTML = ''; if (empty) empty.hidden = false; return; }
+    if (empty) empty.hidden = true;
+
+    tbody.innerHTML = perms.map((p) => `
+      <tr>
+        <td>${this.escape(p.email || p.userId || '–')}</td>
+        <td><span class="role-chip is-blue">${this.escape(p.accessLevel || 'READ')}</span></td>
+        <td><span class="state-chip ${p.active ? 'is-active' : 'is-muted'}">${p.active ? 'Aktivní' : 'Vypnuto'}</span></td>
+        <td>${this.escape(this.formatDateTime(p.updatedAt))}</td>
+        <td class="table-actions">
+          <button type="button" class="icon-button danger" data-action="delete-permission"
+            data-id="${this.escape(p.id)}" aria-label="Odebrat přístup ${this.escape(p.email)}">
+            <svg><use href="#i-trash"></use></svg>
+          </button>
+        </td>
+      </tr>
+    `).join('');
+
+    tbody.querySelectorAll('[data-action="delete-permission"]').forEach((b) =>
+      b.addEventListener('click', () => this.confirmDeletePermission(b.dataset.id)));
+  },
+
+  renderPermissionUserOptions() {
+    const users          = this.permissionsState.users || [];
+    const existingEmails = (this.permissionsState.permissions || []).map((p) => p.email.toLowerCase());
+    const available      = users.filter((u) => !existingEmails.includes((u.email || '').toLowerCase()));
+    this.setSelectOptions('#permUserSelect', [
+      { value: '', label: '— vyberte uživatele —' },
+      ...available.map((u) => ({ value: u.id + '|' + u.email, label: (u.fullName || u.email) + ' (' + u.email + ')' })),
+    ]);
+  },
+
+  openPermissionForm() {
+    const form = document.querySelector('#permissionForm');
+    if (form) form.reset();
+  },
+
+  savePermissionFromForm() {
+    const form = document.querySelector('#permissionForm');
+    if (!form) return;
+    const userVal = form.elements.userId.value;
+    if (!userVal) { this.toast('Vyberte uživatele.', 'error'); return; }
+    const parts   = userVal.split('|');
+    const payload = {
+      userId:      parts[0] || '',
+      email:       parts[1] || '',
+      subAppKey:   this.permissionsState.currentSubAppKey,
+      accessLevel: form.elements.accessLevel.value,
+      active:      true,
+    };
+    this.callServer('saveSubAppPermission', payload, { silent: true })
+      .then((data) => {
+        this.permissionsState = { ...data, currentSubAppKey: this.permissionsState.currentSubAppKey };
+        this.renderPermissions();
+        this.renderPermissionUserOptions();
+        form.reset();
+        this.toast('Přístup byl přidán.');
+      })
+      .catch((err) => this.toast(err.message || 'Nepodařilo se přidat přístup.', 'error'));
+  },
+
+  confirmDeletePermission(permId) {
+    const perm = (this.permissionsState.permissions || []).find((p) => p.id === permId);
+    if (!perm) return;
+    this.openModal('Odebrat přístup', 'Opravdu chcete odebrat přístup uživatele ' + (perm.email || permId) + '?', () => {
+      this.callServer('deleteSubAppPermission', permId, { silent: true })
         .then((data) => {
           this.permissionsState = { ...data, currentSubAppKey: this.permissionsState.currentSubAppKey };
           this.renderPermissions();
           this.renderPermissionUserOptions();
-          form.reset();
-          this.toast('Přístup byl přidán.');
+          this.toast('Přístup byl odebrán.');
         })
-        .catch((err) => this.toast(err.message || 'Nepodařilo se přidat přístup.', 'error'));
-    },
+        .catch((err) => this.toast(err.message || 'Nepodařilo se odebrat přístup.', 'error'));
+    });
+  },
 
-    confirmDeletePermission(permId) {
-      const perm = (this.permissionsState.permissions || []).find(p => p.id === permId);
-      if (!perm) return;
-      this.openModal('Odebrat přístup', 'Opravdu chcete odebrat přístup uživatele ' + (perm.email || permId) + '?', () => {
-        this.callServer('deleteSubAppPermission', permId, { silent: true })
-          .then((data) => {
-            this.permissionsState = { ...data, currentSubAppKey: this.permissionsState.currentSubAppKey };
-            this.renderPermissions();
-            this.renderPermissionUserOptions();
-            this.toast('Přístup byl odebrán.');
-          })
-          .catch((err) => this.toast(err.message || 'Nepodařilo se odebrat přístup.', 'error'));
+  // =========================================================================
+  // SEKCE: Role a oprávnění rolí
+  // =========================================================================
+
+  loadRoles() {
+    this.callServer('getRolesAdminData', null, { silent: true })
+      .then((data) => { this.rolesState = data; this.renderRoles(); })
+      .catch((err) => this.toast(err.message || 'Nepodařilo se načíst role.', 'error'));
+  },
+
+  renderRoles() {
+    const rows      = document.querySelector('#rolesRows');
+    const empty     = document.querySelector('#rolesEmpty');
+    const roles     = this.rolesState.roles     || [];
+    const permsByRole = this.rolesState.permsByRole || {};
+    if (!rows) return;
+    if (!roles.length) { rows.innerHTML = ''; if (empty) empty.hidden = false; return; }
+    if (empty) empty.hidden = true;
+
+    rows.innerHTML = roles.map((role) => {
+      const perms    = (permsByRole[role.roleKey] || []).join(', ') || '–';
+      const isSystem = SYSTEM_ROLE_KEYS.indexOf(role.roleKey) >= 0;
+      return `
+        <tr>
+          <td><strong>${this.escape(role.roleKey)}</strong></td>
+          <td>${this.escape(role.roleName)}</td>
+          <td><small>${this.escape(role.description || '–')}</small></td>
+          <td>${this.escape(perms)}</td>
+          <td><span class="state-chip ${role.active ? 'is-active' : 'is-muted'}">${role.active ? 'Aktivní' : 'Vypnuto'}</span></td>
+          <td class="table-actions">
+            <button type="button" class="icon-button" data-action="manage-role-perms"
+              data-key="${this.escape(role.roleKey)}" title="Oprávnění role">
+              <svg><use href="#i-settings"></use></svg>
+            </button>
+            <button type="button" class="icon-button" data-action="edit-role"
+              data-key="${this.escape(role.roleKey)}" aria-label="Upravit roli">
+              <svg><use href="#i-pencil"></use></svg>
+            </button>
+            ${!isSystem ? `<button type="button" class="icon-button danger" data-action="delete-role"
+              data-key="${this.escape(role.roleKey)}" aria-label="Smazat roli">
+              <svg><use href="#i-trash"></use></svg>
+            </button>` : ''}
+          </td>
+        </tr>`;
+    }).join('');
+
+    rows.querySelectorAll('[data-action="edit-role"]').forEach((b) =>
+      b.addEventListener('click', () => this.openRoleForm(this.rolesState.roles.find((r) => r.roleKey === b.dataset.key))));
+    rows.querySelectorAll('[data-action="delete-role"]').forEach((b) =>
+      b.addEventListener('click', () => this.confirmDeleteRole(b.dataset.key)));
+    rows.querySelectorAll('[data-action="manage-role-perms"]').forEach((b) =>
+      b.addEventListener('click', () => this.openRolesModal(b.dataset.key)));
+  },
+
+  openRoleForm(role) {
+    const form = document.querySelector('#roleForm');
+    if (!form) return;
+    form.reset();
+    this.setText('#roleModalTitle', role ? 'Upravit roli' : 'Nová role');
+    const keyField       = form.elements.roleKey;
+    keyField.value       = role ? role.roleKey     : '';
+    keyField.readOnly    = !!role;
+    form.elements.roleName.value    = role ? role.roleName    : '';
+    form.elements.description.value = role ? (role.description || '') : '';
+    form.elements.active.checked    = role ? Boolean(role.active) : true;
+    document.querySelector('#roleModal').showModal();
+  },
+
+  closeRoleForm() { document.querySelector('#roleModal').close(); },
+
+  saveRoleFromForm() {
+    const form    = document.querySelector('#roleForm');
+    const payload = {
+      roleKey:     form.elements.roleKey.value,
+      roleName:    form.elements.roleName.value,
+      description: form.elements.description.value,
+      active:      form.elements.active.checked,
+    };
+    this.closeRoleForm();
+    this.callServer('saveRole', payload, { silent: true })
+      .then((data) => { this.rolesState = data; this.renderRoles(); this.toast('Role uložena.'); })
+      .catch((err) => this.toast(err.message || 'Nepodařilo se uložit roli.', 'error'));
+  },
+
+  confirmDeleteRole(roleKey) {
+    const role = (this.rolesState.roles || []).find((r) => r.roleKey === roleKey);
+    if (!role) return;
+    this.openModal('Smazat roli', 'Opravdu chcete smazat roli ' + role.roleName + '? Tuto akci nelze vrátit.', () => {
+      this.callServer('deleteRole', roleKey, { silent: true })
+        .then((data) => { this.rolesState = data; this.renderRoles(); this.toast('Role smazána.'); })
+        .catch((err) => this.toast(err.message || 'Nepodařilo se smazat roli.', 'error'));
+    });
+  },
+
+  openRolesModal(roleKey) {
+    const role = (this.rolesState.roles || []).find((r) => r.roleKey === roleKey);
+    this.setText('#rolesModalTitle', 'Oprávnění: ' + (role ? role.roleName : roleKey));
+    this.renderRolePerms(roleKey);
+    if (this.rolesModal) this.rolesModal.showModal();
+  },
+
+  closeRolesModal() {
+    if (this.rolesModal) this.rolesModal.close();
+  },
+
+  renderRolePerms(roleKey) {
+    const container   = document.querySelector('#rolePermsContent');
+    if (!container) return;
+    const permsByRole = this.rolesState.permsByRole     || {};
+    const knownPerms  = this.rolesState.knownPermissions || ['dashboard.view', 'users.manage', 'roles.manage'];
+    const current     = permsByRole[roleKey] || [];
+
+    container.innerHTML = knownPerms.map((perm) => {
+      const has = current.indexOf(perm) >= 0;
+      return `
+        <div class="perm-row">
+          <span class="perm-key">${this.escape(perm)}</span>
+          <span class="state-chip ${has ? 'is-active' : 'is-muted'}">${has ? 'Povoleno' : 'Zakázáno'}</span>
+          ${has
+            ? `<button type="button" class="button button-secondary button-sm" data-action="remove-role-perm" data-role="${this.escape(roleKey)}" data-perm="${this.escape(perm)}">Odebrat</button>`
+            : `<button type="button" class="button button-primary button-sm" data-action="add-role-perm" data-role="${this.escape(roleKey)}" data-perm="${this.escape(perm)}">Přidat</button>`
+          }
+        </div>`;
+    }).join('');
+
+    container.querySelectorAll('[data-action="add-role-perm"]').forEach((b) => {
+      b.addEventListener('click', () => {
+        this.callServer('saveRolePermission', { roleKey: b.dataset.role, permissionKey: b.dataset.perm }, { silent: true })
+          .then((data) => { this.rolesState = data; this.renderRolePerms(roleKey); this.renderRoles(); this.toast('Oprávnění přidáno.'); })
+          .catch((err) => this.toast(err.message, 'error'));
       });
-    },
+    });
+    container.querySelectorAll('[data-action="remove-role-perm"]').forEach((b) => {
+      b.addEventListener('click', () => {
+        this.callServer('deleteRolePermission', { roleKey: b.dataset.role, permissionKey: b.dataset.perm }, { silent: true })
+          .then((data) => { this.rolesState = data; this.renderRolePerms(roleKey); this.renderRoles(); this.toast('Oprávnění odebráno.'); })
+          .catch((err) => this.toast(err.message, 'error'));
+      });
+    });
+  },
 
-    loadRoles() {
-      this.callServer('getRolesAdminData', null, { silent: true })
-        .then((data) => {
-          this.rolesState = data;
-          this.renderRoles();
-        })
-        .catch((err) => this.toast(err.message || 'Nepodařilo se načíst role.', 'error'));
-    },
+  // =========================================================================
+  // SEKCE: Optimistické aktualizace
+  // =========================================================================
 
-    renderRoles() {
-      const rows = document.querySelector('#rolesRows');
-      const empty = document.querySelector('#rolesEmpty');
-      const roles = this.rolesState.roles || [];
-      const permsByRole = this.rolesState.permsByRole || {};
-      const SYSTEM_ROLES = ['SUPERADMIN', 'ADMIN', 'EDITOR', 'VIEWER'];
-      if (!rows) return;
-      if (!roles.length) { rows.innerHTML = ''; if (empty) empty.hidden = false; return; }
-      if (empty) empty.hidden = true;
-      rows.innerHTML = roles.map(role => {
-        const perms = (permsByRole[role.roleKey] || []).join(', ') || '–';
-        const isSystem = SYSTEM_ROLES.indexOf(role.roleKey) >= 0;
+  /**
+   * Vzor pro optimistické UI aktualizace: okamžitá mutace stavu → server call.
+   * Při chybě serveru se stav automaticky obnoví ze snapshotu.
+   *
+   * @param {Function} mutateFn  - okamžitě změní lokální stav
+   * @param {Function} serverFn  - vrátí Promise serverového volání
+   * @param {Function} onSuccess - zpracuje serverovou odpověď po úspěchu
+   * @param {string}   successMsg - text toast notifikace
+   */
+  optimisticUpdate(mutateFn, serverFn, onSuccess, successMsg) {
+    const snapshot = this.snapshotState();
+    mutateFn();
+    this.renderCurrentSettingsView();
+    serverFn()
+      .then((data) => {
+        if (onSuccess) onSuccess(data);
+        else this.renderCurrentSettingsView();
+        if (successMsg) this.toast(successMsg);
+      })
+      .catch((err) => {
+        this.restoreSnapshot(snapshot);
+        this.renderCurrentSettingsView();
+        this.toast(err.message || 'Operace se nezdařila.', 'error');
+      });
+  },
+
+  snapshotState() {
+    return {
+      usersState:       JSON.parse(JSON.stringify(this.usersState)),
+      locationsState:   JSON.parse(JSON.stringify(this.locationsState)),
+      departmentsState: JSON.parse(JSON.stringify(this.departmentsState)),
+      subAppsState:     JSON.parse(JSON.stringify(this.subAppsState)),
+    };
+  },
+
+  restoreSnapshot(snapshot) {
+    this.usersState       = snapshot.usersState;
+    this.locationsState   = snapshot.locationsState;
+    this.departmentsState = snapshot.departmentsState;
+    this.subAppsState     = snapshot.subAppsState;
+  },
+
+  renderCurrentSettingsView() {
+    if      (this.currentView === 'users')       { this.renderUserOptions(); this.renderUsers(); }
+    else if (this.currentView === 'locations')   this.renderLocations();
+    else if (this.currentView === 'departments') this.renderDepartments();
+    else if (this.currentView === 'subapps')     this.renderSubApps();
+  },
+
+  // =========================================================================
+  // SEKCE: Changelog
+  // =========================================================================
+
+  openChangelog() {
+    const changelog = window.APP_CHANGELOG || [];
+    const body      = document.querySelector('#changelogBody');
+    if (!body) return;
+
+    const latestVersion = changelog.length ? changelog[0].version : '';
+    const appName       = (window.APP_BOOTSTRAP && window.APP_BOOTSTRAP.appName) || 'OZ Dashboard';
+    this.setText('#changelogKicker', latestVersion ? `${appName} · ${latestVersion}` : 'Co je nového');
+
+    if (!changelog.length) {
+      body.innerHTML = '<p class="cl-empty">Žádné záznamy o změnách.</p>';
+    } else {
+      body.innerHTML = changelog.map((entry, idx) => {
+        const isLatest = idx === 0;
+        const dateStr  = entry.date
+          ? new Date(entry.date).toLocaleDateString('cs-CZ', { day: 'numeric', month: 'long', year: 'numeric' })
+          : '';
+        const items = (entry.changes || []).map((c) => {
+          const tag = this.changelogTagFor(c);
+          return `<li class="cl-item"><span class="cl-tag ${tag.cls}">${this.escape(tag.label)}</span><span class="cl-item-text">${this.escape(c)}</span></li>`;
+        }).join('');
         return `
-          <tr>
-            <td><strong>${this.escape(role.roleKey)}</strong></td>
-            <td>${this.escape(role.roleName)}</td>
-            <td><small>${this.escape(role.description || '–')}</small></td>
-            <td>${this.escape(perms)}</td>
-            <td><span class="state-chip ${role.active ? 'is-active' : 'is-muted'}">${role.active ? 'Aktivní' : 'Vypnuto'}</span></td>
-            <td class="table-actions">
-              <button type="button" class="icon-button" data-action="manage-role-perms" data-key="${this.escape(role.roleKey)}" title="Oprávnění role"><svg><use href="#i-settings"></use></svg></button>
-              <button type="button" class="icon-button" data-action="edit-role" data-key="${this.escape(role.roleKey)}" aria-label="Upravit roli"><svg><use href="#i-pencil"></use></svg></button>
-              ${!isSystem ? `<button type="button" class="icon-button danger" data-action="delete-role" data-key="${this.escape(role.roleKey)}" aria-label="Smazat roli"><svg><use href="#i-trash"></use></svg></button>` : ''}
-            </td>
-          </tr>`;
-      }).join('');
-      rows.querySelectorAll('[data-action="edit-role"]').forEach(b => {
-        b.addEventListener('click', () => this.openRoleForm(this.rolesState.roles.find(r => r.roleKey === b.dataset.key)));
-      });
-      rows.querySelectorAll('[data-action="delete-role"]').forEach(b => {
-        b.addEventListener('click', () => this.confirmDeleteRole(b.dataset.key));
-      });
-      rows.querySelectorAll('[data-action="manage-role-perms"]').forEach(b => {
-        b.addEventListener('click', () => this.openRolesModal(b.dataset.key));
-      });
-    },
-
-    openRoleForm(role) {
-      const form = document.querySelector('#roleForm');
-      if (!form) return;
-      form.reset();
-      this.setText('#roleModalTitle', role ? 'Upravit roli' : 'Nová role');
-      const keyField = form.elements.roleKey;
-      keyField.value = role ? role.roleKey : '';
-      keyField.readOnly = !!role;
-      form.elements.roleName.value = role ? role.roleName : '';
-      form.elements.description.value = role ? (role.description || '') : '';
-      form.elements.active.checked = role ? Boolean(role.active) : true;
-      document.querySelector('#roleModal').showModal();
-    },
-
-    closeRoleForm() {
-      document.querySelector('#roleModal').close();
-    },
-
-    saveRoleFromForm() {
-      const form = document.querySelector('#roleForm');
-      const payload = {
-        roleKey: form.elements.roleKey.value,
-        roleName: form.elements.roleName.value,
-        description: form.elements.description.value,
-        active: form.elements.active.checked,
-      };
-      this.closeRoleForm();
-      this.callServer('saveRole', payload, { silent: true })
-        .then((data) => { this.rolesState = data; this.renderRoles(); this.toast('Role uložena.'); })
-        .catch((err) => this.toast(err.message || 'Nepodařilo se uložit roli.', 'error'));
-    },
-
-    confirmDeleteRole(roleKey) {
-      const role = (this.rolesState.roles || []).find(r => r.roleKey === roleKey);
-      if (!role) return;
-      this.openModal('Smazat roli', 'Opravdu chcete smazat roli ' + role.roleName + '? Tuto akci nelze vrátit.', () => {
-        this.callServer('deleteRole', roleKey, { silent: true })
-          .then((data) => { this.rolesState = data; this.renderRoles(); this.toast('Role smazána.'); })
-          .catch((err) => this.toast(err.message || 'Nepodařilo se smazat roli.', 'error'));
-      });
-    },
-
-    openRolesModal(roleKey) {
-      const role = (this.rolesState.roles || []).find(r => r.roleKey === roleKey);
-      this.setText('#rolesModalTitle', 'Oprávnění: ' + (role ? role.roleName : roleKey));
-      this.renderRolePerms(roleKey);
-      if (this.rolesModal) this.rolesModal.showModal();
-    },
-
-    closeRolesModal() {
-      if (this.rolesModal) this.rolesModal.close();
-    },
-
-    renderRolePerms(roleKey) {
-      const container = document.querySelector('#rolePermsContent');
-      if (!container) return;
-      const permsByRole = this.rolesState.permsByRole || {};
-      const knownPerms = this.rolesState.knownPermissions || ['dashboard.view', 'users.manage', 'roles.manage'];
-      const current = permsByRole[roleKey] || [];
-      const SYSTEM_ROLES = ['SUPERADMIN', 'ADMIN', 'EDITOR', 'VIEWER'];
-      const isSystem = SYSTEM_ROLES.indexOf(roleKey) >= 0; // použito pro styling (read-only indikátor)
-
-      container.innerHTML = knownPerms.map(perm => {
-        const has = current.indexOf(perm) >= 0;
-        return `
-          <div class="perm-row">
-            <span class="perm-key">${this.escape(perm)}</span>
-            <span class="state-chip ${has ? 'is-active' : 'is-muted'}">${has ? 'Povoleno' : 'Zakázáno'}</span>
-            ${has
-              ? `<button type="button" class="button button-secondary button-sm" data-action="remove-role-perm" data-role="${this.escape(roleKey)}" data-perm="${this.escape(perm)}">Odebrat</button>`
-              : `<button type="button" class="button button-primary button-sm" data-action="add-role-perm" data-role="${this.escape(roleKey)}" data-perm="${this.escape(perm)}">Přidat</button>`
-            }
-          </div>`;
-      }).join('');
-
-      container.querySelectorAll('[data-action="add-role-perm"]').forEach(b => {
-        b.addEventListener('click', () => {
-          this.callServer('saveRolePermission', { roleKey: b.dataset.role, permissionKey: b.dataset.perm }, { silent: true })
-            .then((data) => { this.rolesState = data; this.renderRolePerms(roleKey); this.renderRoles(); this.toast('Oprávnění přidáno.'); })
-            .catch((err) => this.toast(err.message, 'error'));
-        });
-      });
-      container.querySelectorAll('[data-action="remove-role-perm"]').forEach(b => {
-        b.addEventListener('click', () => {
-          this.callServer('deleteRolePermission', { roleKey: b.dataset.role, permissionKey: b.dataset.perm }, { silent: true })
-            .then((data) => { this.rolesState = data; this.renderRolePerms(roleKey); this.renderRoles(); this.toast('Oprávnění odebráno.'); })
-            .catch((err) => this.toast(err.message, 'error'));
-        });
-      });
-    },
-
-    filterDepartmentsByLocation(locationName) {
-      const loc = (this.usersState.locations || []).find(l => l.displayName === locationName);
-      const locId = loc ? loc.id : null;
-      const filtered = (this.usersState.departments || []).filter(d =>
-        !locId || !d.locationIds || d.locationIds.length === 0 || d.locationIds.includes(locId)
-      );
-      this.setSelectOptions('#userDepartment', filtered.map(d => ({ value: d.name, label: d.name })));
-    },
-
-    getLocationTypeByName(name) {
-      const loc = (this.usersState.locations || []).find(l => l.displayName === name);
-      return loc ? loc.type : 'CENTRALA';
-    },
-
-    findUser(id) {
-      return (this.usersState.users || []).find((user) => user.id === id) || null;
-    },
-
-    setSelectOptions(selector, options) {
-      const select = document.querySelector(selector);
-      if (!select) return;
-      select.innerHTML = (options || []).map((option) => `
-        <option value="${this.escape(option.value)}">${this.escape(option.label)}</option>
-      `).join('');
-    },
-
-    removeDiacritics(str) {
-      const map = {'á':'a','č':'c','ď':'d','é':'e','ě':'e','í':'i','ň':'n','ó':'o','ř':'r','š':'s','ť':'t','ú':'u','ů':'u','ý':'y','ž':'z'};
-      return String(str || '').toLowerCase().replace(/[áčďéěíňóřšťúůýž]/g, c => map[c] || c).replace(/[^a-z0-9]/g, '');
-    },
-
-    startClock() {
-      const update = () => {
-        const now = new Date();
-        this.setText('#currentDay', now.toLocaleDateString('cs-CZ', {
-          weekday: 'long',
-          day: 'numeric',
-          month: 'long',
-        }).toUpperCase());
-        this.setText('#currentTime', now.toLocaleTimeString('cs-CZ', {
-          hour: '2-digit',
-          minute: '2-digit',
-        }));
-      };
-      update();
-      this.clockTimer = setInterval(update, 30000);
-    },
-
-    getLoaderText(functionName) {
-      const labels = {
-        getInitData: 'Načítám aplikaci...',
-        getHomeData: 'Načítám dashboard...',
-        getUsersAdminData: 'Načítám uživatele...',
-        saveUser: 'Ukládám uživatele...',
-        deleteUser: 'Mažu uživatele...',
-        getLocationsData: 'Načítám umístění...',
-        saveLocation: 'Ukládám umístění...',
-        deleteLocation: 'Mažu umístění...',
-        getDepartmentsData: 'Načítám úseky...',
-        saveDepartment: 'Ukládám úsek...',
-        deleteDepartment: 'Mažu úsek...',
-        saveSubApp: 'Ukládám dlaždici...',
-        deleteSubApp: 'Mažu dlaždici...',
-        getSubAppPermissionsData: 'Načítám oprávnění...',
-        saveSubAppPermission: 'Ukládám oprávnění...',
-        deleteSubAppPermission: 'Mažu oprávnění...',
-        getRolesAdminData: 'Načítám role...',
-        saveRole: 'Ukládám roli...',
-        deleteRole: 'Mažu roli...',
-        saveRolePermission: 'Ukládám oprávnění role...',
-        deleteRolePermission: 'Mažu oprávnění role...',
-        checkDataIntegrity: 'Kontroluji integritu dat...',
-      };
-      return labels[functionName] || 'Načítám data...';
-    },
-
-    showLoader(message) {
-      this.loadingCount += 1;
-      if (!this.startupLoading) this.loader.classList.remove('is-startup');
-      this.setText('#loaderText', message || 'Načítám data...');
-      this.loader.classList.add('is-visible');
-    },
-
-    hideLoader() {
-      this.loadingCount = Math.max(0, this.loadingCount - 1);
-      if (this.loadingCount === 0) {
-        this.loader.classList.remove('is-visible');
-        this.loader.classList.remove('is-startup');
-        this.startupLoading = false;
-        this.setText('#loaderText', 'Načítám data...');
-      }
-    },
-
-    toast(message, type) {
-      const node = document.createElement('div');
-      node.className = 'toast' + (type === 'error' ? ' is-error' : '');
-      node.textContent = message;
-      this.toastRegion.appendChild(node);
-      setTimeout(() => node.remove(), 3600);
-    },
-
-    openModal(title, body, onConfirm) {
-      this.setText('#modalTitle', title);
-      const bodyEl = document.querySelector('#modalBody');
-      if (bodyEl) {
-        // Podpora víceřádkového textu (integrity report, potvrzovací dialogy s \n)
-        bodyEl.textContent = '';
-        if (body && body.includes('\n')) {
-          body.split('\n').forEach((line, i, arr) => {
-            bodyEl.appendChild(document.createTextNode(line));
-            if (i < arr.length - 1) bodyEl.appendChild(document.createElement('br'));
-          });
-        } else {
-          bodyEl.textContent = body || '';
-        }
-      }
-      this.pendingConfirm = typeof onConfirm === 'function' ? onConfirm : null;
-      const confirmButton = document.querySelector('#modalConfirmButton');
-      if (confirmButton) confirmButton.hidden = !this.pendingConfirm;
-      // UX: uložení triggeru pro obnovení focusu po zavření
-      this._modalTrigger = document.activeElement;
-      this.modal.showModal();
-    },
-
-    closeModal() {
-      this.modal.classList.add('is-closing');
-      const trigger = this._modalTrigger;
-      const done = () => {
-        this.modal.classList.remove('is-closing');
-        this.modal.close();
-        this.pendingConfirm = null;
-        this._modalTrigger = null;
-        const confirmButton = document.querySelector('#modalConfirmButton');
-        if (confirmButton) confirmButton.hidden = true;
-        // UX: vrátíme focus na element, který modal otevřel
-        if (trigger && typeof trigger.focus === 'function') trigger.focus();
-      };
-      const fallback = setTimeout(done, 280);
-      this.modal.addEventListener('animationend', () => {
-        clearTimeout(fallback);
-        done();
-      }, { once: true });
-    },
-
-    changelogTagFor(text) {
-      const t = (text || '').toLowerCase();
-      if (/^přidán|^přidána|^přidáno|^nová |^nové |^nový /.test(t))  return { label: 'Nové',       cls: 'cl-tag-new' };
-      if (/^opraven|^opravena|^opraveno|^oprava/.test(t))             return { label: 'Oprava',     cls: 'cl-tag-fix' };
-      if (/^optimalizov|^zrychl|^snížen|^redukován/.test(t))         return { label: 'Výkon',      cls: 'cl-tag-perf' };
-      if (/^odstraněn|^odstraněna|^odstraněno|^odebrán/.test(t))     return { label: 'Odstraněno', cls: 'cl-tag-remove' };
-      if (/^bezpečnost|^zabezpečen/.test(t))                         return { label: 'Bezpečnost', cls: 'cl-tag-security' };
-      if (/^refaktoring|^refaktor|^interní/.test(t))                 return { label: 'Interní',    cls: 'cl-tag-internal' };
-      return { label: 'Změna', cls: 'cl-tag-change' };
-    },
-
-    openChangelog() {
-      const changelog = window.APP_CHANGELOG || [];
-      const body = document.querySelector('#changelogBody');
-      if (!body) return;
-
-      // Aktualizuj kicker s názvem aplikace a verzí
-      const latestVersion = changelog.length ? changelog[0].version : '';
-      const appName = (window.APP_BOOTSTRAP && window.APP_BOOTSTRAP.appName) || 'OZ Dashboard';
-      this.setText('#changelogKicker', latestVersion ? `${appName} · ${latestVersion}` : 'Co je nového');
-
-      if (!changelog.length) {
-        body.innerHTML = '<p class="cl-empty">Žádné záznamy o změnách.</p>';
-      } else {
-        body.innerHTML = changelog.map((entry, idx) => {
-          const isLatest = idx === 0;
-          const dateStr = entry.date
-            ? new Date(entry.date).toLocaleDateString('cs-CZ', { day: 'numeric', month: 'long', year: 'numeric' })
-            : '';
-          const items = (entry.changes || []).map((c) => {
-            const tag = this.changelogTagFor(c);
-            return `<li class="cl-item"><span class="cl-tag ${tag.cls}">${this.escape(tag.label)}</span><span class="cl-item-text">${this.escape(c)}</span></li>`;
-          }).join('');
-          return `<div class="cl-version${isLatest ? ' cl-version-latest' : ''}">
+          <div class="cl-version${isLatest ? ' cl-version-latest' : ''}">
             <div class="cl-version-head">
               <div class="cl-version-left">
                 <span class="cl-version-num">${this.escape(entry.version)}</span>
@@ -1471,212 +1559,223 @@
             </div>
             <ul class="cl-items">${items}</ul>
           </div>`;
-        }).join('');
-      }
+      }).join('');
+    }
 
-      this.changelogModal.showModal();
-    },
+    this.changelogModal.showModal();
+  },
 
-    runIntegrityCheck() {
-      this.callServer('checkDataIntegrity', null, {})
-        .then((report) => {
-          const { ok, checkedAt, issues, summary } = report;
-          const date = new Date(checkedAt).toLocaleString('cs-CZ');
-          let body = '';
-          if (ok) {
-            body = `✅ Vše v pořádku — žádné nesrovnalosti nenalezeny.\nKontrolováno: ${date}`;
-          } else {
-            const lines = [`⚠️ Nalezeno ${summary.total} nesrovnalostí (${date}):\n`];
-            issues.forEach((issue) => {
-              lines.push(`• [${issue.sheet}] ${issue.email || issue.name || issue.id} — ${issue.field}: „${issue.value}" → ${issue.reason}`);
-            });
-            body = lines.join('\n');
-          }
-          this.openModal('Audit datové integrity', body);
-        })
-        .catch((err) => this.toast(err.message || 'Audit selhal.', 'error'));
-    },
+  /** Vrátí objekt { label, cls } pro daný text položky changelogu. */
+  changelogTagFor(text) {
+    const t = (text || '').toLowerCase();
+    if (/^přidán|^přidána|^přidáno|^nová |^nové |^nový /.test(t))  return { label: 'Nové',       cls: 'cl-tag-new' };
+    if (/^opraven|^opravena|^opraveno|^oprava/.test(t))             return { label: 'Oprava',     cls: 'cl-tag-fix' };
+    if (/^optimalizov|^zrychl|^snížen|^redukován/.test(t))         return { label: 'Výkon',      cls: 'cl-tag-perf' };
+    if (/^odstraněn|^odstraněna|^odstraněno|^odebrán/.test(t))     return { label: 'Odstraněno', cls: 'cl-tag-remove' };
+    if (/^bezpečnost|^zabezpečen/.test(t))                         return { label: 'Bezpečnost', cls: 'cl-tag-security' };
+    if (/^refaktoring|^refaktor|^interní/.test(t))                 return { label: 'Interní',    cls: 'cl-tag-internal' };
+    return { label: 'Změna', cls: 'cl-tag-change' };
+  },
 
-    setText(selector, value) {
-      const node = document.querySelector(selector);
-      if (node) node.textContent = value || '';
-    },
+  // =========================================================================
+  // SEKCE: Audit datové integrity
+  // =========================================================================
 
-    syncSidebarToggle() {
-      const app = document.querySelector('.app');
-      const toggle = document.querySelector('#sidebarToggle');
-      if (!app || !toggle) return;
-      const collapsed = app.classList.contains('sidebar-collapsed');
-      toggle.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
-      toggle.setAttribute('title', collapsed ? 'Zobrazit texty panelu' : 'Skrýt texty panelu');
-    },
+  runIntegrityCheck() {
+    this.callServer('checkDataIntegrity', null, {})
+      .then((report) => {
+        const { ok, checkedAt, issues, summary } = report;
+        const date = new Date(checkedAt).toLocaleString('cs-CZ');
+        let body;
+        if (ok) {
+          body = `✅ Vše v pořádku — žádné nesrovnalosti nenalezeny.\nKontrolováno: ${date}`;
+        } else {
+          const lines = [`⚠️ Nalezeno ${summary.total} nesrovnalostí (${date}):\n`];
+          issues.forEach((issue) => {
+            lines.push(`• [${issue.sheet}] ${issue.email || issue.name || issue.id} — ${issue.field}: „${issue.value}" → ${issue.reason}`);
+          });
+          body = lines.join('\n');
+        }
+        this.openModal('Audit datové integrity', body);
+      })
+      .catch((err) => this.toast(err.message || 'Audit selhal.', 'error'));
+  },
 
-    iconId(name) {
-      const icons = {
-        activity: 'i-activity',
-        briefcase: 'i-briefcase',
-        calendar: 'i-calendar',
-        chart: 'i-chart',
-        check: 'i-check',
-        info: 'i-info',
-        list: 'i-list',
-        layout: 'i-layout',
-        megaphone: 'i-megaphone',
-        settings: 'i-settings',
-        user: 'i-user',
-        users: 'i-users',
-      };
-      return icons[name] || 'i-info';
-    },
+  // =========================================================================
+  // SEKCE: UI — Modal, Toast, Loader
+  // =========================================================================
 
-    subAppStatusLabel(status) {
-      const labels = { ACTIVE: 'Aktivní', PREPARING: 'V přípravě', DISABLED: 'Vypnuto' };
-      return labels[status] || 'Vypnuto';
-    },
-
-    subAppStatusClass(status) {
-      if (status === 'ACTIVE') return 'is-active';
-      if (status === 'PREPARING') return 'is-preparing';
-      return 'is-muted';
-    },
-
-    subAppIconLabel(icon) {
-      const found = this.findCatalogIcon(icon);
-      if (found) return found.label;
-      const labels = { activity: 'Aktivita', briefcase: 'Aktovka', chart: 'Graf', list: 'Seznam', megaphone: 'Megafon', settings: 'Nastavení' };
-      return labels[icon] || icon || '-';
-    },
-
-    renderIconPicker(query) {
-      const grid = document.querySelector('#iconGrid');
-      if (!grid) return;
-      const normalized = String(query || '').trim().toLowerCase();
-      const source = this.iconCatalog || [];
-      let groups = [];
-      if (normalized) {
-        const icons = source
-          .filter(icon => (icon.tags || icon.label || icon.key || '').toLowerCase().includes(normalized))
-          .slice(0, 60);
-        groups = [{ title: 'Výsledky hledání', icons }];
-      } else {
-        groups = [
-          {
-            title: 'Doporučené pro OZ reporting',
-            icons: this.getIconGroup([
-              'digital-report', 'diagram-up', 'diagram-down', 'database', 'data-cloud', 'quality-confirmed',
-              'check-list-to-dos', 'process-map', 'time-arrow', 'calendar', 'monitor', 'warning',
-              'calculator', 'budget', 'warehouse', 'truck', 'supply-chain', 'all-process-documents',
-            ]),
-          },
-          {
-            title: 'Sortiment OZ',
-            icons: this.getIconGroup([
-              'vegetables', 'broccoli', 'carrot', 'apple', 'tomato', 'strawberry',
-              'bread', 'bread-roll', 'baguette', 'croissant', 'bake-off-module', 'bag-baked-goods',
-            ]),
-          },
-        ];
-      }
-      const selected = document.querySelector('#subAppIcon')?.value || '';
-      grid.innerHTML = groups.map(group => `
-        <div class="icon-group">
-          <h4>${this.escape(group.title)}</h4>
-          <div class="icon-group-grid">
-            ${group.icons.map(icon => `
-              <button type="button" class="icon-choice${icon.key === selected ? ' is-selected' : ''}" data-icon="${this.escape(icon.key)}" aria-label="${this.escape(icon.label)}">
-                <svg><use href="#${this.escape(icon.symbol)}"></use></svg>
-                <span>${this.escape(icon.label)}</span>
-              </button>
-            `).join('')}
-          </div>
-        </div>
-      `).join('');
-      grid.querySelectorAll('.icon-choice').forEach(button => {
-        button.addEventListener('click', () => {
-          this.setSubAppIcon(button.dataset.icon);
-          this.renderIconPicker(document.querySelector('#iconSearch')?.value || '');
+  /**
+   * Otevře potvrzovací modal s volitelným tlačítkem Potvrdit.
+   * Podporuje víceřádkový text (dělí se na \n → <br>).
+   * @param {string}   title
+   * @param {string}   body
+   * @param {Function} [onConfirm]
+   */
+  openModal(title, body, onConfirm) {
+    this.setText('#modalTitle', title);
+    const bodyEl = document.querySelector('#modalBody');
+    if (bodyEl) {
+      bodyEl.textContent = '';
+      if (body && body.includes('\n')) {
+        body.split('\n').forEach((line, i, arr) => {
+          bodyEl.appendChild(document.createTextNode(line));
+          if (i < arr.length - 1) bodyEl.appendChild(document.createElement('br'));
         });
-      });
-    },
+      } else {
+        bodyEl.textContent = body || '';
+      }
+    }
+    this.pendingConfirm = typeof onConfirm === 'function' ? onConfirm : null;
+    const confirmButton = document.querySelector('#modalConfirmButton');
+    if (confirmButton) confirmButton.hidden = !this.pendingConfirm;
+    this._modalTrigger  = document.activeElement; // uložíme pro obnovení focusu
+    this.modal.showModal();
+  },
 
-    getIconGroup(keys) {
-      return keys.map(key => this.findCatalogIcon(key)).filter(Boolean);
-    },
+  closeModal() {
+    this.modal.classList.add('is-closing');
+    const trigger = this._modalTrigger;
+    const done    = () => {
+      this.modal.classList.remove('is-closing');
+      this.modal.close();
+      this.pendingConfirm = null;
+      this._modalTrigger  = null;
+      const confirmButton = document.querySelector('#modalConfirmButton');
+      if (confirmButton) confirmButton.hidden = true;
+      // Vrátíme focus na element, který modal otevřel (přístupnost)
+      if (trigger && typeof trigger.focus === 'function') trigger.focus();
+    };
+    const fallback = setTimeout(done, 280);
+    this.modal.addEventListener('animationend', () => { clearTimeout(fallback); done(); }, { once: true });
+  },
 
-    setSubAppIcon(iconKey) {
-      const icon = this.findCatalogIcon(iconKey) || this.findCatalogIcon('briefcase');
-      const key = icon ? icon.key : (iconKey || 'briefcase');
-      const symbol = icon ? icon.symbol : this.iconId(key);
-      const input = document.querySelector('#subAppIcon');
-      const preview = document.querySelector('#subAppIconPreview use');
-      if (input) input.value = key;
-      if (preview) preview.setAttribute('href', '#' + symbol);
-    },
+  showLoader(message) {
+    this.loadingCount += 1;
+    if (!this.startupLoading) this.loader.classList.remove('is-startup');
+    this.setText('#loaderText', message || 'Načítám data...');
+    this.loader.classList.add('is-visible');
+  },
 
-    findCatalogIcon(key) {
-      const normalized = String(key || '').trim();
-      if (!normalized) return null;
-      return (this.iconCatalog || []).find(icon => icon.key === normalized || icon.symbol === normalized || icon.symbol === 'li-' + normalized) || null;
-    },
+  hideLoader() {
+    this.loadingCount = Math.max(0, this.loadingCount - 1);
+    if (this.loadingCount === 0) {
+      this.loader.classList.remove('is-visible', 'is-startup');
+      this.startupLoading = false;
+      this.setText('#loaderText', 'Načítám data...');
+    }
+  },
 
-    iconSymbol(name) {
-      const found = this.findCatalogIcon(name);
-      return found ? found.symbol : this.iconId(name);
-    },
+  showSessionExpired() {
+    this.openModal(
+      'Platnost sezení vypršela',
+      'Vaše přihlášení vypršelo. Stránku obnovte pro pokračování v práci.',
+      () => window.location.reload(),
+    );
+  },
 
-    nextSubAppSortOrder() {
-      const values = (this.subAppsState.subApps || []).map(item => Number(item.sortOrder || 0));
-      return values.length ? Math.max(...values) + 1 : 1;
-    },
+  /**
+   * Zobrazí toast notifikaci.
+   * @param {string} message
+   * @param {'error'|undefined} type
+   */
+  toast(message, type) {
+    const node       = document.createElement('div');
+    node.className   = 'toast' + (type === 'error' ? ' is-error' : '');
+    node.textContent = message;
+    this.toastRegion.appendChild(node);
+    setTimeout(() => node.remove(), 3600);
+  },
 
-    getUserEmail(user) {
-      if (!user) return 'Neznámý uživatel';
-      if (typeof user === 'string') return user;
-      return user.email || 'Neznámý uživatel';
-    },
+  // =========================================================================
+  // SEKCE: Pomocné funkce
+  // =========================================================================
 
-    getInitials(value) {
-      const clean = String(value || '').trim();
-      if (!clean) return '?';
-      const source = clean.includes('@') ? clean.split('@')[0] : clean;
-      return source
-        .split(/[.\s_-]+/)
-        .filter(Boolean)
-        .slice(0, 2)
-        .map((part) => part.charAt(0).toUpperCase())
-        .join('') || '?';
-    },
+  /** Bezpečně nastaví textContent elementu dle CSS selektoru. */
+  setText(selector, value) {
+    const node = document.querySelector(selector);
+    if (node) node.textContent = value || '';
+  },
 
-    getDisplayName(value) {
-      const clean = String(value || '').trim();
-      if (!clean) return 'uživateli';
-      const source = clean.includes('@') ? clean.split('@')[0] : clean;
-      const first = source.split(/[.\s_-]+/).filter(Boolean)[0] || source;
-      return first.charAt(0).toUpperCase() + first.slice(1);
-    },
+  /** HTML-escapuje hodnotu pro bezpečné vložení do šablony. */
+  escape(value) {
+    return String(value ?? '')
+      .replaceAll('&', '&amp;')
+      .replaceAll('<', '&lt;')
+      .replaceAll('>', '&gt;')
+      .replaceAll('"', '&quot;')
+      .replaceAll("'", '&#039;');
+  },
 
-    formatDateTime(value) {
-      if (!value) return '-';
-      const date = new Date(value);
-      if (Number.isNaN(date.getTime())) return '-';
-      return date.toLocaleString('cs-CZ', {
-        day: '2-digit',
-        month: '2-digit',
-        year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-      });
-    },
+  /** Naplní <select> element ze seznamu { value, label } objektů. */
+  setSelectOptions(selector, options) {
+    const select = document.querySelector(selector);
+    if (!select) return;
+    select.innerHTML = (options || []).map((option) =>
+      `<option value="${this.escape(option.value)}">${this.escape(option.label)}</option>`,
+    ).join('');
+  },
 
-    escape(value) {
-      return String(value ?? '')
-        .replaceAll('&', '&amp;')
-        .replaceAll('<', '&lt;')
-        .replaceAll('>', '&gt;')
-        .replaceAll('"', '&quot;')
-        .replaceAll("'", '&#039;');
-    },
-  };
+  /** Odstraní diakritiku a vrátí pouze alfanumerické znaky (lowercase). */
+  removeDiacritics(str) {
+    const map = { 'á':'a','č':'c','ď':'d','é':'e','ě':'e','í':'i','ň':'n','ó':'o','ř':'r','š':'s','ť':'t','ú':'u','ů':'u','ý':'y','ž':'z' };
+    return String(str || '').toLowerCase().replace(/[áčďéěíňóřšťúůýž]/g, (c) => map[c] || c).replace(/[^a-z0-9]/g, '');
+  },
 
-  document.addEventListener('DOMContentLoaded', () => App.init());
+  /** Vrátí iniciály z jména nebo e-mailu (max 2 znaky). */
+  getInitials(value) {
+    const clean  = String(value || '').trim();
+    if (!clean) return '?';
+    const source = clean.includes('@') ? clean.split('@')[0] : clean;
+    return source.split(/[.\s_-]+/).filter(Boolean).slice(0, 2).map((p) => p.charAt(0).toUpperCase()).join('') || '?';
+  },
+
+  /** Vrátí první část jména pro pozdrav (s velkým počátečním písmenem). */
+  getDisplayName(value) {
+    const clean  = String(value || '').trim();
+    if (!clean) return 'uživateli';
+    const source = clean.includes('@') ? clean.split('@')[0] : clean;
+    const first  = source.split(/[.\s_-]+/).filter(Boolean)[0] || source;
+    return first.charAt(0).toUpperCase() + first.slice(1);
+  },
+
+  /** Vrátí e-mail z různých formátů (string nebo objekt). */
+  getUserEmail(user) {
+    if (!user) return 'Neznámý uživatel';
+    if (typeof user === 'string') return user;
+    return user.email || 'Neznámý uživatel';
+  },
+
+  /** Formátuje ISO datum/čas do češtiny (dd.MM.yyyy HH:mm). */
+  formatDateTime(value) {
+    if (!value) return '-';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return '-';
+    return date.toLocaleString('cs-CZ', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+  },
+
+  /** Spustí hodiny aktualizované každých 30 sekund. */
+  startClock() {
+    const update = () => {
+      const now = new Date();
+      this.setText('#currentDay', now.toLocaleDateString('cs-CZ', { weekday: 'long', day: 'numeric', month: 'long' }).toUpperCase());
+      this.setText('#currentTime', now.toLocaleTimeString('cs-CZ', { hour: '2-digit', minute: '2-digit' }));
+    };
+    update();
+    this.clockTimer = setInterval(update, 30000);
+  },
+
+  /** Aktualizuje aria-expanded a title atributy toggleu sidebaru. */
+  syncSidebarToggle() {
+    const app    = document.querySelector('.app');
+    const toggle = document.querySelector('#sidebarToggle');
+    if (!app || !toggle) return;
+    const collapsed = app.classList.contains('sidebar-collapsed');
+    toggle.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+    toggle.setAttribute('title', collapsed ? 'Zobrazit texty panelu' : 'Skrýt texty panelu');
+  },
+
+}; // konec App
+
+document.addEventListener('DOMContentLoaded', () => App.init());
 </script>
