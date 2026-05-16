@@ -1288,15 +1288,15 @@
             : '';
           const items = (entry.changes || []).map((c) => {
             const tag = this.changelogTagFor(c);
-            return `<li class="cl-item"><span class="cl-tag ${tag.cls}">${tag.label}</span><span class="cl-item-text">${c}</span></li>`;
+            return `<li class="cl-item"><span class="cl-tag ${tag.cls}">${this.escape(tag.label)}</span><span class="cl-item-text">${this.escape(c)}</span></li>`;
           }).join('');
           return `<div class="cl-version${isLatest ? ' cl-version-latest' : ''}">
             <div class="cl-version-head">
               <div class="cl-version-left">
-                <span class="cl-version-num">${entry.version}</span>
+                <span class="cl-version-num">${this.escape(entry.version)}</span>
                 ${isLatest ? '<span class="cl-latest-badge">Nejnovější</span>' : ''}
               </div>
-              ${dateStr ? `<span class="cl-version-date">${dateStr}</span>` : ''}
+              ${dateStr ? `<span class="cl-version-date">${this.escape(dateStr)}</span>` : ''}
             </div>
             <ul class="cl-items">${items}</ul>
           </div>`;

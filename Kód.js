@@ -114,7 +114,7 @@ function getInitData() {
     };
 
     try {
-      updateUserLastVisit_(database.spreadsheet, context.user.id);
+      updateUserLastVisit_(context.database.spreadsheet, context.user.id);
     } catch (e) {
       Logger.log('[VISIT_UPDATE_FAIL] user=%s error=%s', context.user.email, e && e.message ? e.message : e);
     }
@@ -1148,8 +1148,8 @@ function validateSubAppPayload_(data) {
   if (['ACTIVE', 'PREPARING', 'DISABLED'].indexOf(data.status) < 0) throw new Error('Vyberte platný stav dlaždice.');
   if (data.targetUrl) {
     const url = String(data.targetUrl).trim().toLowerCase();
-    if (url && !url.startsWith('https://') && !url.startsWith('http://')) {
-      throw new Error('Cílová URL musí začínat https:// nebo http://');
+    if (url && !url.startsWith('https://')) {
+      throw new Error('Cílová URL musí začínat https://');
     }
   }
 }
