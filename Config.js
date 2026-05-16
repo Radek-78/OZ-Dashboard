@@ -3,7 +3,7 @@
   appSubtitle: '',
   logoFileId: '18mu_Lq1F_FqqSZcolMjLwG0aaQDPMdyD',
   logoUrl: 'https://drive.google.com/thumbnail?id=18mu_Lq1F_FqqSZcolMjLwG0aaQDPMdyD&sz=w320',
-  version: 'v0.5.0',
+  version: 'v0.6.0',
   theme: {
     blue: '#0050aa',
     darkBlue: '#002466',
@@ -16,6 +16,18 @@
 };
 
 const APP_CHANGELOG = [
+  {
+    version: 'v0.6.0',
+    date: '2026-05-16',
+    changes: [
+      'Přidáno vyhledávání uživatelů — filtr podle jména, e-mailu a úseku v reálném čase',
+      'Přidán filtr podle role přístupu a stavu (aktivní / neaktivní)',
+      'Přidáno řazení podle sloupce (kliknutím na hlavičku) se zobrazením směru řazení',
+      'Přidán export viditelných uživatelů do CSV (s BOM pro správné zobrazení diakritiky v Excelu)',
+      'Counter uživatelů zobrazuje počet filtrovaných záznamů z celkového počtu',
+      'roles.manage přidáno do seed oprávnění role ADMIN',
+    ],
+  },
   {
     version: 'v0.5.0',
     date: '2026-05-16',
