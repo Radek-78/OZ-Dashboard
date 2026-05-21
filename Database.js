@@ -6,7 +6,7 @@
  */
 
 /** Aktuální verze databázového schématu. Navyšte při přidání nových listů/sloupců. */
-const DATABASE_SCHEMA_VERSION = '2';
+const DATABASE_SCHEMA_VERSION = '3';
 
 /** TTL cache záznamu o databázi v sekundách (6 hodin). */
 const DATABASE_CACHE_TTL_SECONDS = 21600;
@@ -214,7 +214,7 @@ function setupDatabaseSheets_(spreadsheet) {
   ]);
 
   ensureSheet_(spreadsheet, 'FILIALKY', [
-    'id', 'storeNumber', 'storeName', 'abbreviation', 'lc',
+    'id', 'storeNumber', 'storeName', 'lc',
     'storePhone', 'vt', 'rm', 'rmPhone',
     'mondayOpen', 'mondayClose', 'tuesdayOpen', 'tuesdayClose',
     'wednesdayOpen', 'wednesdayClose', 'thursdayOpen', 'thursdayClose',

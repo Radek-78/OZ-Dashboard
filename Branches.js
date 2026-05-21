@@ -113,11 +113,13 @@ function buildBranchesData_(context) {
   const props = PropertiesService.getScriptProperties();
   const rows = getObjects_(spreadsheet.getSheetByName('FILIALKY')).map(mapBranchRow_);
   const activeRows = rows.filter(function(row) { return row.active; });
+  const lcs = listLocations_(spreadsheet).filter(function(loc) { return loc.type === 'LC'; });
 
   return {
     auth: context.auth,
     canSync: hasPermission_(context.auth, 'branches.sync'),
     branches: activeRows,
+    lcs: lcs,
     stats: {
       total: activeRows.length,
       lcCount: uniqueCount_(activeRows.map(function(row) { return row.lc; })),
@@ -245,8 +247,7 @@ function normalizeBranchRow_(raw, sourceFile, sourceRow, sourceUpdatedAt) {
     id: Utilities.getUuid(),
     storeNumber: pickBranchValue_(raw, ['cprodejny', 'cisloprodejny', 'cislofilialky', 'cislo', 'prodejna', 'filialka', 'store', 'storenumber']),
     storeName: pickBranchValue_(raw, ['nazevfilialky', 'nazev', 'prodejnaNazev', 'name', 'storename']),
-    abbreviation: pickBranchValue_(raw, ['zkratka', 'abbr', 'abbreviation', 'lc']),
-    lc: pickBranchValue_(raw, ['lc', 'logistickecentrum', 'logistickecentrumlc']),
+    lc: pickBranchValue_(raw, ['lc', 'logistickecentrum', 'logistickecentrumlc', 'zkratka', 'abbr', 'abbreviation']),
     storePhone: formatCzechPhone_(pickBranchValue_(raw, ['telefonprodejny', 'telefon', 'phone', 'storephone'])),
     vt: pickBranchValue_(raw, ['vt', 'oblastnimanager', 'oblastnivedouci']),
     rm: pickBranchValue_(raw, ['rm', 'regionalnimanager', 'regionalmanager']),
@@ -399,7 +400,6 @@ function mapBranchRow_(row) {
     id: String(row.id || ''),
     storeNumber: String(row.storeNumber || ''),
     storeName: String(row.storeName || ''),
-    abbreviation: String(row.abbreviation || ''),
     lc: String(row.lc || ''),
     storePhone: String(row.storePhone || ''),
     vt: String(row.vt || ''),

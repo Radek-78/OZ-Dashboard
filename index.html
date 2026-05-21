@@ -48,7 +48,7 @@
         <nav class="navigation" aria-label="Hlavní navigace">
           <p>Přehled</p>
           <button class="nav-link is-active" type="button" data-section="home" data-tooltip="Přehled"><svg><use href="#i-home"></use></svg><span>Přehled</span></button>
-          <button class="nav-link" type="button" data-section="branches" data-tooltip="Filiálky"><svg><use href="#i-store"></use></svg><span>Filiálky</span></button>
+          <button class="nav-link" type="button" data-section="branches" data-tooltip="LC a Filiálky"><svg><use href="#i-store"></use></svg><span>LC a Filiálky</span></button>
           <div class="nav-group-item" aria-label="Nastavení"><svg><use href="#i-settings"></use></svg><span>Nastavení</span></div>
           <button class="nav-link nav-link-child" type="button" data-section="users" data-tooltip="Uživatelé"><svg><use href="#i-users"></use></svg><span>Uživatelé</span></button>
           <button class="nav-link nav-link-child" type="button" data-section="locations" data-tooltip="Umístění"><svg><use href="#i-map-pin"></use></svg><span>Umístění</span></button>
@@ -99,47 +99,80 @@
         <section class="page settings-page" id="branchesPage" hidden>
           <section class="admin-panel branches-panel">
             <div class="admin-panel-head">
-              <span class="admin-panel-icon"><svg><use href="#i-briefcase"></use></svg></span>
+              <span class="admin-panel-icon"><svg><use href="#i-store"></use></svg></span>
               <div class="admin-panel-title">
-                <h3>Filiálky</h3>
-                <p><strong id="branchesCount">0</strong> filiálek v hlavní databázi</p>
+                <h3>LC a Filiálky</h3>
+                <p id="lcBranchesHeadSub"><strong id="branchesCount">0</strong> filiálek v hlavní databázi</p>
               </div>
               <div class="branches-head-tools">
-                <input type="search" id="branchesSearch" class="branches-head-search" placeholder="Hledat filiálku, LC, VT nebo RM…" aria-label="Hledat filiálky" autocomplete="off">
-                <div class="branches-summary" id="branchesStats"></div>
+                <div id="branchesToolsBranches">
+                  <input type="search" id="branchesSearch" class="branches-head-search" placeholder="Hledat filiálku, LC, VT nebo RM…" aria-label="Hledat filiálky" autocomplete="off">
+                  <div class="branches-summary" id="branchesStats"></div>
+                </div>
+                <div id="branchesToolsLc" hidden>
+                  <button type="button" class="button button-primary" data-action="create-lc"><svg><use href="#i-map-pin"></use></svg>Přidat LC</button>
+                </div>
               </div>
             </div>
 
-            <div class="branches-quick-filters" id="branchesQuickFilters"></div>
-
-            <div class="table-shell branches-table-shell">
-              <table class="users-table branches-table" aria-label="Přehled filiálek">
-                <thead>
-                  <tr>
-                    <th class="sortable" data-col="storeNumber">Číslo</th>
-                    <th class="sortable" data-col="storeName">Filiálka</th>
-                    <th class="sortable" data-col="lc">LC</th>
-                    <th class="sortable" data-col="storePhone">Telefon</th>
-                    <th class="sortable" data-col="vt">VT</th>
-                    <th class="sortable" data-col="rm">RM</th>
-                    <th class="sortable" data-col="rmPhone">Telefon RM</th>
-                    <th class="sortable" data-col="mondayOpen">Po</th>
-                    <th class="sortable" data-col="tuesdayOpen">Út</th>
-                    <th class="sortable" data-col="wednesdayOpen">St</th>
-                    <th class="sortable" data-col="thursdayOpen">Čt</th>
-                    <th class="sortable" data-col="fridayOpen">Pá</th>
-                    <th class="sortable" data-col="saturdayOpen">So</th>
-                    <th class="sortable" data-col="sundayOpen">Ne</th>
-                  </tr>
-                </thead>
-                <tbody id="branchesRows"></tbody>
-              </table>
+            <div class="lc-branches-tabs">
+              <button class="lc-tab is-active" type="button" data-lc-tab="branches"><svg><use href="#i-store"></use></svg><span>Přehled filiálek</span></button>
+              <button class="lc-tab" type="button" data-lc-tab="lc"><svg><use href="#i-map-pin"></use></svg><span>Logistická centra</span></button>
             </div>
 
-            <div class="empty-state users-empty" id="branchesEmpty" hidden>
-              <svg><use href="#i-briefcase"></use></svg>
-              <strong>Filiálky zatím nejsou načtené</strong>
-              <span>Nastavte složku se zdrojovým přehledem a spusťte synchronizaci.</span>
+            <div id="lcTabBranches" class="lc-tab-panel is-active">
+              <div class="branches-quick-filters" id="branchesQuickFilters"></div>
+              <div class="table-shell branches-table-shell">
+                <table class="users-table branches-table" aria-label="Přehled filiálek">
+                  <thead>
+                    <tr>
+                      <th class="sortable" data-col="storeNumber">Číslo</th>
+                      <th class="sortable" data-col="storeName">Filiálka</th>
+                      <th class="sortable" data-col="lc">LC</th>
+                      <th class="sortable" data-col="storePhone">Telefon</th>
+                      <th class="sortable" data-col="vt">VT</th>
+                      <th class="sortable" data-col="rm">RM</th>
+                      <th class="sortable" data-col="rmPhone">Telefon RM</th>
+                      <th class="sortable" data-col="mondayOpen">Po</th>
+                      <th class="sortable" data-col="tuesdayOpen">Út</th>
+                      <th class="sortable" data-col="wednesdayOpen">St</th>
+                      <th class="sortable" data-col="thursdayOpen">Čt</th>
+                      <th class="sortable" data-col="fridayOpen">Pá</th>
+                      <th class="sortable" data-col="saturdayOpen">So</th>
+                      <th class="sortable" data-col="sundayOpen">Ne</th>
+                    </tr>
+                  </thead>
+                  <tbody id="branchesRows"></tbody>
+                </table>
+              </div>
+              <div class="empty-state users-empty" id="branchesEmpty" hidden>
+                <svg><use href="#i-store"></use></svg>
+                <strong>Filiálky zatím nejsou načtené</strong>
+                <span>Nastavte složku se zdrojovým přehledem a spusťte synchronizaci.</span>
+              </div>
+            </div>
+
+            <div id="lcTabLc" class="lc-tab-panel">
+              <div class="table-shell lc-table-shell">
+                <table class="users-table lc-table" aria-label="Přehled logistických center">
+                  <thead>
+                    <tr>
+                      <th>Označení</th>
+                      <th>Zkratka</th>
+                      <th>Město</th>
+                      <th>Filiálek</th>
+                      <th>Stav</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody id="lcRows"></tbody>
+                </table>
+              </div>
+              <div class="empty-state users-empty" id="lcEmpty" hidden>
+                <svg><use href="#i-map-pin"></use></svg>
+                <strong>Žádná logistická centra</strong>
+                <span>Přidejte první LC kliknutím na tlačítko Přidat LC.</span>
+              </div>
             </div>
           </section>
         </section>
@@ -438,6 +471,32 @@
         </div>
         <footer class="modal-actions">
           <button class="button button-secondary" type="button" data-action="close-location-modal"><svg><use href="#i-close"></use></svg>Zrušit</button>
+          <button class="button button-primary" type="submit"><svg><use href="#i-check"></use></svg>Uložit</button>
+        </footer>
+      </form>
+    </dialog>
+
+    <dialog class="modal user-modal" id="lcModal">
+      <form id="lcForm">
+        <header class="modal-header">
+          <span class="modal-icon"><svg><use href="#i-map-pin"></use></svg></span>
+          <div class="modal-header-text">
+            <p class="kicker">Logistické centrum</p>
+            <h2 id="lcModalTitle">Nové LC</h2>
+          </div>
+          <button class="modal-close" type="button" data-action="close-lc-modal" aria-label="Zavřít"><svg><use href="#i-close"></use></svg></button>
+        </header>
+        <div class="modal-body">
+          <input type="hidden" name="id">
+          <div class="form-grid">
+            <label>Číslo LC<input type="text" name="code" placeholder="01" maxlength="4" required></label>
+            <label>Zkratka<input type="text" name="abbreviation" placeholder="BRN" maxlength="6" required></label>
+            <label style="grid-column:1/-1">Město<input type="text" name="city" placeholder="Brno" required></label>
+          </div>
+          <label class="switch-row"><input type="checkbox" name="active" checked> <span>Aktivní</span></label>
+        </div>
+        <footer class="modal-actions">
+          <button class="button button-secondary" type="button" data-action="close-lc-modal"><svg><use href="#i-close"></use></svg>Zrušit</button>
           <button class="button button-primary" type="submit"><svg><use href="#i-check"></use></svg>Uložit</button>
         </footer>
       </form>

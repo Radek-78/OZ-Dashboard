@@ -3664,6 +3664,57 @@
     text-transform: none;
   }
 
+  /* ── LC a Filiálky — záložky ── */
+  .lc-branches-tabs {
+    display: flex;
+    gap: 0;
+    background: #f3f5f9;
+    border-bottom: 2px solid rgba(0,36,102,.1);
+    flex-shrink: 0;
+  }
+
+  .lc-tab {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 10px 20px;
+    border: 0;
+    border-bottom: 3px solid transparent;
+    background: transparent;
+    color: #7a8ca3;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    margin-bottom: -2px;
+    transition: color .15s, border-color .15s, background .15s;
+    letter-spacing: .01em;
+  }
+
+  .lc-tab svg { width: 15px; height: 15px; opacity: .65; transition: opacity .15s; }
+  .lc-tab:hover { color: var(--lidl-dark-blue); background: rgba(0,36,102,.04); }
+  .lc-tab:hover svg { opacity: 1; }
+  .lc-tab.is-active { color: var(--lidl-dark-blue); border-bottom-color: var(--lidl-yellow); background: #fff; }
+  .lc-tab.is-active svg { opacity: 1; }
+
+  /* ── Tab panels ── */
+  .lc-tab-panel { display: none; flex-direction: column; flex: 1; min-height: 0; }
+  .lc-tab-panel.is-active { display: flex; }
+
+  /* ── LC tabulka ── */
+  .lc-table-shell {
+    overflow: auto;
+    flex: 1;
+    min-height: 0;
+  }
+
+  .lc-table th:nth-child(1) { width: 100px; }
+  .lc-table th:nth-child(2) { width: 90px; }
+  .lc-table th:nth-child(3) { min-width: 140px; }
+  .lc-table th:nth-child(4) { width: 80px; text-align: center; }
+  .lc-table th:nth-child(5) { width: 90px; }
+  .lc-table th:nth-child(6) { width: 80px; }
+  .lc-table td:nth-child(4) { text-align: center; }
+
   .branches-table-shell {
     overflow: auto;
     scrollbar-gutter: stable;

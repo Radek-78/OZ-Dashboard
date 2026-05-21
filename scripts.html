@@ -72,7 +72,8 @@ const App = {
   usersSort:   { field: 'fullName', dir: 'asc' },
 
   /** Stavové objekty pro jednotlivé sekce nastavení */
-  branchesState:    { branches: [], stats: {}, sync: {}, canSync: false },
+  branchesState:    { branches: [], lcs: [], stats: {}, sync: {}, canSync: false },
+  lcBranchesTab:    'branches',
   branchesFilter:   { query: '', sort: { col: null, dir: 'asc' }, colFilters: {}, quick: { lc: '', vt: '', rm: '' } },
   _branchColMenuCurrentCol: null,
   _branchColMenuCloseHandler: null,
@@ -99,6 +100,7 @@ const App = {
     this.permissionsModal = document.querySelector('#permissionsModal');
     this.rolesModal      = document.querySelector('#rolesModal');
     this.changelogModal  = document.querySelector('#changelogModal');
+    this.lcModal         = document.querySelector('#lcModal');
     this.iconCatalog     = window.LIDL_ICON_CATALOG || [];
     this.applyBootstrap(window.APP_BOOTSTRAP || {});
     this.bindEvents();
@@ -214,6 +216,21 @@ const App = {
     if (saveBranchesSource) saveBranchesSource.addEventListener('click', () => this.saveBranchesSourceFolder());
     const syncBranches = document.querySelector('[data-action="sync-branches"]');
     if (syncBranches) syncBranches.addEventListener('click', () => this.syncBranches());
+
+    // LC a Filiálky — přepínání záložek
+    document.querySelectorAll('.lc-tab').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        this.lcBranchesTab = btn.dataset.lcTab || 'branches';
+        this.renderBranches();
+      });
+    });
+
+    // LC — CRUD
+    const createLc = document.querySelector('[data-action="create-lc"]');
+    if (createLc) createLc.addEventListener('click', () => this.openLcModal());
+    const lcForm = document.querySelector('#lcForm');
+    if (lcForm) lcForm.addEventListener('submit', (e) => { e.preventDefault(); this.saveLcFromForm(); });
+    document.querySelectorAll('[data-action="close-lc-modal"]').forEach((b) => b.addEventListener('click', () => this.closeLcModal()));
 
     document.querySelectorAll('.branches-table th[data-col]').forEach((th) => {
       th.addEventListener('click', () => this.openBranchColMenu(th, th.dataset.col));
@@ -604,6 +621,7 @@ const App = {
   applyBranchesState(data) {
     this.branchesState = {
       branches: data.branches || [],
+      lcs: data.lcs || [],
       stats: data.stats || {},
       sync: data.sync || {},
       canSync: data.canSync === true,
@@ -695,8 +713,32 @@ const App = {
   },
 
   renderBranches() {
-    const rows = document.querySelector('#branchesRows');
-    const empty = document.querySelector('#branchesEmpty');
+    const tab = this.lcBranchesTab || 'branches';
+
+    // ── Přepínač záložek ─────────────────────────────────────────────────────
+    document.querySelectorAll('.lc-tab').forEach((btn) =>
+      btn.classList.toggle('is-active', btn.dataset.lcTab === tab));
+    document.querySelectorAll('.lc-tab-panel').forEach((panel) =>
+      panel.classList.toggle('is-active', panel.id === (tab === 'lc' ? 'lcTabLc' : 'lcTabBranches')));
+
+    // ── Nástroje v hlavičce ───────────────────────────────────────────────────
+    const toolsBranches = document.querySelector('#branchesToolsBranches');
+    const toolsLc       = document.querySelector('#branchesToolsLc');
+    if (toolsBranches) toolsBranches.hidden = tab === 'lc';
+    if (toolsLc)       toolsLc.hidden       = tab !== 'lc';
+
+    // ── Záložka Logistická centra ─────────────────────────────────────────────
+    if (tab === 'lc') {
+      this.renderLcList();
+      return;
+    }
+
+    // ── Záložka Přehled filiálek ──────────────────────────────────────────────
+    const headSub = document.querySelector('#lcBranchesHeadSub');
+    if (headSub) headSub.innerHTML = '<strong id="branchesCount">0</strong> filiálek v hlavní databázi';
+
+    const rows    = document.querySelector('#branchesRows');
+    const empty   = document.querySelector('#branchesEmpty');
     const counter = document.querySelector('#branchesCount');
     if (!rows) return;
 
@@ -740,6 +782,153 @@ const App = {
     this.setText('#branchesSourceFolderLabel', sync.sourceFolderId || 'Nenastaveno');
     this.setText('#branchesLastSync', this.formatDateTime(sync.lastSyncAt));
     this.setText('#branchesSourceFile', sync.lastSourceFileName || sync.lastSourceFileId || '-');
+  },
+
+  // =========================================================================
+  // SEKCE: Logistická centra (LC)
+  // =========================================================================
+
+  renderLcList() {
+    const rows    = document.querySelector('#lcRows');
+    const empty   = document.querySelector('#lcEmpty');
+    const headSub = document.querySelector('#lcBranchesHeadSub');
+    const lcs     = this.branchesState.lcs || [];
+
+    // Subtitle
+    const n = lcs.length;
+    const suffix = n === 1 ? 'é centrum' : n >= 2 && n <= 4 ? 'á centra' : 'ých center';
+    if (headSub) headSub.innerHTML = `<strong>${n}</strong> logistick${suffix}`;
+
+    if (!rows) return;
+    if (!lcs.length) {
+      rows.innerHTML = '';
+      if (empty) empty.hidden = false;
+      return;
+    }
+    if (empty) empty.hidden = true;
+
+    // Počet filiálek přiřazených k LC (shoda přes zkratku)
+    const branchCountByAbbr = {};
+    (this.branchesState.branches || []).forEach((b) => {
+      if (b.lc) branchCountByAbbr[b.lc] = (branchCountByAbbr[b.lc] || 0) + 1;
+    });
+
+    rows.innerHTML = lcs.map((lc) => `
+      <tr>
+        <td><strong>${this.escape('LC' + lc.code)}</strong></td>
+        <td><span class="role-chip is-blue">${this.escape(lc.abbreviation || '–')}</span></td>
+        <td>${this.escape(lc.city || '–')}</td>
+        <td>${branchCountByAbbr[lc.abbreviation] || 0}</td>
+        <td><span class="state-chip ${lc.active ? 'is-active' : 'is-muted'}">${lc.active ? 'Aktivní' : 'Vypnutá'}</span></td>
+        <td class="table-actions">
+          <button type="button" class="icon-button" data-action="edit-lc" data-id="${this.escape(lc.id)}" aria-label="Upravit"><svg><use href="#i-pencil"></use></svg></button>
+          <button type="button" class="icon-button danger" data-action="delete-lc" data-id="${this.escape(lc.id)}" aria-label="Smazat"><svg><use href="#i-trash"></use></svg></button>
+        </td>
+      </tr>
+    `).join('');
+
+    rows.querySelectorAll('[data-action="edit-lc"]').forEach((b) =>
+      b.addEventListener('click', () => this.openLcModal(lcs.find((l) => l.id === b.dataset.id))));
+    rows.querySelectorAll('[data-action="delete-lc"]').forEach((b) =>
+      b.addEventListener('click', () => this.confirmDeleteLc(b.dataset.id)));
+  },
+
+  openLcModal(lc) {
+    const form = document.querySelector('#lcForm');
+    if (!form) return;
+    form.reset();
+    this.setText('#lcModalTitle', lc ? 'Upravit LC' : 'Nové logistické centrum');
+    form.elements.id.value           = lc ? (lc.id           || '') : '';
+    form.elements.code.value         = lc ? (lc.code         || '') : '';
+    form.elements.abbreviation.value = lc ? (lc.abbreviation || '') : '';
+    form.elements.city.value         = lc ? (lc.city         || '') : '';
+    form.elements.active.checked     = lc ? lc.active : true;
+    document.querySelector('#lcModal').showModal();
+  },
+
+  closeLcModal() { document.querySelector('#lcModal').close(); },
+
+  saveLcFromForm() {
+    const form = document.querySelector('#lcForm');
+    const payload = {
+      id:           form.elements.id.value,
+      type:         'LC',
+      code:         form.elements.code.value,
+      abbreviation: form.elements.abbreviation.value,
+      city:         form.elements.city.value,
+      active:       form.elements.active.checked,
+    };
+    this.closeLcModal();
+
+    const isNew       = !payload.id;
+    const displayName = ['LC' + payload.code, payload.abbreviation, payload.city].filter(Boolean).join(' ');
+
+    this.optimisticUpdate(
+      () => {
+        const optimistic = {
+          id: isNew ? 'temp_' + Date.now() : payload.id,
+          type: 'LC', code: payload.code, abbreviation: payload.abbreviation,
+          city: payload.city, displayName, active: payload.active,
+        };
+        const lcs = this.branchesState.lcs || [];
+        if (isNew) {
+          this.branchesState.lcs = [...lcs, optimistic]
+            .sort((a, b) => (parseInt(a.code, 10) || 0) - (parseInt(b.code, 10) || 0));
+        } else {
+          this.branchesState.lcs = lcs.map((l) => l.id === payload.id ? { ...l, ...optimistic } : l);
+        }
+        const allLocs = this.locationsState.locations || [];
+        if (isNew) {
+          this.locationsState.locations = [...allLocs, optimistic]
+            .sort((a, b) => a.type === 'CENTRALA' ? -1 : b.type === 'CENTRALA' ? 1 : (parseInt(a.code, 10) || 0) - (parseInt(b.code, 10) || 0));
+        } else {
+          this.locationsState.locations = allLocs.map((l) => l.id === payload.id ? { ...l, ...optimistic } : l);
+        }
+        this.usersState.locations = this.locationsState.locations;
+        this.renderUserOptions();
+      },
+      () => this.callServer('saveLocation', payload, { silent: true }),
+      (data) => {
+        const allLocs = data.locations || [];
+        this.locationsState = { locations: allLocs };
+        this.branchesState.lcs = allLocs.filter((l) => l.type === 'LC');
+        this.usersState.locations = allLocs;
+        this.renderLcList();
+        this.renderUserOptions();
+      },
+      isNew ? 'LC přidáno.' : 'LC uloženo.',
+    );
+  },
+
+  confirmDeleteLc(id) {
+    const lc = (this.branchesState.lcs || []).find((l) => l.id === id);
+    if (!lc) return;
+    const branchCount = (this.branchesState.branches || []).filter((b) => b.lc === lc.abbreviation).length;
+    const warning = branchCount
+      ? ` Je přiřazeno k ${branchCount} filiálk${branchCount === 1 ? 'e' : branchCount >= 2 && branchCount <= 4 ? 'ám' : 'ám'}.`
+      : '';
+    this.openModal(
+      'Smazat LC',
+      `Opravdu chcete smazat ${lc.displayName}?${warning}`,
+      () => this.optimisticUpdate(
+        () => {
+          this.branchesState.lcs = (this.branchesState.lcs || []).filter((l) => l.id !== id);
+          this.locationsState.locations = (this.locationsState.locations || []).filter((l) => l.id !== id);
+          this.usersState.locations = this.locationsState.locations;
+          this.renderUserOptions();
+        },
+        () => this.callServer('deleteLocation', id, { silent: true }),
+        (data) => {
+          const allLocs = data.locations || [];
+          this.locationsState = { locations: allLocs };
+          this.branchesState.lcs = allLocs.filter((l) => l.type === 'LC');
+          this.usersState.locations = allLocs;
+          this.renderLcList();
+          this.renderUserOptions();
+        },
+        'LC smazáno.',
+      ),
+    );
   },
 
   renderBranchSettings() {
