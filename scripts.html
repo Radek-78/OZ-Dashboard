@@ -73,7 +73,9 @@ const App = {
 
   /** Stavové objekty pro jednotlivé sekce nastavení */
   branchesState:    { branches: [], stats: {}, sync: {}, canSync: false },
-  branchesFilter:   { query: '' },
+  branchesFilter:   { query: '', sort: { col: null, dir: 'asc' }, colFilters: {} },
+  _branchColMenuCurrentCol: null,
+  _branchColMenuCloseHandler: null,
   locationsState:   { locations: [] },
   departmentsState: { departments: [] },
   subAppsState:     { subApps: [] },
@@ -211,6 +213,49 @@ const App = {
     if (saveBranchesSource) saveBranchesSource.addEventListener('click', () => this.saveBranchesSourceFolder());
     const syncBranches = document.querySelector('[data-action="sync-branches"]');
     if (syncBranches) syncBranches.addEventListener('click', () => this.syncBranches());
+
+    document.querySelectorAll('.branches-table th[data-col]').forEach((th) => {
+      th.addEventListener('click', () => this.openBranchColMenu(th, th.dataset.col));
+    });
+    const branchColMenu = document.querySelector('#branchColMenu');
+    if (branchColMenu) {
+      branchColMenu.addEventListener('click', (e) => {
+        const btn = e.target.closest('[data-col-action]');
+        if (!btn) return;
+        const col = this._branchColMenuCurrentCol;
+        const action = btn.dataset.colAction;
+        if (action === 'sort-asc' || action === 'sort-desc') {
+          const dir = action === 'sort-asc' ? 'asc' : 'desc';
+          const cur = this.branchesFilter.sort;
+          this.branchesFilter.sort = (cur.col === col && cur.dir === dir)
+            ? { col: null, dir: 'asc' }
+            : { col, dir };
+          this.closeBranchColMenu();
+          this.renderBranches();
+        } else if (action === 'clear') {
+          delete this.branchesFilter.colFilters[col];
+          const input = branchColMenu.querySelector('#branchColMenuFilter');
+          if (input) input.value = '';
+          btn.hidden = true;
+          this.renderBranches();
+        }
+      });
+      const filterInput = branchColMenu.querySelector('#branchColMenuFilter');
+      if (filterInput) {
+        filterInput.addEventListener('input', () => {
+          const col = this._branchColMenuCurrentCol;
+          if (!col) return;
+          const val = filterInput.value;
+          this.branchesFilter.colFilters[col] = val;
+          const clearBtn = branchColMenu.querySelector('[data-col-action="clear"]');
+          if (clearBtn) clearBtn.hidden = !val.trim();
+          this.renderBranches();
+        });
+      }
+    }
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') this.closeBranchColMenu();
+    });
 
     // Umístění
     const createLocation = document.querySelector('[data-action="create-location"]');
@@ -547,16 +592,47 @@ const App = {
   },
 
   getFilteredBranches() {
-    const query = this.branchesFilter.query;
-    const rows = this.branchesState.branches || [];
-    if (!query) return rows;
-    return rows.filter((branch) => {
-      const haystack = [
-        branch.storeNumber, branch.storeName, branch.abbreviation, branch.lc,
-        branch.storePhone, branch.vt, branch.rm, branch.rmPhone,
-      ].join(' ').toLowerCase();
-      return haystack.includes(query);
+    const { query, sort, colFilters } = this.branchesFilter;
+    let rows = this.branchesState.branches || [];
+
+    if (query) {
+      rows = rows.filter((branch) => {
+        const haystack = [
+          branch.storeNumber, branch.storeName, branch.abbreviation, branch.lc,
+          branch.storePhone, branch.vt, branch.rm, branch.rmPhone,
+        ].join(' ').toLowerCase();
+        return haystack.includes(query);
+      });
+    }
+
+    Object.entries(colFilters).forEach(([col, val]) => {
+      const v = (val || '').trim().toLowerCase();
+      if (!v) return;
+      rows = rows.filter((branch) => this.getBranchColDisplayValue(branch, col).toLowerCase().includes(v));
     });
+
+    if (sort.col) {
+      const col = sort.col;
+      const dir = sort.dir === 'asc' ? 1 : -1;
+      const isNum = col === 'storeNumber';
+      rows = [...rows].sort((a, b) => {
+        const av = isNum ? (parseInt(a[col], 10) || 0) : this.getBranchColDisplayValue(a, col);
+        const bv = isNum ? (parseInt(b[col], 10) || 0) : this.getBranchColDisplayValue(b, col);
+        if (av < bv) return -dir;
+        if (av > bv) return dir;
+        return 0;
+      });
+    }
+
+    return rows;
+  },
+
+  getBranchColDisplayValue(branch, col) {
+    if (col.endsWith('Open')) {
+      const closeKey = col.replace('Open', 'Close');
+      return this.formatBranchHours(branch[col], branch[closeKey]);
+    }
+    return String(branch[col] || '');
   },
 
   renderBranches() {
@@ -570,6 +646,7 @@ const App = {
     this.renderBranchesSyncInfo();
     this.renderBranchesStats();
     this.renderBranchSettings();
+    this.renderBranchesHeaders();
 
     if (!branches.length) {
       rows.innerHTML = '';
@@ -580,7 +657,7 @@ const App = {
     if (empty) empty.hidden = true;
     rows.innerHTML = branches.map((branch) => `
       <tr>
-        <td><strong>${this.escape(branch.storeNumber || '-')}</strong><small>${this.escape(branch.abbreviation || '')}</small></td>
+        <td><strong>${this.escape(branch.storeNumber || '-')}</strong></td>
         <td>${this.escape(branch.storeName || '-')}</td>
         <td><span class="role-chip is-blue">${this.escape(branch.lc || '-')}</span></td>
         <td>${this.escape(branch.storePhone || '-')}</td>
@@ -633,8 +710,72 @@ const App = {
 
   formatBranchHours(open, close) {
     if (!open && !close) return '-';
-    if (open && close) return open + '-' + close;
+    if (open && close) return open + '–' + close;
     return open || close;
+  },
+
+  renderBranchesHeaders() {
+    const { sort, colFilters } = this.branchesFilter;
+    document.querySelectorAll('.branches-table th[data-col]').forEach((th) => {
+      const col = th.dataset.col;
+      const isSorted = sort.col === col;
+      const hasFilter = !!(colFilters[col] && colFilters[col].trim());
+      th.classList.toggle('is-sorted', isSorted);
+      th.classList.toggle('is-sorted-desc', isSorted && sort.dir === 'desc');
+      th.classList.toggle('is-filtered', hasFilter);
+    });
+  },
+
+  openBranchColMenu(th, col) {
+    const menu = document.querySelector('#branchColMenu');
+    if (!menu) return;
+    if (!menu.hidden && this._branchColMenuCurrentCol === col) {
+      this.closeBranchColMenu();
+      return;
+    }
+    this._branchColMenuCurrentCol = col;
+    const { sort, colFilters } = this.branchesFilter;
+    const isSorted = sort.col === col;
+    const filterVal = colFilters[col] || '';
+
+    const input = menu.querySelector('#branchColMenuFilter');
+    if (input) input.value = filterVal;
+    const clearBtn = menu.querySelector('[data-col-action="clear"]');
+    if (clearBtn) clearBtn.hidden = !filterVal.trim();
+
+    menu.querySelectorAll('[data-col-action="sort-asc"], [data-col-action="sort-desc"]').forEach((btn) => {
+      const isAsc = btn.dataset.colAction === 'sort-asc';
+      btn.classList.toggle('is-active', isSorted && (isAsc ? sort.dir === 'asc' : sort.dir === 'desc'));
+    });
+
+    const rect = th.getBoundingClientRect();
+    menu.style.top = (rect.bottom + 4) + 'px';
+    menu.style.left = rect.left + 'px';
+    menu.hidden = false;
+
+    const menuRect = menu.getBoundingClientRect();
+    if (menuRect.right > window.innerWidth - 8) {
+      menu.style.left = Math.max(8, rect.right - menuRect.width) + 'px';
+    }
+
+    if (input) input.focus();
+
+    setTimeout(() => {
+      this._branchColMenuCloseHandler = (e) => {
+        if (!menu.contains(e.target) && e.target !== th) this.closeBranchColMenu();
+      };
+      document.addEventListener('mousedown', this._branchColMenuCloseHandler);
+    }, 0);
+  },
+
+  closeBranchColMenu() {
+    const menu = document.querySelector('#branchColMenu');
+    if (menu) menu.hidden = true;
+    if (this._branchColMenuCloseHandler) {
+      document.removeEventListener('mousedown', this._branchColMenuCloseHandler);
+      this._branchColMenuCloseHandler = null;
+    }
+    this._branchColMenuCurrentCol = null;
   },
 
   extractDriveFolderId(value) {

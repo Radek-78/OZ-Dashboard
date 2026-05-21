@@ -112,20 +112,20 @@
               <table class="users-table branches-table" aria-label="Přehled filiálek">
                 <thead>
                   <tr>
-                    <th>Číslo</th>
-                    <th>Filiálka</th>
-                    <th>LC</th>
-                    <th>Telefon</th>
-                    <th>VT</th>
-                    <th>RM</th>
-                    <th>Telefon RM</th>
-                    <th>Po</th>
-                    <th>Út</th>
-                    <th>St</th>
-                    <th>Čt</th>
-                    <th>Pá</th>
-                    <th>So</th>
-                    <th>Ne</th>
+                    <th class="sortable" data-col="storeNumber">Číslo</th>
+                    <th class="sortable" data-col="storeName">Filiálka</th>
+                    <th class="sortable" data-col="lc">LC</th>
+                    <th class="sortable" data-col="storePhone">Telefon</th>
+                    <th class="sortable" data-col="vt">VT</th>
+                    <th class="sortable" data-col="rm">RM</th>
+                    <th class="sortable" data-col="rmPhone">Telefon RM</th>
+                    <th class="sortable" data-col="mondayOpen">Po</th>
+                    <th class="sortable" data-col="tuesdayOpen">Út</th>
+                    <th class="sortable" data-col="wednesdayOpen">St</th>
+                    <th class="sortable" data-col="thursdayOpen">Čt</th>
+                    <th class="sortable" data-col="fridayOpen">Pá</th>
+                    <th class="sortable" data-col="saturdayOpen">So</th>
+                    <th class="sortable" data-col="sundayOpen">Ne</th>
                   </tr>
                 </thead>
                 <tbody id="branchesRows"></tbody>
@@ -606,6 +606,16 @@
         </footer>
       </form>
     </dialog>
+
+    <div id="branchColMenu" class="branch-col-menu" hidden role="menu" aria-label="Možnosti sloupce">
+      <button class="branch-col-menu-opt" data-col-action="sort-asc">↑ Seřadit vzestupně</button>
+      <button class="branch-col-menu-opt" data-col-action="sort-desc">↓ Seřadit sestupně</button>
+      <div class="branch-col-menu-sep"></div>
+      <div class="branch-col-menu-filter-wrap">
+        <input type="text" id="branchColMenuFilter" class="branch-col-menu-input" placeholder="Filtrovat…" autocomplete="off">
+      </div>
+      <button class="branch-col-menu-clear" data-col-action="clear" hidden>× Smazat filtr</button>
+    </div>
 
     <script>
       window.APP_BOOTSTRAP = <?!= JSON.stringify(app) ?>;
