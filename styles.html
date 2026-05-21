@@ -3336,6 +3336,13 @@
     gap: 16px;
   }
 
+  .branches-overview-head {
+    display: grid;
+    grid-template-columns: minmax(240px, 360px) 1fr;
+    gap: 12px;
+    align-items: center;
+  }
+
   .branches-sync-panel {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -3371,12 +3378,42 @@
     white-space: nowrap;
   }
 
-  .branches-toolbar {
-    grid-template-columns: minmax(220px, 1.1fr) minmax(260px, 1fr) auto;
+  .branch-settings-toolbar {
+    grid-template-columns: minmax(260px, 1fr) auto;
   }
 
   .branches-stats {
     grid-template-columns: repeat(4, minmax(130px, 1fr));
+  }
+
+  .branches-summary {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 8px;
+  }
+
+  .branches-summary-item {
+    min-height: 34px;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 7px 10px;
+    border: 1px solid rgba(0,36,102,.08);
+    border-radius: 8px;
+    color: #65758f;
+    background: rgba(255,255,255,.78);
+    font-size: 10px;
+    font-weight: 900;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+  }
+
+  .branches-summary-item strong {
+    color: var(--blue-dark);
+    font-size: 13px;
+    letter-spacing: 0;
+    text-transform: none;
   }
 
   .branches-table-shell {
@@ -3398,13 +3435,18 @@
   }
 
   @media (max-width: 900px) {
+    .branches-overview-head,
     .branches-sync-panel,
     .branches-stats {
       grid-template-columns: 1fr;
     }
 
-    .branches-toolbar {
+    .branch-settings-toolbar {
       grid-template-columns: 1fr;
+    }
+
+    .branches-summary {
+      justify-content: flex-start;
     }
   }
 </style>

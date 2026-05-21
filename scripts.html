@@ -134,6 +134,7 @@ const App = {
         const section = button.dataset.section || 'home';
         this.setActiveNav(section);
         if (section === 'branches')    { this.showView('branches');    this.loadBranches();      return; }
+        if (section === 'branchSettings') { this.showView('branchSettings'); this.loadBranches(); return; }
         if (section === 'users')       { this.showView('users');       this.renderUserOptions(); this.renderUsers(); return; }
         if (section === 'locations')   { this.showView('locations');   this.renderLocations();   return; }
         if (section === 'departments') { this.showView('departments'); this.renderDepartments(); return; }
@@ -390,6 +391,7 @@ const App = {
     const pages = {
       home:        '#dashboardPage',
       branches:    '#branchesPage',
+      branchSettings: '#branchSettingsPage',
       users:       '#usersPage',
       locations:   '#locationsPage',
       departments: '#departmentsPage',
@@ -522,7 +524,7 @@ const App = {
 
   saveBranchesSourceFolder() {
     const input = document.querySelector('#branchesSourceFolderId');
-    const folderId = input ? input.value.trim() : '';
+    const folderId = this.extractDriveFolderId(input ? input.value.trim() : '');
     if (!folderId) { this.toast('Vyplňte ID zdrojové složky.', 'error'); return; }
 
     this.callServer('saveBranchesSourceFolder', { folderId })
@@ -567,6 +569,7 @@ const App = {
     if (counter) counter.textContent = String(branches.length);
     this.renderBranchesSyncInfo();
     this.renderBranchesStats();
+    this.renderBranchSettings();
 
     if (!branches.length) {
       rows.innerHTML = '';
@@ -602,21 +605,29 @@ const App = {
     this.setText('#branchesSourceFile', sync.lastSourceFileName || sync.lastSourceFileId || '-');
   },
 
+  renderBranchSettings() {
+    const sync = this.branchesState.sync || {};
+    const folderInput = document.querySelector('#branchesSourceFolderId');
+    if (folderInput && folderInput.value.trim() === '') folderInput.value = sync.sourceFolderId || '';
+    document.querySelectorAll('[data-action="save-branches-source"], [data-action="sync-branches"]').forEach((button) => {
+      button.hidden = !this.branchesState.canSync;
+    });
+    if (folderInput) folderInput.hidden = !this.branchesState.canSync;
+  },
+
   renderBranchesStats() {
     const stats = this.branchesState.stats || {};
     const grid = document.querySelector('#branchesStats');
     if (!grid) return;
     const items = [
-      { label: 'Filiálky', value: stats.total || 0, tone: 'info', icon: 'briefcase' },
-      { label: 'LC', value: stats.lcCount || 0, tone: 'neutral', icon: 'layout' },
-      { label: 'RM', value: stats.rmCount || 0, tone: 'neutral', icon: 'users' },
-      { label: 'VT', value: stats.vtCount || 0, tone: 'neutral', icon: 'user' },
+      { label: 'Filiálky', value: stats.total || 0 },
+      { label: 'LC', value: stats.lcCount || 0 },
+      { label: 'RM', value: stats.rmCount || 0 },
+      { label: 'VT', value: stats.vtCount || 0 },
+      { label: 'Sync', value: this.formatDateTime((this.branchesState.sync || {}).lastSyncAt) },
     ];
     grid.innerHTML = items.map((item) => `
-      <div class="status-card" data-tone="${this.escape(item.tone)}">
-        <span class="status-icon"><svg><use href="#${this.iconSymbol(item.icon)}"></use></svg></span>
-        <div><span>${this.escape(item.label)}</span><strong>${this.escape(item.value)}</strong></div>
-      </div>
+      <span class="branches-summary-item"><strong>${this.escape(item.value)}</strong>${this.escape(item.label)}</span>
     `).join('');
   },
 
@@ -624,6 +635,16 @@ const App = {
     if (!open && !close) return '-';
     if (open && close) return open + '-' + close;
     return open || close;
+  },
+
+  extractDriveFolderId(value) {
+    const text = String(value || '').trim();
+    if (!text) return '';
+    const foldersMatch = text.match(/\/folders\/([a-zA-Z0-9_-]+)/);
+    if (foldersMatch) return foldersMatch[1];
+    const idMatch = text.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+    if (idMatch) return idMatch[1];
+    return text;
   },
 
   // =========================================================================
@@ -1676,6 +1697,7 @@ const App = {
 
   renderCurrentSettingsView() {
     if      (this.currentView === 'branches')    this.renderBranches();
+    else if (this.currentView === 'branchSettings') this.renderBranchSettings();
     else if (this.currentView === 'users')       { this.renderUserOptions(); this.renderUsers(); }
     else if (this.currentView === 'locations')   this.renderLocations();
     else if (this.currentView === 'departments') this.renderDepartments();

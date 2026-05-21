@@ -42,7 +42,7 @@ function getBranchesData() {
  */
 function saveBranchesSourceFolder(payload) {
   const context = requirePermission_('branches.sync');
-  const folderId = String(payload && payload.folderId || '').trim();
+  const folderId = extractDriveId_(payload && payload.folderId);
   if (!folderId) throw new Error('Vyplňte ID zdrojové složky.');
 
   const folder = DriveApp.getFolderById(folderId);
@@ -418,4 +418,19 @@ function uniqueCount_(values) {
     if (key) seen[key] = true;
   });
   return Object.keys(seen).length;
+}
+
+/**
+ * Z URL nebo prime hodnoty vytahne Drive ID.
+ * @param {*} value
+ * @returns {string}
+ */
+function extractDriveId_(value) {
+  const text = String(value || '').trim();
+  if (!text) return '';
+  const foldersMatch = text.match(/\/folders\/([a-zA-Z0-9_-]+)/);
+  if (foldersMatch) return foldersMatch[1];
+  const idMatch = text.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+  if (idMatch) return idMatch[1];
+  return text;
 }
