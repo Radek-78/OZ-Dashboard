@@ -35,6 +35,8 @@ const LOADER_TEXTS = {
   getBranchesData:          'Načítám filiálky...',
   syncBranchesFromLatestSource: 'Synchronizuji filiálky...',
   saveBranchesSourceFolder: 'Ukládám zdrojovou složku...',
+  getOdpisyData:            'Načítám odpisy...',
+  saveOdpisySourceFolder:   'Ukládám složku odpisů...',
 };
 
 // ===========================================================================
@@ -83,6 +85,8 @@ const App = {
   subAppsState:     { subApps: [] },
   permissionsState: { permissions: [], users: [], subApps: [], currentSubAppKey: '' },
   rolesState:       { roles: [], permsByRole: {}, knownPermissions: [] },
+  odpisyState:      { configured: false, canConfigure: false, folderId: '', weeks: [], lcs: [], akcniCount: 0, globalAkcni: {}, globalCelkem: {}, error: null },
+  odpisyTab:        null,
 
   // =========================================================================
   // SEKCE: Inicializace
@@ -364,6 +368,16 @@ const App = {
     const iconSearch = document.querySelector('#iconSearch');
     if (iconSearch) iconSearch.addEventListener('input', () => this.renderIconPicker(iconSearch.value));
 
+    // Odpisy — tlačítko Zpět
+    const odpisyBack = document.querySelector('[data-action="odpisy-back"]');
+    if (odpisyBack) {
+      odpisyBack.addEventListener('click', () => {
+        this.showView('home');
+        this.setActiveNav('home');
+        this.loadHome();
+      });
+    }
+
     // Changelog & Audit
     const versionLink = document.querySelector('#version');
     if (versionLink) versionLink.addEventListener('click', (e) => { e.preventDefault(); this.openChangelog(); });
@@ -509,6 +523,7 @@ const App = {
       departments: '#departmentsPage',
       subapps:     '#subappsPage',
       roles:       '#rolesPage',
+      odpisyPage:  '#odpisyPage',
     };
     Object.entries(pages).forEach(([k, sel]) => {
       const el = document.querySelector(sel);
@@ -583,8 +598,17 @@ const App = {
     grid.querySelectorAll('.card-arrow').forEach((button) => {
       button.addEventListener('click', () => {
         if (button.dataset.enabled !== '1') return;
-        if (button.dataset.url) {
-          window.open(button.dataset.url, '_blank', 'noopener');
+        const url = button.dataset.url || '';
+        if (url.startsWith('#')) {
+          // Interní subapp — navigace bez načtení nové stránky
+          const viewName = url.slice(1);
+          this.setActiveNav('');
+          this.showView(viewName);
+          if (viewName === 'odpisyPage') this.loadOdpisy();
+          return;
+        }
+        if (url) {
+          window.open(url, '_blank', 'noopener');
         } else {
           this.openModal(button.dataset.title || 'Subaplikace', 'Dlaždice je aktivní, ale zatím nemá nastavenou cílovou URL.');
         }
@@ -2291,6 +2315,294 @@ const App = {
           .catch((err) => this.toast(err.message, 'error'));
       });
     });
+  },
+
+  // =========================================================================
+  // SEKCE: Odpisy akčních artiklů
+  // =========================================================================
+
+  /** Načte data pro subapp Odpisy ze serveru. */
+  loadOdpisy() {
+    this.callServer('getOdpisyData')
+      .then((data) => {
+        this.odpisyState = data;
+        this.renderOdpisy();
+      })
+      .catch((err) => this.toast(err.message || 'Nepodařilo se načíst odpisy.', 'error'));
+  },
+
+  /** Vykreslí celou stránku Odpisy dle aktuálního stavu. */
+  renderOdpisy() {
+    const state = this.odpisyState;
+    const tabs    = document.querySelector('#odpisyTabs');
+    const content = document.querySelector('#odpisyContent');
+    if (!tabs || !content) return;
+
+    // Subtitle s info o týdnech
+    const subtitle = document.querySelector('#odpisySubtitle');
+    if (subtitle) {
+      if (state.weeks && state.weeks.length === 2) {
+        subtitle.textContent = state.weeks.map((w) => w.label).join(' a ') + ' — akční artiklů: ' + (state.akcniCount || 0);
+      } else {
+        subtitle.textContent = 'Nastavte složku se zdrojovými soubory';
+      }
+    }
+
+    // Týdenní info v pravém rohu
+    const weekInfo = document.querySelector('#odpisyWeekInfo');
+    if (weekInfo && state.weeks && state.weeks.length === 2) {
+      weekInfo.textContent = state.weeks.map((w) => w.label).join(' · ');
+    } else if (weekInfo) {
+      weekInfo.textContent = '';
+    }
+
+    // Chybový stav
+    if (state.error) {
+      tabs.hidden = true;
+      content.innerHTML = `<div class="odpisy-error"><strong>Chyba: </strong>${this.escape(state.error)}</div>`;
+      if (!state.configured || state.canConfigure) {
+        content.innerHTML += this.renderOdpisyConfigForm();
+      }
+      this.bindOdpisyConfigEvents();
+      return;
+    }
+
+    // Nezachycená složka — zobrazíme konfigurační formulář
+    if (!state.configured) {
+      tabs.hidden = true;
+      content.innerHTML = this.renderOdpisyConfigForm();
+      this.bindOdpisyConfigEvents();
+      return;
+    }
+
+    // Data načtena, žádné LC — informace
+    if (!state.lcs || !state.lcs.length) {
+      tabs.hidden = true;
+      content.innerHTML = `
+        <div class="odpisy-config">
+          <div class="odpisy-config-icon"><svg><use href="#i-info"></use></svg></div>
+          <strong>Data zatím nejsou dostupná</strong>
+          <p>Žádné filiálky nebylo možné spárovat s logistickými centry. Zkontrolujte, zda jsou filiálky synchronizovány a mají přiřazena LC.</p>
+          ${state.canConfigure ? this.renderOdpisyConfigForm() : ''}
+        </div>`;
+      this.bindOdpisyConfigEvents();
+      return;
+    }
+
+    // Render tab lišty
+    tabs.hidden = false;
+    if (!this.odpisyTab || !state.lcs.find((lc) => lc.abbreviation === this.odpisyTab)) {
+      this.odpisyTab = state.lcs[0].abbreviation;
+    }
+    tabs.innerHTML = state.lcs.map((lc) => `
+      <button class="odpisy-tab${lc.abbreviation === this.odpisyTab ? ' is-active' : ''}"
+        type="button" data-lc="${this.escape(lc.abbreviation)}">
+        LC${this.escape(lc.code)} ${this.escape(lc.abbreviation)}
+        <small style="opacity:.65;font-weight:400"> ${this.escape(lc.city)}</small>
+      </button>
+    `).join('');
+
+    // Bind tab events
+    tabs.querySelectorAll('.odpisy-tab').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        this.odpisyTab = btn.dataset.lc;
+        this.renderOdpisy();
+      });
+    });
+
+    // Render obsahu aktivního LC
+    const activeLc = state.lcs.find((lc) => lc.abbreviation === this.odpisyTab);
+    content.innerHTML = '';
+    if (activeLc) {
+      // Statistiky bar
+      const statBar = document.createElement('div');
+      statBar.className = 'odpisy-stats-bar';
+      const globalPct0 = this.odpisyPct(state.globalAkcni, state.globalCelkem, state.weeks, 0);
+      const globalPct1 = this.odpisyPct(state.globalAkcni, state.globalCelkem, state.weeks, 1);
+      statBar.innerHTML = `
+        <span>Filiálek v LC: <strong>${activeLc.stores.length}</strong></span>
+        <span>Akčních artiklů: <strong>${state.akcniCount || 0}</strong></span>
+        <span>Celkový akční podíl: <strong class="${this.odpisyPctClass(globalPct0)}">${this.formatOdpisyPct(globalPct0)}</strong> · <strong class="${this.odpisyPctClass(globalPct1)}">${this.formatOdpisyPct(globalPct1)}</strong></span>
+      `;
+      content.appendChild(statBar);
+
+      // Tabulka
+      const shell = document.createElement('div');
+      shell.className = 'odpisy-table-shell';
+      shell.innerHTML = this.renderOdpisyTable(activeLc, state.weeks, state.globalAkcni, state.globalCelkem);
+      content.appendChild(shell);
+
+      // Konfig složky (pro admin)
+      if (state.canConfigure) {
+        const configDiv = document.createElement('div');
+        configDiv.style.cssText = 'margin-top:20px;padding-top:16px;border-top:1px solid var(--line)';
+        configDiv.innerHTML = `
+          <p style="font-size:12px;color:var(--muted);margin:0 0 8px">Zdrojová složka: <strong>${this.escape(state.folderId || '–')}</strong></p>
+          <div class="odpisy-config-form">
+            <input type="text" id="odpisyFolderInput" class="odpisy-folder-input" placeholder="ID nebo URL složky se zdrojovými soubory" value="${this.escape(state.folderId || '')}">
+            <button type="button" class="button button-secondary" data-action="save-odpisy-folder"><svg><use href="#i-check"></use></svg>Uložit</button>
+          </div>`;
+        content.appendChild(configDiv);
+        this.bindOdpisyConfigEvents();
+      }
+    }
+  },
+
+  /**
+   * Vrátí HTML pro konfigurační formulář složky.
+   * @returns {string}
+   */
+  renderOdpisyConfigForm() {
+    const state = this.odpisyState;
+    if (!state.canConfigure) {
+      return `
+        <div class="odpisy-config">
+          <div class="odpisy-config-icon"><svg><use href="#i-settings"></use></svg></div>
+          <strong>Subaplikace není nakonfigurována</strong>
+          <p>Požádejte správce aplikace o nastavení složky se zdrojovými soubory odpisů.</p>
+        </div>`;
+    }
+    return `
+      <div class="odpisy-config">
+        <div class="odpisy-config-icon"><svg><use href="#i-percent"></use></svg></div>
+        <strong>Nastavte složku se zdrojovými soubory</strong>
+        <p>Zadejte ID nebo URL Google Drive složky, ve které jsou uloženy tři zdrojové soubory odpisů (Telex, odpisy po filiálkách, odpisy po artiklech) jako Google Sheets.</p>
+        <div class="odpisy-config-form">
+          <input type="text" id="odpisyFolderInput" placeholder="ID nebo URL složky" value="${this.escape(state.folderId || '')}">
+          <button type="button" class="button button-primary" data-action="save-odpisy-folder"><svg><use href="#i-check"></use></svg>Uložit</button>
+        </div>
+      </div>`;
+  },
+
+  /**
+   * Přiváže event listener na tlačítko uložení složky odpisů.
+   * Bezpečné opakované volání.
+   */
+  bindOdpisyConfigEvents() {
+    document.querySelectorAll('[data-action="save-odpisy-folder"]').forEach((btn) => {
+      if (btn._odpisyBound) return;
+      btn._odpisyBound = true;
+      btn.addEventListener('click', () => this.saveOdpisySourceFolder());
+    });
+  },
+
+  /** Odešle ID složky na server a aktualizuje zobrazení. */
+  saveOdpisySourceFolder() {
+    const input = document.querySelector('#odpisyFolderInput');
+    const folderId = (input && input.value) ? input.value.trim() : '';
+    this.callServer('saveOdpisySourceFolder', { folderId })
+      .then((data) => {
+        this.odpisyState = data;
+        this.renderOdpisy();
+        this.toast('Složka odpisů uložena.');
+      })
+      .catch((err) => this.toast(err.message || 'Nepodařilo se uložit složku.', 'error'));
+  },
+
+  /**
+   * Vrátí HTML tabulky odpisů pro jedno LC.
+   * @param {Object} lc
+   * @param {{ year: number, kt: number, label: string }[]} weeks
+   * @param {Object} globalAkcni
+   * @param {Object} globalCelkem
+   * @returns {string}
+   */
+  renderOdpisyTable(lc, weeks, globalAkcni, globalCelkem) {
+    const w0 = weeks[0] ? weeks[0].label : '';
+    const w1 = weeks[1] ? weeks[1].label : '';
+
+    const headerCols = weeks.map((w) => `<th class="num">${this.escape(w.label)}</th>`).join('');
+    const storeRows  = lc.stores.map((s) => {
+      const cols = weeks.map((w) => `<td class="num">${this.formatOdpisyValue(s[w.label] || 0)}</td>`).join('');
+      return `<tr>
+        <td>${this.escape(String(s.storeNumber || ''))}</td>
+        <td>${this.escape(s.storeName || '')}</td>
+        ${cols}
+      </tr>`;
+    }).join('');
+
+    // Footer: LC celkem
+    const lcTotalCols = weeks.map((w) => `<td class="num">${this.formatOdpisyValue(lc.totals[w.label] || 0)}</td>`).join('');
+
+    // Footer: globální akční
+    const akcniCols = weeks.map((w) => `<td class="num">${this.formatOdpisyValue(globalAkcni[w.label] || 0)}</td>`).join('');
+
+    // Footer: % akční/celkový (globální)
+    const pctCols = weeks.map((w, i) => {
+      const pct = this.odpisyPct(globalAkcni, globalCelkem, weeks, i);
+      return `<td class="num ${this.odpisyPctClass(pct)}">${this.formatOdpisyPct(pct)}</td>`;
+    }).join('');
+
+    return `
+      <table class="odpisy-table" aria-label="Odpisy LC ${this.escape(lc.abbreviation)}">
+        <thead>
+          <tr>
+            <th style="text-align:left;width:70px">Číslo</th>
+            <th style="text-align:left;min-width:160px">Filiálka</th>
+            ${headerCols}
+          </tr>
+        </thead>
+        <tbody>
+          ${storeRows || '<tr><td colspan="${2 + weeks.length}" style="text-align:center;color:var(--muted);padding:20px">Žádné filiálky</td></tr>'}
+        </tbody>
+        <tfoot>
+          <tr><td>—</td><td><strong>LC ${this.escape(lc.abbreviation)} celkem</strong></td>${lcTotalCols}</tr>
+          <tr class="odpisy-tfoot-akcni"><td>—</td><td>Akční artiklů (org.)</td>${akcniCols}</tr>
+          <tr class="odpisy-tfoot-pct"><td>—</td><td><strong>Akční podíl (org.)</strong></td>${pctCols}</tr>
+        </tfoot>
+      </table>`;
+  },
+
+  /**
+   * Formátuje číslo odpisu na české formátování (mezera jako oddělovač tisíců, čárka jako desetinná).
+   * @param {number} val
+   * @returns {string}
+   */
+  formatOdpisyValue(val) {
+    if (val === 0 || val === null || val === undefined) return '0';
+    const abs   = Math.abs(val);
+    const sign  = val < 0 ? '− ' : '';
+    const parts = abs.toFixed(2).split('.');
+    parts[0]    = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+    return sign + parts[0] + ',' + parts[1];
+  },
+
+  /**
+   * Formátuje procento na "15,3 %".
+   * @param {number} pct
+   * @returns {string}
+   */
+  formatOdpisyPct(pct) {
+    if (!pct && pct !== 0) return '–';
+    return pct.toFixed(1).replace('.', ',') + ' %';
+  },
+
+  /**
+   * Vypočítá procento akčního podílu pro daný týden.
+   * @param {Object} globalAkcni
+   * @param {Object} globalCelkem
+   * @param {{ label: string }[]} weeks
+   * @param {number} weekIdx
+   * @returns {number}
+   */
+  odpisyPct(globalAkcni, globalCelkem, weeks, weekIdx) {
+    if (!weeks || !weeks[weekIdx]) return 0;
+    const label  = weeks[weekIdx].label;
+    const celkem = globalCelkem && globalCelkem[label] ? globalCelkem[label] : 0;
+    const akcni  = globalAkcni  && globalAkcni[label]  ? globalAkcni[label]  : 0;
+    if (celkem === 0) return 0;
+    return Math.abs(akcni) / Math.abs(celkem) * 100;
+  },
+
+  /**
+   * Vrátí CSS třídu pro barevné kódování procenta akčního podílu.
+   * @param {number} pct
+   * @returns {string}
+   */
+  odpisyPctClass(pct) {
+    if (pct >= 15) return 'pct-high';
+    if (pct >= 8)  return 'pct-mid';
+    return 'pct-low';
   },
 
   // =========================================================================

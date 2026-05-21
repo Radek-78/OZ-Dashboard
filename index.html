@@ -32,6 +32,7 @@
       <symbol id="i-store" viewBox="0 0 24 24" fill="currentColor"><path d="M1 3.393V10.5h1v11h5V17h2v4.5h13v-11h1V6.344zM20.5 20h-10v-4.5h-5V20h-2v-9.5h2v2h5v-2h10zM6.75 10a1.24 1.24 0 0 1 1.248-1.25A1.25 1.25 0 1 1 6.75 10M21.5 9h-11V7.5h-5V9h-3V5.107l19 2.55z"/></symbol>
       <symbol id="i-map-pin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/><circle cx="12" cy="9" r="2.5"/></symbol>
       <symbol id="i-branch-shelf" viewBox="0 0 24 24" fill="currentColor"><path d="M23 6V4.25A3.254 3.254 0 0 0 19.75 1H4.25A3.254 3.254 0 0 0 1 4.25V6h1.5v15.5h-.75V23h20.5v-1.5h-.75V6zM2.5 4.25c0-.965.785-1.75 1.75-1.75h15.5c.965 0 1.75.785 1.75 1.75v.25h-19zM20 16H4v-2h16zm0-3.5H4v-2h16zm-16 9v-4h16v4zM20 9H4V6h16z"/></symbol>
+      <symbol id="i-percent" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="5" x2="5" y2="19"/><circle cx="6.5" cy="6.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/></symbol>
       <?!= include('icons'); ?>
     </svg>
 
@@ -356,6 +357,26 @@
               <strong>Žádné role</strong>
               <span>Přidejte první přístupovou roli.</span>
             </div>
+          </section>
+        </section>
+
+        <section class="page odpisy-page" id="odpisyPage" hidden>
+          <section class="admin-panel odpisy-panel">
+            <div class="odpisy-header">
+              <div class="odpisy-header-left">
+                <button class="button button-ghost odpisy-back-btn" type="button" data-action="odpisy-back">
+                  <svg style="transform:rotate(180deg)"><use href="#i-chevron-right"></use></svg>
+                  Dashboard
+                </button>
+                <div>
+                  <h3>Vyhodnocení odpisů akčních artiklů</h3>
+                  <p id="odpisySubtitle">Načítám data…</p>
+                </div>
+              </div>
+              <div class="odpisy-header-right" id="odpisyWeekInfo"></div>
+            </div>
+            <div id="odpisyTabs" class="odpisy-tabs" hidden></div>
+            <div id="odpisyContent" class="odpisy-content"></div>
           </section>
         </section>
 

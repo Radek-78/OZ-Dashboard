@@ -4121,4 +4121,308 @@
       justify-content: flex-start;
     }
   }
+
+  /* ══════════════════════════════════════════════════════════════════════════
+     Odpisy — Vyhodnocení odpisů akčních artiklů
+  ══════════════════════════════════════════════════════════════════════════ */
+
+  .odpisy-page {
+    min-height: 0;
+  }
+
+  .odpisy-panel {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    padding: 0 !important;
+    overflow: hidden;
+  }
+
+  /* ── Hlavička ── */
+  .odpisy-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--line);
+    flex-shrink: 0;
+  }
+
+  .odpisy-header-left {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    min-width: 0;
+  }
+
+  .odpisy-header-left h3 {
+    margin: 0 0 2px;
+    font-size: 16px;
+    color: var(--text);
+  }
+
+  .odpisy-header-left p {
+    margin: 0;
+    font-size: 12px;
+    color: var(--muted);
+  }
+
+  .odpisy-header-right {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+    font-size: 12px;
+    color: var(--muted);
+    white-space: nowrap;
+  }
+
+  .odpisy-back-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 6px 12px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: var(--panel);
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+    white-space: nowrap;
+    flex-shrink: 0;
+    transition: background .12s, color .12s, border-color .12s;
+  }
+
+  .odpisy-back-btn svg {
+    width: 14px;
+    height: 14px;
+  }
+
+  .odpisy-back-btn:hover {
+    background: #f0f4fa;
+    color: var(--lidl-blue);
+    border-color: rgba(0,80,170,.2);
+  }
+
+  /* ── Tab lišta ── */
+  .odpisy-tabs {
+    display: flex;
+    gap: 0;
+    padding: 0 16px;
+    border-bottom: 1px solid var(--line);
+    background: #f7faff;
+    flex-shrink: 0;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .odpisy-tabs::-webkit-scrollbar { display: none; }
+
+  .odpisy-tab {
+    padding: 10px 16px;
+    border: none;
+    border-bottom: 3px solid transparent;
+    background: none;
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: color .12s, border-color .12s;
+    flex-shrink: 0;
+  }
+
+  .odpisy-tab:hover { color: var(--lidl-blue); }
+
+  .odpisy-tab.is-active {
+    color: var(--lidl-blue);
+    border-bottom-color: var(--lidl-blue);
+    background: none;
+  }
+
+  /* ── Obsah ── */
+  .odpisy-content {
+    flex: 1;
+    overflow: auto;
+    padding: 16px 20px;
+    min-height: 0;
+  }
+
+  /* ── Tabulka odpisů ── */
+  .odpisy-table-shell {
+    overflow-x: auto;
+    scrollbar-gutter: stable;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+  }
+
+  .odpisy-table {
+    width: 100%;
+    min-width: 560px;
+    border-collapse: collapse;
+    font-size: 12px;
+  }
+
+  .odpisy-table thead th {
+    padding: 9px 12px;
+    background: linear-gradient(180deg, var(--lidl-blue), var(--lidl-dark-blue));
+    color: #fff;
+    font-size: 11px;
+    font-weight: 700;
+    white-space: nowrap;
+    text-align: right;
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    box-shadow: inset 0 -2px 0 var(--lidl-yellow);
+  }
+
+  .odpisy-table thead th:first-child,
+  .odpisy-table thead th:nth-child(2) {
+    text-align: left;
+  }
+
+  .odpisy-table thead tr.odpisy-head-group th {
+    text-align: center;
+    background: var(--lidl-dark-blue);
+    font-size: 10px;
+    letter-spacing: .04em;
+    box-shadow: inset -1px 0 0 rgba(255,255,255,.1), inset 0 -2px 0 var(--lidl-yellow);
+    padding: 5px 12px;
+  }
+
+  .odpisy-table tbody td {
+    padding: 7px 12px;
+    border-bottom: 1px solid var(--line-soft);
+    color: var(--text);
+    vertical-align: middle;
+  }
+
+  .odpisy-table tbody tr:last-child td {
+    border-bottom: none;
+  }
+
+  .odpisy-table tbody tr:hover td {
+    background: #f6f9ff;
+  }
+
+  .odpisy-table tfoot td {
+    padding: 8px 12px;
+    font-weight: 700;
+    border-top: 2px solid var(--line);
+    background: #f0f4fa;
+    font-size: 11px;
+  }
+
+  .odpisy-table tfoot tr.odpisy-tfoot-akcni td {
+    background: #fff8e0;
+    color: #7a5c00;
+    font-size: 11px;
+  }
+
+  .odpisy-table tfoot tr.odpisy-tfoot-pct td {
+    background: #f0f4fa;
+    font-size: 12px;
+  }
+
+  /* ── Číselné buňky ── */
+  .num {
+    text-align: right !important;
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum";
+    white-space: nowrap;
+  }
+
+  /* ── Barevné kódování procent ── */
+  .pct-low  { color: #0a7a2e; }
+  .pct-mid  { color: #b07800; }
+  .pct-high { color: var(--lidl-red); font-weight: 700; }
+
+  /* ── Prázdný stav / konfigurace ── */
+  .odpisy-config {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+    padding: 40px 20px;
+    text-align: center;
+  }
+
+  .odpisy-config-icon {
+    width: 52px;
+    height: 52px;
+    background: #f0f4fa;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--lidl-blue);
+  }
+
+  .odpisy-config-icon svg {
+    width: 26px;
+    height: 26px;
+  }
+
+  .odpisy-config strong {
+    font-size: 15px;
+    color: var(--text);
+  }
+
+  .odpisy-config p {
+    margin: 0;
+    font-size: 13px;
+    color: var(--muted);
+    max-width: 440px;
+  }
+
+  .odpisy-config-form {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    justify-content: center;
+    width: 100%;
+    max-width: 520px;
+  }
+
+  .odpisy-config-form input {
+    flex: 1;
+    min-width: 200px;
+    height: 34px;
+    padding: 0 10px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    font-size: 13px;
+    color: var(--text);
+    outline: none;
+  }
+
+  .odpisy-config-form input:focus {
+    border-color: var(--lidl-blue);
+    box-shadow: 0 0 0 2px rgba(0,80,170,.1);
+  }
+
+  .odpisy-error {
+    padding: 14px 16px;
+    background: #fff2f2;
+    border: 1px solid rgba(230,10,20,.18);
+    border-radius: var(--radius);
+    color: var(--lidl-red);
+    font-size: 12px;
+    margin-bottom: 16px;
+  }
+
+  .odpisy-stats-bar {
+    display: flex;
+    gap: 20px;
+    padding: 10px 0 16px;
+    font-size: 12px;
+    color: var(--muted);
+  }
+
+  .odpisy-stats-bar strong {
+    color: var(--text);
+  }
 </style>
