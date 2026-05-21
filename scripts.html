@@ -744,30 +744,31 @@ const App = {
     const vtValues = this.getBranchColumnValues('vt');
     const rmValues = this.getBranchColumnValues('rm');
 
-    const renderChipGroup = (label, col, values, limit) => {
-      const visible = values.slice(0, limit);
+    const renderChipGroup = (label, col, values) => {
       const active = quick[col] || '';
+      const related = this.getBranchRelatedQuickValues(col);
       return `
-        <div class="branch-filter-group">
-          <span>${this.escape(label)}</span>
-          <button type="button" class="branch-filter-chip${active ? '' : ' is-active'}" data-quick-col="${col}" data-quick-value="">Vše</button>
-          ${visible.map((value) => `
-            <button type="button" class="branch-filter-chip${active === value ? ' is-active' : ''}" data-quick-col="${col}" data-quick-value="${this.escape(value)}">${this.escape(value)}</button>
-          `).join('')}
+        <div class="branch-filter-group branch-filter-group-${col}">
+          <span class="branch-filter-label">${this.escape(label)}</span>
+          <button type="button" class="branch-filter-chip branch-filter-chip-all${active ? '' : ' is-active'}" data-quick-col="${col}" data-quick-value="">
+            <span>Vše</span>
+          </button>
+          ${values.map((value) => {
+            const stateClass = active === value ? ' is-active' : (related.has(value) ? ' is-related' : ' is-unrelated');
+            return `
+            <button type="button" class="branch-filter-chip${stateClass}" data-quick-col="${col}" data-quick-value="${this.escape(value)}">
+              ${this.formatBranchQuickFilterLabel(col, value)}
+            </button>`;
+          }).join('')}
+          <span class="branch-filter-track" aria-hidden="true"></span>
         </div>
       `;
     };
 
     container.innerHTML = `
-      ${renderChipGroup('LC', 'lc', lcValues, 8)}
-      ${renderChipGroup('VT', 'vt', vtValues, 12)}
-      <div class="branch-filter-group branch-filter-group-rm">
-        <span>RM</span>
-        <select class="branch-filter-select" data-quick-select="rm" aria-label="Filtrovat podle RM">
-          <option value="">Všichni RM</option>
-          ${rmValues.map((value) => `<option value="${this.escape(value)}" ${quick.rm === value ? 'selected' : ''}>${this.escape(value)}</option>`).join('')}
-        </select>
-      </div>
+      ${renderChipGroup('LC', 'lc', lcValues)}
+      ${renderChipGroup('VT', 'vt', vtValues)}
+      ${renderChipGroup('RM', 'rm', rmValues)}
     `;
 
     container.querySelectorAll('[data-quick-col]').forEach((button) => {
@@ -777,12 +778,33 @@ const App = {
         this.renderBranches();
       });
     });
-    container.querySelectorAll('[data-quick-select]').forEach((select) => {
-      select.addEventListener('change', () => {
-        this.branchesFilter.quick[select.dataset.quickSelect] = select.value;
-        this.renderBranches();
+  },
+
+  getBranchRelatedQuickValues(col) {
+    const quick = this.branchesFilter.quick || {};
+    const relatedRows = (this.branchesState.branches || []).filter((branch) => {
+      return ['lc', 'vt', 'rm'].every((filterCol) => {
+        if (filterCol === col) return true;
+        const selected = quick[filterCol] || '';
+        return !selected || this.getBranchColDisplayValue(branch, filterCol) === selected;
       });
     });
+    return new Set(relatedRows.map((branch) => this.getBranchColDisplayValue(branch, col)).filter(Boolean));
+  },
+
+  formatBranchQuickFilterLabel(col, value) {
+    const safeValue = this.escape(value);
+    if (col !== 'vt' && col !== 'rm') return `<span>${safeValue}</span>`;
+    const parts = String(value || '').trim().split(/\s+/);
+    if (parts.length < 2) return `<span>${safeValue}</span>`;
+    const surname = parts[0];
+    const firstName = parts.slice(1).join(' ');
+    return `
+      <span class="branch-filter-name">
+        <strong>${this.escape(surname)}</strong>
+        <small>${this.escape(firstName)}</small>
+      </span>
+    `;
   },
 
   formatBranchHours(open, close) {
@@ -796,7 +818,8 @@ const App = {
     document.querySelectorAll('.branches-table th[data-col]').forEach((th) => {
       const col = th.dataset.col;
       const isSorted = sort.col === col;
-      const hasFilter = !!(colFilters[col] && colFilters[col].trim());
+      const filter = colFilters[col];
+      const hasFilter = Array.isArray(filter) ? filter.length > 0 : !!(filter && String(filter).trim());
       th.classList.toggle('is-sorted', isSorted);
       th.classList.toggle('is-sorted-desc', isSorted && sort.dir === 'desc');
       th.classList.toggle('is-filtered', hasFilter);
