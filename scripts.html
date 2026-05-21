@@ -729,7 +729,6 @@ const App = {
       { label: 'LC', value: stats.lcCount || 0 },
       { label: 'RM', value: stats.rmCount || 0 },
       { label: 'VT', value: stats.vtCount || 0 },
-      { label: 'Sync', value: this.formatDateTime((this.branchesState.sync || {}).lastSyncAt) },
     ];
     grid.innerHTML = items.map((item) => `
       <span class="branches-summary-item"><strong>${this.escape(item.value)}</strong>${this.escape(item.label)}</span>
@@ -748,20 +747,25 @@ const App = {
     const renderChipGroup = (label, col, values) => {
       const active = quick[col] || '';
       const related = this.getBranchRelatedQuickValues(col);
+      const hasContext = ['lc', 'vt', 'rm'].some((filterCol) => filterCol !== col && !!quick[filterCol]);
       return `
         <div class="branch-filter-group branch-filter-group-${col}">
           <span class="branch-filter-label">${this.escape(label)}</span>
-          <button type="button" class="branch-filter-chip branch-filter-chip-all${active ? '' : ' is-active'}" data-quick-col="${col}" data-quick-value="">
-            <span>Vše</span>
-          </button>
-          ${values.map((value) => {
-            const stateClass = active === value ? ' is-active' : (related.has(value) ? ' is-related' : ' is-unrelated');
-            return `
-            <button type="button" class="branch-filter-chip${stateClass}" data-quick-col="${col}" data-quick-value="${this.escape(value)}">
-              ${this.formatBranchQuickFilterLabel(col, value)}
-            </button>`;
-          }).join('')}
-          <span class="branch-filter-track" aria-hidden="true"></span>
+          <div class="branch-filter-control">
+            <button type="button" class="branch-filter-chip branch-filter-chip-all${active ? '' : ' is-active'}" data-quick-col="${col}" data-quick-value="">
+              <span>Vše</span>
+            </button>
+            ${values.map((value) => {
+              const stateClass = active === value
+                ? ' is-active'
+                : (hasContext ? (related.has(value) ? ' is-related' : ' is-unrelated') : ' is-neutral');
+              return `
+              <button type="button" class="branch-filter-chip${stateClass}" data-quick-col="${col}" data-quick-value="${this.escape(value)}">
+                ${this.formatBranchQuickFilterLabel(col, value)}
+              </button>`;
+            }).join('')}
+            <span class="branch-filter-track" aria-hidden="true"></span>
+          </div>
         </div>
       `;
     };
@@ -771,13 +775,15 @@ const App = {
       ${renderChipGroup('VT', 'vt', vtValues)}
       <div class="branch-filter-group branch-filter-group-rm">
         <span class="branch-filter-label">RM</span>
-        <select class="branch-filter-select${quick.rm ? ' is-active' : ''}" data-quick-select="rm" aria-label="Filtrovat podle RM">
-          <option value="">Všichni RM</option>
-          ${rmValues.map((value) => {
-            const related = relatedRmValues.has(value);
-            return `<option value="${this.escape(value)}" ${quick.rm === value ? 'selected' : ''}>${related ? '● ' : '○ '}${this.escape(value)}</option>`;
-          }).join('')}
-        </select>
+        <div class="branch-filter-control">
+          <select class="branch-filter-select${quick.rm ? ' is-active' : ''}" data-quick-select="rm" aria-label="Filtrovat podle RM">
+            <option value="">Všichni RM</option>
+            ${rmValues.map((value) => {
+              const related = relatedRmValues.has(value);
+              return `<option value="${this.escape(value)}" ${quick.rm === value ? 'selected' : ''}>${related ? '● ' : '○ '}${this.escape(value)}</option>`;
+            }).join('')}
+          </select>
+        </div>
       </div>
     `;
 
