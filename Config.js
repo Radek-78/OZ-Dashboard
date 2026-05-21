@@ -3,7 +3,7 @@
   appSubtitle: '',
   logoFileId: '18mu_Lq1F_FqqSZcolMjLwG0aaQDPMdyD',
   logoUrl: 'https://drive.google.com/thumbnail?id=18mu_Lq1F_FqqSZcolMjLwG0aaQDPMdyD&sz=w320',
-  version: 'v0.8.1',
+  version: 'v0.8.2',
   theme: {
     blue: '#0050aa',
     darkBlue: '#002466',
@@ -16,6 +16,16 @@
 };
 
 const APP_CHANGELOG = [
+  {
+    version: 'v0.8.2',
+    date: '2026-05-21',
+    changes: [
+      'Opraven import čísla filiálky ze sloupce Č.prodejny',
+      'Opraven import otevíracích a zavíracích časů ze sloupců otevřeno/zavřeno',
+      'Doplněna normalizace telefonů prodejen a RM do formátu +420 000 000 000',
+      'Doplněno mapování hodnoty lc také do sloupce abbreviation',
+    ],
+  },
   {
     version: 'v0.8.1',
     date: '2026-05-21',
