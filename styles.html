@@ -3331,4 +3331,80 @@
     -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
   }
+
+  .branches-panel {
+    gap: 16px;
+  }
+
+  .branches-sync-panel {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  .branches-sync-panel > div {
+    min-width: 0;
+    padding: 12px 14px;
+    border: 1px solid rgba(0,36,102,.09);
+    border-radius: 8px;
+    background: rgba(255,255,255,.78);
+  }
+
+  .branches-sync-panel span {
+    display: block;
+    margin-bottom: 5px;
+    color: #65758f;
+    font-size: 10px;
+    font-weight: 900;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+  }
+
+  .branches-sync-panel strong {
+    display: block;
+    color: var(--ink);
+    font-size: 12px;
+    font-weight: 850;
+    line-height: 1.35;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .branches-toolbar {
+    grid-template-columns: minmax(220px, 1.1fr) minmax(260px, 1fr) auto;
+  }
+
+  .branches-stats {
+    grid-template-columns: repeat(4, minmax(130px, 1fr));
+  }
+
+  .branches-table-shell {
+    overflow: auto;
+  }
+
+  .branches-table {
+    min-width: 1280px;
+  }
+
+  .branches-table th,
+  .branches-table td {
+    white-space: nowrap;
+  }
+
+  .branches-table td:nth-child(2) {
+    min-width: 210px;
+    white-space: normal;
+  }
+
+  @media (max-width: 900px) {
+    .branches-sync-panel,
+    .branches-stats {
+      grid-template-columns: 1fr;
+    }
+
+    .branches-toolbar {
+      grid-template-columns: 1fr;
+    }
+  }
 </style>

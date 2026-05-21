@@ -10,7 +10,7 @@
  * Whitelist platných oprávnění přiřaditelných přes UI.
  * Wildcard '*' je záměrně vynechán — přiřazuje se pouze přes seed dat (SUPERADMIN).
  */
-const KNOWN_PERMISSIONS = ['dashboard.view', 'users.manage', 'roles.manage'];
+const KNOWN_PERMISSIONS = ['dashboard.view', 'branches.view', 'branches.sync', 'users.manage', 'roles.manage'];
 
 /** Role, které nelze smazat (jsou součástí pevné struktury aplikace). */
 const SYSTEM_ROLE_KEYS = ['SUPERADMIN', 'ADMIN', 'EDITOR', 'VIEWER'];

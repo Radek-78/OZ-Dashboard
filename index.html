@@ -45,6 +45,7 @@
         <nav class="navigation" aria-label="Hlavní navigace">
           <p>Přehled</p>
           <button class="nav-link is-active" type="button" data-section="home" data-tooltip="Přehled"><svg><use href="#i-home"></use></svg><span>Přehled</span></button>
+          <button class="nav-link" type="button" data-section="branches" data-tooltip="Filiálky"><svg><use href="#i-briefcase"></use></svg><span>Filiálky</span></button>
           <div class="nav-group-item" aria-label="Nastavení"><svg><use href="#i-settings"></use></svg><span>Nastavení</span></div>
           <button class="nav-link nav-link-child" type="button" data-section="users" data-tooltip="Uživatelé"><svg><use href="#i-users"></use></svg><span>Uživatelé</span></button>
           <button class="nav-link nav-link-child" type="button" data-section="locations" data-tooltip="Umístění"><svg><use href="#i-briefcase"></use></svg><span>Umístění</span></button>
@@ -89,6 +90,72 @@
           <div class="status-strip" id="statusGrid"></div>
 
           <section class="module-dashboard" id="moduleGrid"></section>
+        </section>
+
+        <section class="page settings-page" id="branchesPage" hidden>
+          <section class="admin-panel branches-panel">
+            <div class="admin-panel-head">
+              <span class="admin-panel-icon"><svg><use href="#i-briefcase"></use></svg></span>
+              <div class="admin-panel-title">
+                <h3>Filiálky</h3>
+                <p><strong id="branchesCount">0</strong> filiálek v hlavní databázi</p>
+              </div>
+              <button class="button button-primary admin-add-user" type="button" data-action="sync-branches"><svg><use href="#i-download"></use></svg>Synchronizovat</button>
+            </div>
+
+            <div class="branches-sync-panel" id="branchesSyncPanel">
+              <div>
+                <span>Zdrojová složka</span>
+                <strong id="branchesSourceFolderLabel">Nenastaveno</strong>
+              </div>
+              <div>
+                <span>Poslední synchronizace</span>
+                <strong id="branchesLastSync">-</strong>
+              </div>
+              <div>
+                <span>Zdrojový soubor</span>
+                <strong id="branchesSourceFile">-</strong>
+              </div>
+            </div>
+
+            <div class="table-toolbar branches-toolbar">
+              <input type="search" id="branchesSearch" class="table-search" placeholder="Hledat filiálku, LC, VT nebo RM…" aria-label="Hledat filiálky" autocomplete="off">
+              <input type="text" id="branchesSourceFolderId" class="table-search" placeholder="ID složky se zdrojovým přehledem" aria-label="ID složky se zdrojovým přehledem">
+              <button type="button" class="button button-secondary" data-action="save-branches-source"><svg><use href="#i-check"></use></svg>Uložit složku</button>
+            </div>
+
+            <div class="status-strip branches-stats" id="branchesStats"></div>
+
+            <div class="table-shell branches-table-shell">
+              <table class="users-table branches-table" aria-label="Přehled filiálek">
+                <thead>
+                  <tr>
+                    <th>Číslo</th>
+                    <th>Filiálka</th>
+                    <th>LC</th>
+                    <th>Telefon</th>
+                    <th>VT</th>
+                    <th>RM</th>
+                    <th>Telefon RM</th>
+                    <th>Po</th>
+                    <th>Út</th>
+                    <th>St</th>
+                    <th>Čt</th>
+                    <th>Pá</th>
+                    <th>So</th>
+                    <th>Ne</th>
+                  </tr>
+                </thead>
+                <tbody id="branchesRows"></tbody>
+              </table>
+            </div>
+
+            <div class="empty-state users-empty" id="branchesEmpty" hidden>
+              <svg><use href="#i-briefcase"></use></svg>
+              <strong>Filiálky zatím nejsou načtené</strong>
+              <span>Nastavte složku se zdrojovým přehledem a spusťte synchronizaci.</span>
+            </div>
+          </section>
         </section>
         <section class="page settings-page" id="usersPage" hidden>
 

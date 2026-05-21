@@ -32,6 +32,9 @@ const LOADER_TEXTS = {
   saveRolePermission:       'Ukládám oprávnění role...',
   deleteRolePermission:     'Mažu oprávnění role...',
   checkDataIntegrity:       'Kontroluji integritu dat...',
+  getBranchesData:          'Načítám filiálky...',
+  syncBranchesFromLatestSource: 'Synchronizuji filiálky...',
+  saveBranchesSourceFolder: 'Ukládám zdrojovou složku...',
 };
 
 // ===========================================================================
@@ -69,6 +72,8 @@ const App = {
   usersSort:   { field: 'fullName', dir: 'asc' },
 
   /** Stavové objekty pro jednotlivé sekce nastavení */
+  branchesState:    { branches: [], stats: {}, sync: {}, canSync: false },
+  branchesFilter:   { query: '' },
   locationsState:   { locations: [] },
   departmentsState: { departments: [] },
   subAppsState:     { subApps: [] },
@@ -128,6 +133,7 @@ const App = {
       button.addEventListener('click', () => {
         const section = button.dataset.section || 'home';
         this.setActiveNav(section);
+        if (section === 'branches')    { this.showView('branches');    this.loadBranches();      return; }
         if (section === 'users')       { this.showView('users');       this.renderUserOptions(); this.renderUsers(); return; }
         if (section === 'locations')   { this.showView('locations');   this.renderLocations();   return; }
         if (section === 'departments') { this.showView('departments'); this.renderDepartments(); return; }
@@ -191,6 +197,19 @@ const App = {
     });
     const exportCsvBtn = document.querySelector('[data-action="export-users-csv"]');
     if (exportCsvBtn) exportCsvBtn.addEventListener('click', () => this.exportUsersCsv());
+
+    // Filiálky
+    const branchesSearch = document.querySelector('#branchesSearch');
+    if (branchesSearch) {
+      branchesSearch.addEventListener('input', () => {
+        this.branchesFilter.query = branchesSearch.value.trim().toLowerCase();
+        this.renderBranches();
+      });
+    }
+    const saveBranchesSource = document.querySelector('[data-action="save-branches-source"]');
+    if (saveBranchesSource) saveBranchesSource.addEventListener('click', () => this.saveBranchesSourceFolder());
+    const syncBranches = document.querySelector('[data-action="sync-branches"]');
+    if (syncBranches) syncBranches.addEventListener('click', () => this.syncBranches());
 
     // Umístění
     const createLocation = document.querySelector('[data-action="create-location"]');
@@ -370,6 +389,7 @@ const App = {
     if (denied && !denied.hidden) return;
     const pages = {
       home:        '#dashboardPage',
+      branches:    '#branchesPage',
       users:       '#usersPage',
       locations:   '#locationsPage',
       departments: '#departmentsPage',
@@ -469,6 +489,141 @@ const App = {
         <svg><use href="#i-mail"></use></svg>
       </div>
     `).join('');
+  },
+
+  // =========================================================================
+  // SEKCE: Filiálky
+  // =========================================================================
+
+  loadBranches() {
+    this.callServer('getBranchesData')
+      .then((data) => {
+        this.applyBranchesState(data);
+        this.renderBranches();
+      })
+      .catch((err) => this.toast(err.message || 'Nepodařilo se načíst filiálky.', 'error'));
+  },
+
+  applyBranchesState(data) {
+    this.branchesState = {
+      branches: data.branches || [],
+      stats: data.stats || {},
+      sync: data.sync || {},
+      canSync: data.canSync === true,
+    };
+    const folderInput = document.querySelector('#branchesSourceFolderId');
+    if (folderInput) folderInput.value = (this.branchesState.sync || {}).sourceFolderId || '';
+
+    document.querySelectorAll('[data-action="save-branches-source"], [data-action="sync-branches"]').forEach((button) => {
+      button.hidden = !this.branchesState.canSync;
+    });
+    if (folderInput) folderInput.hidden = !this.branchesState.canSync;
+  },
+
+  saveBranchesSourceFolder() {
+    const input = document.querySelector('#branchesSourceFolderId');
+    const folderId = input ? input.value.trim() : '';
+    if (!folderId) { this.toast('Vyplňte ID zdrojové složky.', 'error'); return; }
+
+    this.callServer('saveBranchesSourceFolder', { folderId })
+      .then((data) => {
+        this.applyBranchesState(data);
+        this.renderBranches();
+        this.toast('Zdrojová složka byla uložena.');
+      })
+      .catch((err) => this.toast(err.message || 'Zdrojovou složku se nepodařilo uložit.', 'error'));
+  },
+
+  syncBranches() {
+    this.callServer('syncBranchesFromLatestSource')
+      .then((data) => {
+        this.applyBranchesState(data);
+        this.renderBranches();
+        this.toast('Filiálky byly synchronizovány.');
+      })
+      .catch((err) => this.toast(err.message || 'Synchronizace filiálek selhala.', 'error'));
+  },
+
+  getFilteredBranches() {
+    const query = this.branchesFilter.query;
+    const rows = this.branchesState.branches || [];
+    if (!query) return rows;
+    return rows.filter((branch) => {
+      const haystack = [
+        branch.storeNumber, branch.storeName, branch.abbreviation, branch.lc,
+        branch.storePhone, branch.vt, branch.rm, branch.rmPhone,
+      ].join(' ').toLowerCase();
+      return haystack.includes(query);
+    });
+  },
+
+  renderBranches() {
+    const rows = document.querySelector('#branchesRows');
+    const empty = document.querySelector('#branchesEmpty');
+    const counter = document.querySelector('#branchesCount');
+    if (!rows) return;
+
+    const branches = this.getFilteredBranches();
+    if (counter) counter.textContent = String(branches.length);
+    this.renderBranchesSyncInfo();
+    this.renderBranchesStats();
+
+    if (!branches.length) {
+      rows.innerHTML = '';
+      if (empty) empty.hidden = false;
+      return;
+    }
+
+    if (empty) empty.hidden = true;
+    rows.innerHTML = branches.map((branch) => `
+      <tr>
+        <td><strong>${this.escape(branch.storeNumber || '-')}</strong><small>${this.escape(branch.abbreviation || '')}</small></td>
+        <td>${this.escape(branch.storeName || '-')}</td>
+        <td><span class="role-chip is-blue">${this.escape(branch.lc || '-')}</span></td>
+        <td>${this.escape(branch.storePhone || '-')}</td>
+        <td>${this.escape(branch.vt || '-')}</td>
+        <td>${this.escape(branch.rm || '-')}</td>
+        <td>${this.escape(branch.rmPhone || '-')}</td>
+        <td>${this.escape(this.formatBranchHours(branch.mondayOpen, branch.mondayClose))}</td>
+        <td>${this.escape(this.formatBranchHours(branch.tuesdayOpen, branch.tuesdayClose))}</td>
+        <td>${this.escape(this.formatBranchHours(branch.wednesdayOpen, branch.wednesdayClose))}</td>
+        <td>${this.escape(this.formatBranchHours(branch.thursdayOpen, branch.thursdayClose))}</td>
+        <td>${this.escape(this.formatBranchHours(branch.fridayOpen, branch.fridayClose))}</td>
+        <td>${this.escape(this.formatBranchHours(branch.saturdayOpen, branch.saturdayClose))}</td>
+        <td>${this.escape(this.formatBranchHours(branch.sundayOpen, branch.sundayClose))}</td>
+      </tr>
+    `).join('');
+  },
+
+  renderBranchesSyncInfo() {
+    const sync = this.branchesState.sync || {};
+    this.setText('#branchesSourceFolderLabel', sync.sourceFolderId || 'Nenastaveno');
+    this.setText('#branchesLastSync', this.formatDateTime(sync.lastSyncAt));
+    this.setText('#branchesSourceFile', sync.lastSourceFileName || sync.lastSourceFileId || '-');
+  },
+
+  renderBranchesStats() {
+    const stats = this.branchesState.stats || {};
+    const grid = document.querySelector('#branchesStats');
+    if (!grid) return;
+    const items = [
+      { label: 'Filiálky', value: stats.total || 0, tone: 'info', icon: 'briefcase' },
+      { label: 'LC', value: stats.lcCount || 0, tone: 'neutral', icon: 'layout' },
+      { label: 'RM', value: stats.rmCount || 0, tone: 'neutral', icon: 'users' },
+      { label: 'VT', value: stats.vtCount || 0, tone: 'neutral', icon: 'user' },
+    ];
+    grid.innerHTML = items.map((item) => `
+      <div class="status-card" data-tone="${this.escape(item.tone)}">
+        <span class="status-icon"><svg><use href="#${this.iconSymbol(item.icon)}"></use></svg></span>
+        <div><span>${this.escape(item.label)}</span><strong>${this.escape(item.value)}</strong></div>
+      </div>
+    `).join('');
+  },
+
+  formatBranchHours(open, close) {
+    if (!open && !close) return '-';
+    if (open && close) return open + '-' + close;
+    return open || close;
   },
 
   // =========================================================================
@@ -1504,6 +1659,7 @@ const App = {
   snapshotState() {
     return {
       usersState:       JSON.parse(JSON.stringify(this.usersState)),
+      branchesState:    JSON.parse(JSON.stringify(this.branchesState)),
       locationsState:   JSON.parse(JSON.stringify(this.locationsState)),
       departmentsState: JSON.parse(JSON.stringify(this.departmentsState)),
       subAppsState:     JSON.parse(JSON.stringify(this.subAppsState)),
@@ -1512,13 +1668,15 @@ const App = {
 
   restoreSnapshot(snapshot) {
     this.usersState       = snapshot.usersState;
+    this.branchesState    = snapshot.branchesState || this.branchesState;
     this.locationsState   = snapshot.locationsState;
     this.departmentsState = snapshot.departmentsState;
     this.subAppsState     = snapshot.subAppsState;
   },
 
   renderCurrentSettingsView() {
-    if      (this.currentView === 'users')       { this.renderUserOptions(); this.renderUsers(); }
+    if      (this.currentView === 'branches')    this.renderBranches();
+    else if (this.currentView === 'users')       { this.renderUserOptions(); this.renderUsers(); }
     else if (this.currentView === 'locations')   this.renderLocations();
     else if (this.currentView === 'departments') this.renderDepartments();
     else if (this.currentView === 'subapps')     this.renderSubApps();

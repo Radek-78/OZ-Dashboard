@@ -6,7 +6,7 @@
  */
 
 /** Aktuální verze databázového schématu. Navyšte při přidání nových listů/sloupců. */
-const DATABASE_SCHEMA_VERSION = '1';
+const DATABASE_SCHEMA_VERSION = '2';
 
 /** TTL cache záznamu o databázi v sekundách (6 hodin). */
 const DATABASE_CACHE_TTL_SECONDS = 21600;
@@ -185,6 +185,12 @@ function setupDatabaseSheets_(spreadsheet) {
     ['EDITOR',     'dashboard.view', true, 'Zobrazení dashboardu',       new Date()],
     ['VIEWER',     'dashboard.view', true, 'Zobrazení dashboardu',       new Date()],
   ]);
+  ensureRolePermissions_(spreadsheet, [
+    ['ADMIN',  'branches.view', true, 'Zobrazení přehledu filiálek', new Date()],
+    ['ADMIN',  'branches.sync', true, 'Synchronizace přehledu filiálek', new Date()],
+    ['EDITOR', 'branches.view', true, 'Zobrazení přehledu filiálek', new Date()],
+    ['VIEWER', 'branches.view', true, 'Zobrazení přehledu filiálek', new Date()],
+  ]);
 
   ensureSheet_(spreadsheet, 'SUBAPP_PERMISSIONS', [
     'id', 'userId', 'email', 'subAppKey', 'accessLevel', 'active', 'updatedAt', 'updatedBy',
@@ -206,6 +212,54 @@ function setupDatabaseSheets_(spreadsheet) {
   ], [
     [Utilities.getUuid(), 'OZ', '', true, new Date(), new Date()],
   ]);
+
+  ensureSheet_(spreadsheet, 'FILIALKY', [
+    'id', 'storeNumber', 'storeName', 'abbreviation', 'lc',
+    'storePhone', 'vt', 'rm', 'rmPhone',
+    'mondayOpen', 'mondayClose', 'tuesdayOpen', 'tuesdayClose',
+    'wednesdayOpen', 'wednesdayClose', 'thursdayOpen', 'thursdayClose',
+    'fridayOpen', 'fridayClose', 'saturdayOpen', 'saturdayClose',
+    'sundayOpen', 'sundayClose',
+    'sourceFileId', 'sourceFileName', 'sourceRow', 'sourceUpdatedAt',
+    'syncedAt', 'rawHash', 'active',
+  ]);
+}
+
+/**
+ * Doplni seedovana opravneni i do existujiciho ROLE_PERMISSIONS listu.
+ * ensureSheet_ seeduje jen prazdny list, proto nove permission keys migrujeme explicitne.
+ * @param {Spreadsheet} spreadsheet
+ * @param {Array[]} rows
+ */
+function ensureRolePermissions_(spreadsheet, rows) {
+  const sheet = spreadsheet.getSheetByName('ROLE_PERMISSIONS');
+  const values = sheet.getDataRange().getValues();
+  const headers = values[0];
+  const roleIdx = headers.indexOf('roleKey');
+  const permIdx = headers.indexOf('permissionKey');
+  const existing = {};
+
+  for (let row = 1; row < values.length; row++) {
+    const key = String(values[row][roleIdx] || '').trim().toUpperCase() + '|' + String(values[row][permIdx] || '').trim();
+    existing[key] = true;
+  }
+
+  rows.forEach(function(seed) {
+    const key = String(seed[0] || '').trim().toUpperCase() + '|' + String(seed[1] || '').trim();
+    if (existing[key]) return;
+    const rowValues = headers.map(function(header) {
+      const map = {
+        roleKey: seed[0],
+        permissionKey: seed[1],
+        allowed: seed[2],
+        description: seed[3],
+        updatedAt: seed[4],
+      };
+      return map[header] !== undefined ? map[header] : '';
+    });
+    sheet.appendRow(rowValues);
+    existing[key] = true;
+  });
 }
 
 /**
