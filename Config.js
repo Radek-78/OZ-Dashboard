@@ -3,7 +3,7 @@
   appSubtitle: '',
   logoFileId: '18mu_Lq1F_FqqSZcolMjLwG0aaQDPMdyD',
   logoUrl: 'https://drive.google.com/thumbnail?id=18mu_Lq1F_FqqSZcolMjLwG0aaQDPMdyD&sz=w320',
-  version: 'v0.13.1',
+  version: 'v0.13.2',
   theme: {
     blue: '#0050aa',
     darkBlue: '#002466',
@@ -16,6 +16,13 @@
 };
 
 const APP_CHANGELOG = [
+  {
+    version: 'v0.13.2',
+    date: '2026-05-21',
+    changes: [
+      'Sloupec Číslo v tabulce LC zobrazuje pouze číslo bez prefixu LC',
+    ],
+  },
   {
     version: 'v0.13.1',
     date: '2026-05-21',
