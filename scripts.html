@@ -236,12 +236,14 @@ const App = {
           this.closeBranchColMenu();
           this.renderBranches();
         } else if (action === 'clear') {
-          delete this.branchesFilter.colFilters[col];
-          this.renderBranchColMenuValues('');
+          // Odznačit vše — nastaví prázdné pole, tabulka nezobrazí žádné řádky
+          this.branchesFilter.colFilters[col] = [];
+          this.renderBranchColMenuValues(branchColMenu.querySelector('#branchColMenuFilter')?.value || '');
           this.renderBranches();
         } else if (action === 'select-all') {
+          // Vybrat vše — smaže explicitní filtr, zobrazí vše
           delete this.branchesFilter.colFilters[col];
-          this.renderBranchColMenuValues('');
+          this.renderBranchColMenuValues(branchColMenu.querySelector('#branchColMenuFilter')?.value || '');
           this.renderBranches();
         }
       });
@@ -642,7 +644,7 @@ const App = {
 
     Object.entries(colFilters).forEach(([col, val]) => {
       if (Array.isArray(val)) {
-        if (!val.length) return;
+        if (!val.length) { rows = []; return; }
         rows = rows.filter((branch) => val.includes(this.getBranchColDisplayValue(branch, col)));
         return;
       }
@@ -951,8 +953,12 @@ const App = {
       }).join('')
       : '<div class="branch-col-menu-empty">Žádná hodnota</div>';
 
+    // "Vybrat vše" — disabled když žádný filtr (vše už zobrazeno)
+    const selectAllBtn = menu.querySelector('[data-col-action="select-all"]');
+    if (selectAllBtn) selectAllBtn.disabled = !hasExplicitSelection;
+    // "Vyčistit" — disabled jen když je pole prázdné (vše odznačeno)
     const clearBtn = menu.querySelector('[data-col-action="clear"]');
-    if (clearBtn) clearBtn.disabled = !hasExplicitSelection;
+    if (clearBtn) clearBtn.disabled = hasExplicitSelection && selectedValues.length === 0;
   },
 
   getBranchColumnValues(col) {

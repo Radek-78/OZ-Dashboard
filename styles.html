@@ -3392,83 +3392,96 @@
   }
 
   .branches-quick-filters {
-    display: grid;
-    grid-template-columns: max-content minmax(560px, 1fr) 260px;
-    gap: 6px;
-    align-items: end;
-    padding: 6px 16px 0;
-    border-bottom: 1px solid rgba(0,36,102,.08);
-    background: #f5f8fd;
+    display: flex;
+    align-items: flex-end;
+    gap: 8px;
+    padding: 8px 16px 0;
+    border-bottom: 2px solid rgba(0,36,102,.12);
+    background: #ebf0f9;
     overflow-x: auto;
-    overflow-y: hidden;
-  }
-
-  .branch-filter-group {
-    min-width: 0;
-    display: grid;
-    grid-template-rows: auto auto;
-    gap: 1px;
-    padding: 0;
-    border: 0;
-    background: transparent;
-  }
-
-  .branch-filter-control {
-    min-width: 0;
-    display: inline-flex;
-    align-items: center;
-    gap: 2px;
-    padding: 1px;
-    border: 1px solid rgba(0,36,102,.12);
-    border-radius: 0 7px 7px 7px;
-    background: rgba(255,255,255,.9);
-    box-shadow: inset 0 0 0 1px rgba(255,255,255,.75);
-    overflow-x: auto;
+    overflow-y: visible;
     scrollbar-width: thin;
   }
 
-  .branches-quick-filters::-webkit-scrollbar,
-  .branch-filter-control::-webkit-scrollbar {
-    height: 4px;
-  }
-
-  .branches-quick-filters::-webkit-scrollbar-thumb,
-  .branch-filter-control::-webkit-scrollbar-thumb {
+  .branches-quick-filters::-webkit-scrollbar { height: 4px; }
+  .branches-quick-filters::-webkit-scrollbar-thumb {
     border-radius: 999px;
-    background: rgba(0,36,102,.26);
+    background: rgba(0,36,102,.22);
   }
 
+  /* ── Filter group — unified card ── */
+  .branch-filter-group {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    flex-shrink: 0;
+    border: 1px solid rgba(0,36,102,.14);
+    border-radius: 8px;
+    overflow: hidden;
+    background: rgba(255,255,255,.96);
+    box-shadow: 0 1px 5px rgba(0,36,102,.07);
+  }
+
+  .branch-filter-group-lc { width: 280px; }
+  .branch-filter-group-vt { flex: 1; min-width: 580px; }
+  .branch-filter-group-rm { width: 236px; }
+
+  /* Full-width yellow label bar */
   .branch-filter-label {
-    display: inline-flex;
+    display: flex;
     align-items: center;
-    height: 18px;
-    padding: 0 8px;
-    border: 1px solid rgba(0,36,102,.12);
-    border-bottom: 0;
-    border-radius: 5px 5px 0 0;
+    height: 15px;
+    padding: 0 9px;
     background: var(--lidl-yellow);
     color: var(--lidl-dark-blue);
-    font-size: 9px;
+    font-size: 8.5px;
     font-weight: 900;
-    letter-spacing: .07em;
+    letter-spacing: .09em;
     text-transform: uppercase;
+    border-bottom: 1px solid rgba(0,36,102,.12);
+    flex-shrink: 0;
   }
 
+  /* Chip container — no separate border, fills card width */
+  .branch-filter-control {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    padding: 2px;
+    background: transparent;
+    border: none;
+    border-radius: 0;
+    overflow-x: auto;
+    scrollbar-width: none;
+    width: 100%;
+    box-sizing: border-box;
+    flex-shrink: 0;
+  }
+
+  .branch-filter-control::-webkit-scrollbar { display: none; }
+
+  /* ── Chip — flex 1 = proportional fill ── */
   .branch-filter-chip {
     position: relative;
-    min-width: 46px;
-    height: 30px;
-    padding: 0 8px;
+    flex: 1;
+    height: 28px;
+    min-width: 34px;
+    padding: 0 4px;
     border: 1px solid transparent;
-    border-radius: 7px;
+    border-radius: 5px;
     background: transparent;
     color: #43546f;
     font-size: 11px;
     font-weight: 800;
     cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    white-space: nowrap;
     isolation: isolate;
     overflow: hidden;
-    transition: color .16s ease, border-color .16s ease, opacity .16s ease, transform .16s ease;
+    transition: color .15s, opacity .15s;
   }
 
   .branch-filter-chip::before {
@@ -3476,22 +3489,15 @@
     position: absolute;
     inset: 2px;
     z-index: -1;
-    border-radius: 5px;
-    background: #dce8f8;
+    border-radius: 4px;
+    background: #d4e6f8;
     opacity: 0;
-    transform: translateX(-42%);
+    transform: translateX(-40%);
     transition: transform .18s ease, opacity .18s ease, background .18s ease;
   }
 
-  .branch-filter-chip:hover {
-    color: var(--lidl-dark-blue);
-    transform: translateY(-1px);
-  }
-
-  .branch-filter-chip:hover::before {
-    opacity: .72;
-    transform: translateX(0);
-  }
+  .branch-filter-chip:hover { color: var(--lidl-dark-blue); }
+  .branch-filter-chip:hover::before { opacity: .65; transform: translateX(0); }
 
   .branch-filter-chip.is-related {
     background: rgba(255,240,0,.28);
@@ -3500,15 +3506,12 @@
     font-weight: 900;
   }
 
-  .branch-filter-chip.is-unrelated {
-    color: #a0afc2;
-    opacity: .45;
-  }
+  .branch-filter-chip.is-unrelated { color: #a0afc2; opacity: .4; }
 
   .branch-filter-chip.is-active {
     border-color: rgba(0,85,170,.16);
     color: #fff;
-    box-shadow: 0 4px 12px rgba(0,85,170,.14);
+    box-shadow: 0 3px 10px rgba(0,85,170,.14);
   }
 
   .branch-filter-chip.is-active::before {
@@ -3517,30 +3520,20 @@
     transform: translateX(0);
   }
 
-  .branch-filter-group-lc {
-    min-width: 286px;
-  }
-
-  .branch-filter-group-vt {
-    min-width: 560px;
-  }
-
-  .branch-filter-group-rm {
-    min-width: 0;
-    overflow: visible;
-  }
-
-  .branch-filter-group-vt .branch-filter-chip {
-    width: 82px;
-    min-width: 82px;
-    height: 30px;
-    padding: 0 5px;
-    white-space: normal;
-  }
-
+  /* "Vše" chip — fixed small width, doesn't grow */
   .branch-filter-chip-all {
-    width: 44px;
-    min-width: 44px;
+    flex: 0 0 38px;
+    min-width: 38px;
+    font-size: 10px;
+  }
+
+  /* VT chips — same flex fill, allow text to wrap */
+  .branch-filter-group-vt .branch-filter-chip {
+    flex: 1;
+    min-width: 72px;
+    height: 28px;
+    padding: 0 4px;
+    white-space: normal;
   }
 
   .branch-filter-name {
@@ -3887,21 +3880,22 @@
   .branch-col-value {
     display: flex;
     align-items: center;
-    gap: 8px;
-    min-height: 28px;
-    padding: 4px 8px;
-    border-radius: 5px;
+    gap: 6px;
+    min-height: 20px;
+    padding: 1px 7px;
+    border-radius: 4px;
     color: var(--ink);
-    font-size: 12px;
+    font-size: 11px;
     font-weight: 600;
     cursor: pointer;
+    line-height: 1.2;
   }
 
   .branch-col-value:hover { background: #f0f5ff; }
 
   .branch-col-value input {
-    width: 14px;
-    height: 14px;
+    width: 12px;
+    height: 12px;
     margin: 0;
     flex-shrink: 0;
     accent-color: var(--lidl-blue);
@@ -3928,8 +3922,8 @@
     align-items: center;
     justify-content: space-between;
     gap: 6px;
-    min-width: 170px;
-    height: 30px;
+    flex: 1;
+    height: 28px;
     padding: 0 8px 0 10px;
     border: none;
     border-radius: 4px;
@@ -3967,7 +3961,6 @@
   .branch-rm-clear:hover { background: #fde8e8; border-color: rgba(230,10,20,.2); color: var(--lidl-red); }
 
   .branch-filter-group-rm .branch-filter-control {
-    min-width: 200px;
     overflow: visible;
     gap: 3px;
   }
