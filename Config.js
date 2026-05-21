@@ -3,7 +3,7 @@
   appSubtitle: '',
   logoFileId: '18mu_Lq1F_FqqSZcolMjLwG0aaQDPMdyD',
   logoUrl: 'https://drive.google.com/thumbnail?id=18mu_Lq1F_FqqSZcolMjLwG0aaQDPMdyD&sz=w320',
-  version: 'v0.9.5',
+  version: 'v0.10.0',
   theme: {
     blue: '#0050aa',
     darkBlue: '#002466',
@@ -16,6 +16,19 @@
 };
 
 const APP_CHANGELOG = [
+  {
+    version: 'v0.10.0',
+    date: '2026-05-21',
+    changes: [
+      'Sjednocena výška chipů filtrů (30 px pro všechny skupiny)',
+      'Redesign label tabů LC/VT/RM s napojením na chip control',
+      'Jasné barevné rozlišení příbuzných (žlutá) a nepříbuzných (dim) chipů',
+      'Opraven hover záhlaví tabulky — zůstává modré',
+      'RM filtr nahrazen vlastním searchable dropdown',
+      'Redesign popup filtru sloupce s modrým headerem a grid tlačítky',
+      'Odstraněny zbytečné mezery ve filtrovací liště a nad tabulkou',
+    ],
+  },
   {
     version: 'v0.9.5',
     date: '2026-05-21',
