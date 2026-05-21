@@ -1887,7 +1887,6 @@ const App = {
     form.elements.key.value         = item ? item.key                 : '';
     form.elements.status.value      = item ? item.status              : 'ACTIVE';
     form.elements.description.value = item ? (item.description || '') : '';
-    form.elements.targetUrl.value   = item ? (item.targetUrl   || '') : '';
     form.elements.active.checked    = item ? Boolean(item.active)     : true;
     this.setSubAppIcon(item ? (item.icon || 'briefcase') : 'briefcase');
     const iconSearch = document.querySelector('#iconSearch');
@@ -1907,7 +1906,6 @@ const App = {
       status:      form.elements.status.value,
       icon:        form.elements.icon.value,
       description: form.elements.description.value,
-      targetUrl:   form.elements.targetUrl.value,
       active:      form.elements.active.checked,
     };
     this.closeSubAppForm();
@@ -1922,7 +1920,7 @@ const App = {
           id: tempId,
           key: payload.key.toUpperCase().replace(/[^A-Z0-9_]/g, '_'),
           name: payload.name, status: payload.status, icon: payload.icon,
-          description: payload.description, targetUrl: payload.targetUrl, lastUpdatedAt: '',
+          description: payload.description, lastUpdatedAt: '',
           sortOrder: isNew ? this.nextSubAppSortOrder() : (existing || {}).sortOrder || 0,
           active: payload.active,
           createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),

@@ -8,6 +8,15 @@
 // Konstanty pro platné stavy dlaždic
 var SUBAPP_STATUSES = ['ACTIVE', 'PREPARING', 'DISABLED'];
 
+/**
+ * Mapa klíčů interních subaplikací na jejich interní view URL.
+ * Tyto URL jsou spravovány kódem — uživatel je nenastavuje ručně.
+ * Přidejte každou novou interní subaplikaci sem.
+ */
+var INTERNAL_SUBAPP_URLS = {
+  'VYHODNOCENI_ODPISU_AKCNICH_ARTIKLU': '#odpisyPage',
+};
+
 // ---------------------------------------------------------------------------
 // Veřejné API endpointy
 // ---------------------------------------------------------------------------
@@ -198,7 +207,7 @@ function listDashboardSubApps_(spreadsheet, auth) {
         updated:     item.lastUpdatedAt
                        ? 'Aktualizováno: ' + item.lastUpdatedAt
                        : 'Aktualizace zatím není uvedena',
-        targetUrl:   item.targetUrl,
+        targetUrl:   INTERNAL_SUBAPP_URLS[accessKey] || item.targetUrl,
         enabled:     enabled,
         accent:      item.status === 'ACTIVE' ? 'blue' : (item.status === 'PREPARING' ? 'red' : 'muted'),
         accessLevel: userAccess[accessKey] || null,
@@ -239,10 +248,6 @@ function normalizeSubAppPayload_(payload) {
 function validateSubAppPayload_(data) {
   if (!data.name) throw new Error('Vyplňte název dlaždice.');
   if (SUBAPP_STATUSES.indexOf(data.status) < 0) throw new Error('Vyberte platný stav dlaždice.');
-  if (data.targetUrl) {
-    const url = String(data.targetUrl).trim().toLowerCase();
-    if (url && !url.startsWith('https://')) throw new Error('Cílová URL musí začínat https://');
-  }
 }
 
 /**
@@ -300,7 +305,7 @@ function buildSubAppRow_(headers, data, original, now) {
     status:       data.status,
     icon:         data.icon,
     description:  data.description,
-    targetUrl:    data.targetUrl,
+    targetUrl:    data.targetUrl || source.targetUrl || '',
     lastUpdatedAt: data.lastUpdatedAt,
     sortOrder:    data.sortOrder,
     active:       data.active,
@@ -308,4 +313,35 @@ function buildSubAppRow_(headers, data, original, now) {
     updatedAt:    now,
   };
   return headers.map(function(h) { return values[h] !== undefined ? values[h] : ''; });
+}
+
+// ---------------------------------------------------------------------------
+// Migrace interních URL
+// ---------------------------------------------------------------------------
+
+/**
+ * Zapíše správnou targetUrl pro všechny interní subaplikace v SUBAPPS listu.
+ * Idempotentní — zapíše pouze pokud se hodnota v DB liší od očekávané.
+ * Voláno při inicializaci aplikace z getInitData().
+ * @param {Spreadsheet} spreadsheet
+ */
+function ensureInternalSubAppUrls_(spreadsheet) {
+  const sheet = spreadsheet.getSheetByName('SUBAPPS');
+  if (!sheet || sheet.getLastRow() < 2) return;
+
+  const values = sheet.getDataRange().getValues();
+  const headers = values[0];
+  const keyIdx = headers.indexOf('key');
+  const urlIdx = headers.indexOf('targetUrl');
+  if (keyIdx < 0 || urlIdx < 0) return;
+
+  for (var row = 1; row < values.length; row++) {
+    var key = String(values[row][keyIdx] || '').trim().toUpperCase();
+    var expectedUrl = INTERNAL_SUBAPP_URLS[key];
+    if (!expectedUrl) continue;
+    var currentUrl = String(values[row][urlIdx] || '').trim();
+    if (currentUrl === expectedUrl) continue;
+    sheet.getRange(row + 1, urlIdx + 1).setValue(expectedUrl);
+    Logger.log('[SUBAPP_URL_MIGRATED] key=%s url=%s', key, expectedUrl);
+  }
 }

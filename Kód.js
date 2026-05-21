@@ -139,6 +139,13 @@ function getInitData() {
     settingsData = buildUsersAdminData_(context);
   }
 
+  // Zajistíme správné targetUrl pro interní subaplikace (idempotentní)
+  try {
+    ensureInternalSubAppUrls_(context.database.spreadsheet);
+  } catch (e) {
+    Logger.log('[ENSURE_INTERNAL_URLS_FAIL] %s', e && e.message ? e.message : e);
+  }
+
   return { bootstrap, homeData, settingsData };
 }
 
