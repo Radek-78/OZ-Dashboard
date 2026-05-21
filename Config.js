@@ -3,7 +3,7 @@
   appSubtitle: '',
   logoFileId: '18mu_Lq1F_FqqSZcolMjLwG0aaQDPMdyD',
   logoUrl: 'https://drive.google.com/thumbnail?id=18mu_Lq1F_FqqSZcolMjLwG0aaQDPMdyD&sz=w320',
-  version: 'v0.10.0',
+  version: 'v0.10.1',
   theme: {
     blue: '#0050aa',
     darkBlue: '#002466',
@@ -16,6 +16,17 @@
 };
 
 const APP_CHANGELOG = [
+  {
+    version: 'v0.10.1',
+    date: '2026-05-21',
+    changes: [
+      'Redesign hlaviček filtrů: žlutý pruh přes celou šířku karty',
+      'Proporcionální distribuce chipů bez prázdných míst',
+      'Kompaktní řádky v popup filtru sloupce',
+      'Opravena logika tlačítka Vyčistit — odznačí vše',
+      'Opraven stav disabled pro Vybrat vše a Vyčistit',
+    ],
+  },
   {
     version: 'v0.10.0',
     date: '2026-05-21',
