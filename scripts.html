@@ -815,7 +815,7 @@ const App = {
 
     rows.innerHTML = lcs.map((lc) => `
       <tr>
-        <td><strong>${this.escape('LC' + lc.code)}</strong></td>
+        <td><strong>${this.escape(lc.code || '–')}</strong></td>
         <td><span class="role-chip is-blue">${this.escape(lc.abbreviation || '–')}</span></td>
         <td>${this.escape(lc.city || '–')}</td>
         <td>${branchCountByAbbr[lc.abbreviation] || 0}</td>
