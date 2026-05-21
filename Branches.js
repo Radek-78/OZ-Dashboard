@@ -243,14 +243,14 @@ function parseBranchesFromValues_(values, sourceFile) {
 function normalizeBranchRow_(raw, sourceFile, sourceRow, sourceUpdatedAt) {
   const branch = {
     id: Utilities.getUuid(),
-    storeNumber: pickBranchValue_(raw, ['cislofilialky', 'cislo', 'prodejna', 'filialka', 'store', 'storenumber']),
+    storeNumber: pickBranchValue_(raw, ['cprodejny', 'cisloprodejny', 'cislofilialky', 'cislo', 'prodejna', 'filialka', 'store', 'storenumber']),
     storeName: pickBranchValue_(raw, ['nazevfilialky', 'nazev', 'prodejnaNazev', 'name', 'storename']),
-    abbreviation: pickBranchValue_(raw, ['zkratka', 'abbr', 'abbreviation']),
+    abbreviation: pickBranchValue_(raw, ['zkratka', 'abbr', 'abbreviation', 'lc']),
     lc: pickBranchValue_(raw, ['lc', 'logistickecentrum', 'logistickecentrumlc']),
-    storePhone: pickBranchValue_(raw, ['telefonprodejny', 'telefon', 'phone', 'storephone']),
+    storePhone: formatCzechPhone_(pickBranchValue_(raw, ['telefonprodejny', 'telefon', 'phone', 'storephone'])),
     vt: pickBranchValue_(raw, ['vt', 'oblastnimanager', 'oblastnivedouci']),
     rm: pickBranchValue_(raw, ['rm', 'regionalnimanager', 'regionalmanager']),
-    rmPhone: pickBranchValue_(raw, ['telefonrm', 'rmtelefon', 'rmphone']),
+    rmPhone: formatCzechPhone_(pickBranchValue_(raw, ['telefonrm', 'rmtelefon', 'rmphone'])),
     sourceFileId: sourceFile.getId(),
     sourceFileName: sourceFile.getName(),
     sourceRow: sourceRow,
@@ -263,8 +263,12 @@ function normalizeBranchRow_(raw, sourceFile, sourceRow, sourceUpdatedAt) {
     const openKey = day[0];
     const closeKey = day[1];
     const aliases = day[2];
-    const openAliases = aliases.map(function(alias) { return alias + 'od'; }).concat(aliases.map(function(alias) { return alias + 'open'; }));
-    const closeAliases = aliases.map(function(alias) { return alias + 'do'; }).concat(aliases.map(function(alias) { return alias + 'close'; }));
+    const openAliases = aliases.map(function(alias) { return alias + 'od'; })
+      .concat(aliases.map(function(alias) { return alias + 'open'; }))
+      .concat(aliases.map(function(alias) { return alias + 'otevreno'; }));
+    const closeAliases = aliases.map(function(alias) { return alias + 'do'; })
+      .concat(aliases.map(function(alias) { return alias + 'close'; }))
+      .concat(aliases.map(function(alias) { return alias + 'zavreno'; }));
     branch[openKey] = pickBranchValue_(raw, openAliases);
     branch[closeKey] = pickBranchValue_(raw, closeAliases);
 
@@ -366,6 +370,21 @@ function normalizeTimeText_(value) {
   const minute = parts.length > 1 ? parts[1] : '00';
   if (!hour) return '';
   return ('0' + hour).slice(-2) + ':' + ('0' + minute).slice(-2);
+}
+
+/**
+ * Normalizuje ceske telefonni cislo na format "+420 000 000 000", pokud to jde.
+ * @param {string} value
+ * @returns {string}
+ */
+function formatCzechPhone_(value) {
+  const text = String(value || '').trim();
+  if (!text) return '';
+  let digits = text.replace(/\D/g, '');
+  if (digits.startsWith('00420')) digits = digits.slice(2);
+  if (digits.length === 9) digits = '420' + digits;
+  if (digits.length !== 12 || !digits.startsWith('420')) return text;
+  return '+420 ' + digits.slice(3, 6) + ' ' + digits.slice(6, 9) + ' ' + digits.slice(9, 12);
 }
 
 /**
