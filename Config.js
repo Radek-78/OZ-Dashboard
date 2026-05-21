@@ -3,7 +3,7 @@
   appSubtitle: '',
   logoFileId: '18mu_Lq1F_FqqSZcolMjLwG0aaQDPMdyD',
   logoUrl: 'https://drive.google.com/thumbnail?id=18mu_Lq1F_FqqSZcolMjLwG0aaQDPMdyD&sz=w320',
-  version: 'v0.12.0',
+  version: 'v0.13.0',
   theme: {
     blue: '#0050aa',
     darkBlue: '#002466',
@@ -16,6 +16,15 @@
 };
 
 const APP_CHANGELOG = [
+  {
+    version: 'v0.13.0',
+    date: '2026-05-21',
+    changes: [
+      'Sekce LC a Filiálky přesunuta do Nastavení se záložkami Logistická centra a Nastavení synchronizace',
+      'Přehled Filiálek v hlavním menu zůstává jako čistý přehled prodejen bez tabů',
+      'Správa LC (CRUD) nyní v sekci Nastavení → LC a Filiálky',
+    ],
+  },
   {
     version: 'v0.12.0',
     date: '2026-05-21',
