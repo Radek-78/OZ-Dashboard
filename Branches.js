@@ -382,8 +382,10 @@ function formatCzechPhone_(value) {
   if (!text) return '';
   let digits = text.replace(/\D/g, '');
   if (digits.startsWith('00420')) digits = digits.slice(2);
-  if (digits.length === 9) digits = '420' + digits;
-  if (digits.length !== 12 || !digits.startsWith('420')) return text;
+  let national = digits.startsWith('420') ? digits.slice(3) : digits;
+  if (national.startsWith('0')) national = national.slice(1);
+  if (national.length !== 9 || national.startsWith('0')) return text;
+  digits = '420' + national;
   return '+420 ' + digits.slice(3, 6) + ' ' + digits.slice(6, 9) + ' ' + digits.slice(9, 12);
 }
 
