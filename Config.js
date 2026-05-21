@@ -3,7 +3,7 @@
   appSubtitle: '',
   logoFileId: '18mu_Lq1F_FqqSZcolMjLwG0aaQDPMdyD',
   logoUrl: 'https://drive.google.com/thumbnail?id=18mu_Lq1F_FqqSZcolMjLwG0aaQDPMdyD&sz=w320',
-  version: 'v0.8.0',
+  version: 'v0.8.1',
   theme: {
     blue: '#0050aa',
     darkBlue: '#002466',
@@ -16,6 +16,16 @@
 };
 
 const APP_CHANGELOG = [
+  {
+    version: 'v0.8.1',
+    date: '2026-05-21',
+    changes: [
+      'Přesunuto nastavení zdrojové složky filiálek do Nastavení > Filiálky',
+      'Záložka Filiálky nyní zobrazuje pouze přehled prodejen',
+      'Zkompaktněna statistika filiálek v přehledu',
+      'Pole zdrojové složky filiálek nově přijímá ID i celou Drive URL',
+    ],
+  },
   {
     version: 'v0.8.0',
     date: '2026-05-21',
