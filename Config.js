@@ -3,7 +3,7 @@
   appSubtitle: '',
   logoFileId: '18mu_Lq1F_FqqSZcolMjLwG0aaQDPMdyD',
   logoUrl: 'https://drive.google.com/thumbnail?id=18mu_Lq1F_FqqSZcolMjLwG0aaQDPMdyD&sz=w320',
-  version: 'v0.13.2',
+  version: 'v0.14.0',
   theme: {
     blue: '#0050aa',
     darkBlue: '#002466',
@@ -16,6 +16,15 @@
 };
 
 const APP_CHANGELOG = [
+  {
+    version: 'v0.14.0',
+    date: '2026-05-21',
+    changes: [
+      'Přidána subaplikace Vyhodnocení odpisů akčních artiklů',
+      'Dlaždice s URL ve tvaru #viewName otevírá subapp přímo v dashboardu',
+      'Přidán server-side modul Odpisy.js pro zpracování tří zdrojových souborů z Drive',
+    ],
+  },
   {
     version: 'v0.13.2',
     date: '2026-05-21',
