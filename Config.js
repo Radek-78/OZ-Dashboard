@@ -3,7 +3,7 @@
   appSubtitle: '',
   logoFileId: '18mu_Lq1F_FqqSZcolMjLwG0aaQDPMdyD',
   logoUrl: 'https://drive.google.com/thumbnail?id=18mu_Lq1F_FqqSZcolMjLwG0aaQDPMdyD&sz=w320',
-  version: 'v0.7.2',
+  version: 'v0.8.0',
   theme: {
     blue: '#0050aa',
     darkBlue: '#002466',
@@ -16,6 +16,16 @@
 };
 
 const APP_CHANGELOG = [
+  {
+    version: 'v0.8.0',
+    date: '2026-05-21',
+    changes: [
+      'Přidána záložka Filiálky s přehledem prodejen, LC, VT a RM',
+      'Přidána synchronizace filiálek z nejnovějšího Google Sheet souboru ve zdrojové složce',
+      'Přidána infrastruktura první subaplikace Vyhodnocení odpisů akčních artiklů včetně vlastního Drive prostoru',
+      'Rozšířeno databázové schéma o list FILIALKY a oprávnění branches.view / branches.sync',
+    ],
+  },
   {
     version: 'v0.7.2',
     date: '2026-05-16',
