@@ -9,13 +9,13 @@
 var SUBAPP_STATUSES = ['ACTIVE', 'PREPARING', 'DISABLED'];
 
 /**
- * Mapa klíčů interních subaplikací na jejich interní view URL.
+ * Mapa interních subaplikací: normalizovaný název (bez diakritiky, bez mezer) → interní view URL.
  * Tyto URL jsou spravovány kódem — uživatel je nenastavuje ručně.
  * Přidejte každou novou interní subaplikaci sem.
  */
-var INTERNAL_SUBAPP_URLS = {
-  'VYHODNOCENI_ODPISU_AKCNICH_ARTIKLU': '#odpisyPage',
-};
+var INTERNAL_SUBAPP_URLS = [
+  { nameContains: 'vyhodnoceniodpisuakcnich', url: '#odpisyPage' },
+];
 
 // ---------------------------------------------------------------------------
 // Veřejné API endpointy
@@ -207,7 +207,7 @@ function listDashboardSubApps_(spreadsheet, auth) {
         updated:     item.lastUpdatedAt
                        ? 'Aktualizováno: ' + item.lastUpdatedAt
                        : 'Aktualizace zatím není uvedena',
-        targetUrl:   INTERNAL_SUBAPP_URLS[accessKey] || item.targetUrl,
+        targetUrl:   resolveInternalSubAppUrl_(item.name, item.targetUrl),
         enabled:     enabled,
         accent:      item.status === 'ACTIVE' ? 'blue' : (item.status === 'PREPARING' ? 'red' : 'muted'),
         accessLevel: userAccess[accessKey] || null,
@@ -320,7 +320,24 @@ function buildSubAppRow_(headers, data, original, now) {
 // ---------------------------------------------------------------------------
 
 /**
+ * Vrátí interní URL pro dlaždici dle jejího názvu, nebo ponechá původní targetUrl.
+ * @param {string} name - název dlaždice
+ * @param {string} currentUrl - stávající targetUrl z DB
+ * @returns {string}
+ */
+function resolveInternalSubAppUrl_(name, currentUrl) {
+  var normalized = removeDiacritics_(String(name || ''));
+  for (var i = 0; i < INTERNAL_SUBAPP_URLS.length; i++) {
+    if (normalized.indexOf(INTERNAL_SUBAPP_URLS[i].nameContains) >= 0) {
+      return INTERNAL_SUBAPP_URLS[i].url;
+    }
+  }
+  return currentUrl || '';
+}
+
+/**
  * Zapíše správnou targetUrl pro všechny interní subaplikace v SUBAPPS listu.
+ * Shoda probíhá dle normalizovaného názvu dlaždice (bez diakritiky, bez mezer).
  * Idempotentní — zapíše pouze pokud se hodnota v DB liší od očekávané.
  * Voláno při inicializaci aplikace z getInitData().
  * @param {Spreadsheet} spreadsheet
@@ -329,19 +346,18 @@ function ensureInternalSubAppUrls_(spreadsheet) {
   const sheet = spreadsheet.getSheetByName('SUBAPPS');
   if (!sheet || sheet.getLastRow() < 2) return;
 
-  const values = sheet.getDataRange().getValues();
+  const values  = sheet.getDataRange().getValues();
   const headers = values[0];
-  const keyIdx = headers.indexOf('key');
-  const urlIdx = headers.indexOf('targetUrl');
-  if (keyIdx < 0 || urlIdx < 0) return;
+  const nameIdx = headers.indexOf('name');
+  const urlIdx  = headers.indexOf('targetUrl');
+  if (nameIdx < 0 || urlIdx < 0) return;
 
   for (var row = 1; row < values.length; row++) {
-    var key = String(values[row][keyIdx] || '').trim().toUpperCase();
-    var expectedUrl = INTERNAL_SUBAPP_URLS[key];
-    if (!expectedUrl) continue;
-    var currentUrl = String(values[row][urlIdx] || '').trim();
-    if (currentUrl === expectedUrl) continue;
+    var name        = String(values[row][nameIdx] || '');
+    var currentUrl  = String(values[row][urlIdx]  || '').trim();
+    var expectedUrl = resolveInternalSubAppUrl_(name, '');
+    if (!expectedUrl || currentUrl === expectedUrl) continue;
     sheet.getRange(row + 1, urlIdx + 1).setValue(expectedUrl);
-    Logger.log('[SUBAPP_URL_MIGRATED] key=%s url=%s', key, expectedUrl);
+    Logger.log('[SUBAPP_URL_MIGRATED] name=%s url=%s', name, expectedUrl);
   }
 }
