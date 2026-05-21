@@ -73,7 +73,7 @@ const App = {
 
   /** Stavové objekty pro jednotlivé sekce nastavení */
   branchesState:    { branches: [], lcs: [], stats: {}, sync: {}, canSync: false },
-  lcBranchesTab:    'branches',
+  lcBranchesTab:    'lc',
   branchesFilter:   { query: '', sort: { col: null, dir: 'asc' }, colFilters: {}, quick: { lc: '', vt: '', rm: '' } },
   _branchColMenuCurrentCol: null,
   _branchColMenuCloseHandler: null,
@@ -138,8 +138,8 @@ const App = {
       button.addEventListener('click', () => {
         const section = button.dataset.section || 'home';
         this.setActiveNav(section);
-        if (section === 'branches')    { this.showView('branches');    this.loadBranches();      return; }
-        if (section === 'branchSettings') { this.showView('branchSettings'); this.loadBranches(); return; }
+        if (section === 'branches')   { this.showView('branches');   this.loadBranches(); return; }
+        if (section === 'lcBranches') { this.showView('lcBranches'); this.loadBranches(); return; }
         if (section === 'users')       { this.showView('users');       this.renderUserOptions(); this.renderUsers(); return; }
         if (section === 'locations')   { this.showView('locations');   this.renderLocations();   return; }
         if (section === 'departments') { this.showView('departments'); this.renderDepartments(); return; }
@@ -220,8 +220,8 @@ const App = {
     // LC a Filiálky — přepínání záložek
     document.querySelectorAll('.lc-tab').forEach((btn) => {
       btn.addEventListener('click', () => {
-        this.lcBranchesTab = btn.dataset.lcTab || 'branches';
-        this.renderBranches();
+        this.lcBranchesTab = btn.dataset.lcTab || 'lc';
+        this.renderLcBranchesSettings();
       });
     });
 
@@ -503,7 +503,7 @@ const App = {
     const pages = {
       home:        '#dashboardPage',
       branches:    '#branchesPage',
-      branchSettings: '#branchSettingsPage',
+      lcBranches:  '#lcBranchesPage',
       users:       '#usersPage',
       locations:   '#locationsPage',
       departments: '#departmentsPage',
@@ -613,7 +613,7 @@ const App = {
     this.callServer('getBranchesData')
       .then((data) => {
         this.applyBranchesState(data);
-        this.renderBranches();
+        this.renderCurrentSettingsView();
       })
       .catch((err) => this.toast(err.message || 'Nepodařilo se načíst filiálky.', 'error'));
   },
@@ -643,7 +643,7 @@ const App = {
     this.callServer('saveBranchesSourceFolder', { folderId })
       .then((data) => {
         this.applyBranchesState(data);
-        this.renderBranches();
+        this.renderLcBranchesSettings();
         this.toast('Zdrojová složka byla uložena.');
       })
       .catch((err) => this.toast(err.message || 'Zdrojovou složku se nepodařilo uložit.', 'error'));
@@ -653,7 +653,7 @@ const App = {
     this.callServer('syncBranchesFromLatestSource')
       .then((data) => {
         this.applyBranchesState(data);
-        this.renderBranches();
+        this.renderLcBranchesSettings();
         this.toast('Filiálky byly synchronizovány.');
       })
       .catch((err) => this.toast(err.message || 'Synchronizace filiálek selhala.', 'error'));
@@ -713,30 +713,6 @@ const App = {
   },
 
   renderBranches() {
-    const tab = this.lcBranchesTab || 'branches';
-
-    // ── Přepínač záložek ─────────────────────────────────────────────────────
-    document.querySelectorAll('.lc-tab').forEach((btn) =>
-      btn.classList.toggle('is-active', btn.dataset.lcTab === tab));
-    document.querySelectorAll('.lc-tab-panel').forEach((panel) =>
-      panel.classList.toggle('is-active', panel.id === (tab === 'lc' ? 'lcTabLc' : 'lcTabBranches')));
-
-    // ── Nástroje v hlavičce ───────────────────────────────────────────────────
-    const toolsBranches = document.querySelector('#branchesToolsBranches');
-    const toolsLc       = document.querySelector('#branchesToolsLc');
-    if (toolsBranches) toolsBranches.hidden = tab === 'lc';
-    if (toolsLc)       toolsLc.hidden       = tab !== 'lc';
-
-    // ── Záložka Logistická centra ─────────────────────────────────────────────
-    if (tab === 'lc') {
-      this.renderLcList();
-      return;
-    }
-
-    // ── Záložka Přehled filiálek ──────────────────────────────────────────────
-    const headSub = document.querySelector('#lcBranchesHeadSub');
-    if (headSub) headSub.innerHTML = '<strong id="branchesCount">0</strong> filiálek v hlavní databázi';
-
     const rows    = document.querySelector('#branchesRows');
     const empty   = document.querySelector('#branchesEmpty');
     const counter = document.querySelector('#branchesCount');
@@ -744,10 +720,8 @@ const App = {
 
     const branches = this.getFilteredBranches();
     if (counter) counter.textContent = String(branches.length);
-    this.renderBranchesSyncInfo();
     this.renderBranchesStats();
     this.renderBranchesQuickFilters();
-    this.renderBranchSettings();
     this.renderBranchesHeaders();
 
     if (!branches.length) {
@@ -775,6 +749,32 @@ const App = {
         <td>${this.escape(this.formatBranchHours(branch.sundayOpen, branch.sundayClose))}</td>
       </tr>
     `).join('');
+  },
+
+  renderLcBranchesSettings() {
+    const tab = this.lcBranchesTab || 'lc';
+
+    // ── Přepínač záložek ─────────────────────────────────────────────────────
+    document.querySelectorAll('.lc-tab').forEach((btn) =>
+      btn.classList.toggle('is-active', btn.dataset.lcTab === tab));
+    document.querySelectorAll('.lc-tab-panel').forEach((panel) =>
+      panel.classList.toggle('is-active', panel.id === (tab === 'lc' ? 'lcBranchesTabLc' : 'lcBranchesTabSync')));
+
+    // ── Nástroje v hlavičce ───────────────────────────────────────────────────
+    const toolsLc   = document.querySelector('#lcBranchesToolsLc');
+    const toolsSync = document.querySelector('#lcBranchesToolsSync');
+    if (toolsLc)   toolsLc.hidden   = tab !== 'lc';
+    if (toolsSync) toolsSync.hidden = tab !== 'sync';
+
+    // ── Obsah záložky ─────────────────────────────────────────────────────────
+    if (tab === 'lc') {
+      this.renderLcList();
+    } else {
+      const headSub = document.querySelector('#lcBranchesHeadSub');
+      if (headSub) headSub.textContent = 'Zdrojový přehled prodejen a automatická synchronizace';
+      this.renderBranchesSyncInfo();
+      this.renderBranchSettings();
+    }
   },
 
   renderBranchesSyncInfo() {
@@ -2328,12 +2328,12 @@ const App = {
   },
 
   renderCurrentSettingsView() {
-    if      (this.currentView === 'branches')    this.renderBranches();
-    else if (this.currentView === 'branchSettings') this.renderBranchSettings();
-    else if (this.currentView === 'users')       { this.renderUserOptions(); this.renderUsers(); }
-    else if (this.currentView === 'locations')   this.renderLocations();
+    if      (this.currentView === 'branches')   this.renderBranches();
+    else if (this.currentView === 'lcBranches') this.renderLcBranchesSettings();
+    else if (this.currentView === 'users')      { this.renderUserOptions(); this.renderUsers(); }
+    else if (this.currentView === 'locations')  this.renderLocations();
     else if (this.currentView === 'departments') this.renderDepartments();
-    else if (this.currentView === 'subapps')     this.renderSubApps();
+    else if (this.currentView === 'subapps')    this.renderSubApps();
   },
 
   // =========================================================================

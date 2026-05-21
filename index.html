@@ -48,12 +48,12 @@
         <nav class="navigation" aria-label="Hlavní navigace">
           <p>Přehled</p>
           <button class="nav-link is-active" type="button" data-section="home" data-tooltip="Přehled"><svg><use href="#i-home"></use></svg><span>Přehled</span></button>
-          <button class="nav-link" type="button" data-section="branches" data-tooltip="LC a Filiálky"><svg><use href="#i-store"></use></svg><span>LC a Filiálky</span></button>
+          <button class="nav-link" type="button" data-section="branches" data-tooltip="Filiálky"><svg><use href="#i-store"></use></svg><span>Filiálky</span></button>
           <div class="nav-group-item" aria-label="Nastavení"><svg><use href="#i-settings"></use></svg><span>Nastavení</span></div>
           <button class="nav-link nav-link-child" type="button" data-section="users" data-tooltip="Uživatelé"><svg><use href="#i-users"></use></svg><span>Uživatelé</span></button>
           <button class="nav-link nav-link-child" type="button" data-section="locations" data-tooltip="Umístění"><svg><use href="#i-map-pin"></use></svg><span>Umístění</span></button>
           <button class="nav-link nav-link-child" type="button" data-section="departments" data-tooltip="Úseky"><svg><use href="#i-list"></use></svg><span>Úseky</span></button>
-          <button class="nav-link nav-link-child" type="button" data-section="branchSettings" data-tooltip="Filiálky"><svg><use href="#i-branch-shelf"></use></svg><span>Filiálky</span></button>
+          <button class="nav-link nav-link-child" type="button" data-section="lcBranches" data-tooltip="LC a Filiálky"><svg><use href="#i-branch-shelf"></use></svg><span>LC a Filiálky</span></button>
           <button class="nav-link nav-link-child" type="button" data-section="subapps" data-tooltip="Dlaždice"><svg><use href="#i-layout"></use></svg><span>Dlaždice</span></button>
           <button class="nav-link nav-link-child" type="button" data-section="roles" data-tooltip="Role"><svg><use href="#i-user"></use></svg><span>Role</span></button>
         </nav>
@@ -101,58 +101,70 @@
             <div class="admin-panel-head">
               <span class="admin-panel-icon"><svg><use href="#i-store"></use></svg></span>
               <div class="admin-panel-title">
-                <h3>LC a Filiálky</h3>
-                <p id="lcBranchesHeadSub"><strong id="branchesCount">0</strong> filiálek v hlavní databázi</p>
+                <h3>Filiálky</h3>
+                <p><strong id="branchesCount">0</strong> filiálek v hlavní databázi</p>
               </div>
               <div class="branches-head-tools">
-                <div id="branchesToolsBranches">
-                  <input type="search" id="branchesSearch" class="branches-head-search" placeholder="Hledat filiálku, LC, VT nebo RM…" aria-label="Hledat filiálky" autocomplete="off">
-                  <div class="branches-summary" id="branchesStats"></div>
-                </div>
-                <div id="branchesToolsLc" hidden>
+                <input type="search" id="branchesSearch" class="branches-head-search" placeholder="Hledat filiálku, LC, VT nebo RM…" aria-label="Hledat filiálky" autocomplete="off">
+                <div class="branches-summary" id="branchesStats"></div>
+              </div>
+            </div>
+
+            <div class="branches-quick-filters" id="branchesQuickFilters"></div>
+            <div class="table-shell branches-table-shell">
+              <table class="users-table branches-table" aria-label="Přehled filiálek">
+                <thead>
+                  <tr>
+                    <th class="sortable" data-col="storeNumber">Číslo</th>
+                    <th class="sortable" data-col="storeName">Filiálka</th>
+                    <th class="sortable" data-col="lc">LC</th>
+                    <th class="sortable" data-col="storePhone">Telefon</th>
+                    <th class="sortable" data-col="vt">VT</th>
+                    <th class="sortable" data-col="rm">RM</th>
+                    <th class="sortable" data-col="rmPhone">Telefon RM</th>
+                    <th class="sortable" data-col="mondayOpen">Po</th>
+                    <th class="sortable" data-col="tuesdayOpen">Út</th>
+                    <th class="sortable" data-col="wednesdayOpen">St</th>
+                    <th class="sortable" data-col="thursdayOpen">Čt</th>
+                    <th class="sortable" data-col="fridayOpen">Pá</th>
+                    <th class="sortable" data-col="saturdayOpen">So</th>
+                    <th class="sortable" data-col="sundayOpen">Ne</th>
+                  </tr>
+                </thead>
+                <tbody id="branchesRows"></tbody>
+              </table>
+            </div>
+            <div class="empty-state users-empty" id="branchesEmpty" hidden>
+              <svg><use href="#i-store"></use></svg>
+              <strong>Filiálky zatím nejsou načtené</strong>
+              <span>Nastavte složku se zdrojovým přehledem v sekci LC a Filiálky a spusťte synchronizaci.</span>
+            </div>
+          </section>
+        </section>
+        <section class="page settings-page" id="lcBranchesPage" hidden>
+          <section class="admin-panel branches-panel">
+            <div class="admin-panel-head">
+              <span class="admin-panel-icon"><svg><use href="#i-branch-shelf"></use></svg></span>
+              <div class="admin-panel-title">
+                <h3>LC a Filiálky</h3>
+                <p id="lcBranchesHeadSub">Logistická centra a nastavení synchronizace</p>
+              </div>
+              <div class="branches-head-tools">
+                <div id="lcBranchesToolsLc" hidden>
                   <button type="button" class="button button-primary" data-action="create-lc"><svg><use href="#i-map-pin"></use></svg>Přidat LC</button>
+                </div>
+                <div id="lcBranchesToolsSync" hidden>
+                  <button class="button button-primary" type="button" data-action="sync-branches"><svg><use href="#i-download"></use></svg>Synchronizovat</button>
                 </div>
               </div>
             </div>
 
             <div class="lc-branches-tabs">
-              <button class="lc-tab is-active" type="button" data-lc-tab="branches"><svg><use href="#i-store"></use></svg><span>Přehled filiálek</span></button>
-              <button class="lc-tab" type="button" data-lc-tab="lc"><svg><use href="#i-map-pin"></use></svg><span>Logistická centra</span></button>
+              <button class="lc-tab is-active" type="button" data-lc-tab="lc"><svg><use href="#i-map-pin"></use></svg><span>Logistická centra</span></button>
+              <button class="lc-tab" type="button" data-lc-tab="sync"><svg><use href="#i-download"></use></svg><span>Nastavení synchronizace</span></button>
             </div>
 
-            <div id="lcTabBranches" class="lc-tab-panel is-active">
-              <div class="branches-quick-filters" id="branchesQuickFilters"></div>
-              <div class="table-shell branches-table-shell">
-                <table class="users-table branches-table" aria-label="Přehled filiálek">
-                  <thead>
-                    <tr>
-                      <th class="sortable" data-col="storeNumber">Číslo</th>
-                      <th class="sortable" data-col="storeName">Filiálka</th>
-                      <th class="sortable" data-col="lc">LC</th>
-                      <th class="sortable" data-col="storePhone">Telefon</th>
-                      <th class="sortable" data-col="vt">VT</th>
-                      <th class="sortable" data-col="rm">RM</th>
-                      <th class="sortable" data-col="rmPhone">Telefon RM</th>
-                      <th class="sortable" data-col="mondayOpen">Po</th>
-                      <th class="sortable" data-col="tuesdayOpen">Út</th>
-                      <th class="sortable" data-col="wednesdayOpen">St</th>
-                      <th class="sortable" data-col="thursdayOpen">Čt</th>
-                      <th class="sortable" data-col="fridayOpen">Pá</th>
-                      <th class="sortable" data-col="saturdayOpen">So</th>
-                      <th class="sortable" data-col="sundayOpen">Ne</th>
-                    </tr>
-                  </thead>
-                  <tbody id="branchesRows"></tbody>
-                </table>
-              </div>
-              <div class="empty-state users-empty" id="branchesEmpty" hidden>
-                <svg><use href="#i-store"></use></svg>
-                <strong>Filiálky zatím nejsou načtené</strong>
-                <span>Nastavte složku se zdrojovým přehledem a spusťte synchronizaci.</span>
-              </div>
-            </div>
-
-            <div id="lcTabLc" class="lc-tab-panel">
+            <div id="lcBranchesTabLc" class="lc-tab-panel is-active">
               <div class="table-shell lc-table-shell">
                 <table class="users-table lc-table" aria-label="Přehled logistických center">
                   <thead>
@@ -174,37 +186,26 @@
                 <span>Přidejte první LC kliknutím na tlačítko Přidat LC.</span>
               </div>
             </div>
-          </section>
-        </section>
-        <section class="page settings-page" id="branchSettingsPage" hidden>
-          <section class="admin-panel branches-panel">
-            <div class="admin-panel-head">
-              <span class="admin-panel-icon"><svg><use href="#i-briefcase"></use></svg></span>
-              <div class="admin-panel-title">
-                <h3>Nastavení filiálek</h3>
-                <p>Zdrojový přehled prodejen a automatická synchronizace</p>
-              </div>
-              <button class="button button-primary admin-add-user" type="button" data-action="sync-branches"><svg><use href="#i-download"></use></svg>Synchronizovat</button>
-            </div>
 
-            <div class="branches-sync-panel" id="branchesSyncPanel">
-              <div>
-                <span>Zdrojová složka</span>
-                <strong id="branchesSourceFolderLabel">Nenastaveno</strong>
+            <div id="lcBranchesTabSync" class="lc-tab-panel">
+              <div class="branches-sync-panel" id="branchesSyncPanel">
+                <div>
+                  <span>Zdrojová složka</span>
+                  <strong id="branchesSourceFolderLabel">Nenastaveno</strong>
+                </div>
+                <div>
+                  <span>Poslední synchronizace</span>
+                  <strong id="branchesLastSync">-</strong>
+                </div>
+                <div>
+                  <span>Zdrojový soubor</span>
+                  <strong id="branchesSourceFile">-</strong>
+                </div>
               </div>
-              <div>
-                <span>Poslední synchronizace</span>
-                <strong id="branchesLastSync">-</strong>
+              <div class="table-toolbar branch-settings-toolbar">
+                <input type="text" id="branchesSourceFolderId" class="table-search" placeholder="ID nebo URL složky se zdrojovým přehledem" aria-label="ID nebo URL složky se zdrojovým přehledem">
+                <button type="button" class="button button-secondary" data-action="save-branches-source"><svg><use href="#i-check"></use></svg>Uložit složku</button>
               </div>
-              <div>
-                <span>Zdrojový soubor</span>
-                <strong id="branchesSourceFile">-</strong>
-              </div>
-            </div>
-
-            <div class="table-toolbar branch-settings-toolbar">
-              <input type="text" id="branchesSourceFolderId" class="table-search" placeholder="ID nebo URL složky se zdrojovým přehledem" aria-label="ID nebo URL složky se zdrojovým přehledem">
-              <button type="button" class="button button-secondary" data-action="save-branches-source"><svg><use href="#i-check"></use></svg>Uložit složku</button>
             </div>
           </section>
         </section>
