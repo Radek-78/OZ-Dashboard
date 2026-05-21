@@ -3,7 +3,7 @@
   appSubtitle: '',
   logoFileId: '18mu_Lq1F_FqqSZcolMjLwG0aaQDPMdyD',
   logoUrl: 'https://drive.google.com/thumbnail?id=18mu_Lq1F_FqqSZcolMjLwG0aaQDPMdyD&sz=w320',
-  version: 'v0.9.3',
+  version: 'v0.9.4',
   theme: {
     blue: '#0050aa',
     darkBlue: '#002466',
@@ -16,6 +16,16 @@
 };
 
 const APP_CHANGELOG = [
+  {
+    version: 'v0.9.4',
+    date: '2026-05-21',
+    changes: [
+      'RM filtr filiálek vrácen do kompaktního rozevíracího seznamu',
+      'Výběr RM automaticky nastaví navázané VT a LC',
+      'Zhutněny okraje rychlých filtrů a hodnotového filtru sloupců',
+      'Barevně zvýrazněny nadpisy filtrů LC VT RM',
+    ],
+  },
   {
     version: 'v0.9.3',
     date: '2026-05-21',
