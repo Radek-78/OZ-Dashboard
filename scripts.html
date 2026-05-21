@@ -250,6 +250,24 @@ const App = {
       const filterInput = branchColMenu.querySelector('#branchColMenuFilter');
       if (filterInput) {
         filterInput.addEventListener('input', () => {
+          const query = filterInput.value.trim();
+          const col = this._branchColMenuCurrentCol;
+          if (col) {
+            if (query) {
+              const allValues = this.getBranchColumnValues(col);
+              const matched = allValues.filter((v) => v.toLowerCase().includes(query.toLowerCase()));
+              if (matched.length === 0) {
+                this.branchesFilter.colFilters[col] = [];
+              } else if (matched.length === allValues.length) {
+                delete this.branchesFilter.colFilters[col];
+              } else {
+                this.branchesFilter.colFilters[col] = matched;
+              }
+            } else {
+              delete this.branchesFilter.colFilters[col];
+            }
+            this.renderBranches();
+          }
           this.renderBranchColMenuValues(filterInput.value);
         });
       }

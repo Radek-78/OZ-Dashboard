@@ -29,6 +29,9 @@
       <symbol id="i-layout" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></symbol>
       <symbol id="i-download" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></symbol>
       <symbol id="i-filter" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></symbol>
+      <symbol id="i-store" viewBox="0 0 24 24" fill="currentColor"><path d="M1 3.393V10.5h1v11h5V17h2v4.5h13v-11h1V6.344zM20.5 20h-10v-4.5h-5V20h-2v-9.5h2v2h5v-2h10zM6.75 10a1.24 1.24 0 0 1 1.248-1.25A1.25 1.25 0 1 1 6.75 10M21.5 9h-11V7.5h-5V9h-3V5.107l19 2.55z"/></symbol>
+      <symbol id="i-map-pin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/><circle cx="12" cy="9" r="2.5"/></symbol>
+      <symbol id="i-branch-shelf" viewBox="0 0 24 24" fill="currentColor"><path d="M23 6V4.25A3.254 3.254 0 0 0 19.75 1H4.25A3.254 3.254 0 0 0 1 4.25V6h1.5v15.5h-.75V23h20.5v-1.5h-.75V6zM2.5 4.25c0-.965.785-1.75 1.75-1.75h15.5c.965 0 1.75.785 1.75 1.75v.25h-19zM20 16H4v-2h16zm0-3.5H4v-2h16zm-16 9v-4h16v4zM20 9H4V6h16z"/></symbol>
       <?!= include('icons'); ?>
     </svg>
 
@@ -45,14 +48,14 @@
         <nav class="navigation" aria-label="Hlavní navigace">
           <p>Přehled</p>
           <button class="nav-link is-active" type="button" data-section="home" data-tooltip="Přehled"><svg><use href="#i-home"></use></svg><span>Přehled</span></button>
-          <button class="nav-link" type="button" data-section="branches" data-tooltip="Filiálky"><svg><use href="#i-briefcase"></use></svg><span>Filiálky</span></button>
+          <button class="nav-link" type="button" data-section="branches" data-tooltip="Filiálky"><svg><use href="#i-store"></use></svg><span>Filiálky</span></button>
           <div class="nav-group-item" aria-label="Nastavení"><svg><use href="#i-settings"></use></svg><span>Nastavení</span></div>
           <button class="nav-link nav-link-child" type="button" data-section="users" data-tooltip="Uživatelé"><svg><use href="#i-users"></use></svg><span>Uživatelé</span></button>
-          <button class="nav-link nav-link-child" type="button" data-section="locations" data-tooltip="Umístění"><svg><use href="#i-briefcase"></use></svg><span>Umístění</span></button>
+          <button class="nav-link nav-link-child" type="button" data-section="locations" data-tooltip="Umístění"><svg><use href="#i-map-pin"></use></svg><span>Umístění</span></button>
           <button class="nav-link nav-link-child" type="button" data-section="departments" data-tooltip="Úseky"><svg><use href="#i-list"></use></svg><span>Úseky</span></button>
-          <button class="nav-link nav-link-child" type="button" data-section="branchSettings" data-tooltip="Filiálky"><svg><use href="#i-briefcase"></use></svg><span>Filiálky</span></button>
+          <button class="nav-link nav-link-child" type="button" data-section="branchSettings" data-tooltip="Filiálky"><svg><use href="#i-branch-shelf"></use></svg><span>Filiálky</span></button>
           <button class="nav-link nav-link-child" type="button" data-section="subapps" data-tooltip="Dlaždice"><svg><use href="#i-layout"></use></svg><span>Dlaždice</span></button>
-          <button class="nav-link nav-link-child" type="button" data-section="roles" data-tooltip="Role"><svg><use href="#i-settings"></use></svg><span>Role</span></button>
+          <button class="nav-link nav-link-child" type="button" data-section="roles" data-tooltip="Role"><svg><use href="#i-user"></use></svg><span>Role</span></button>
         </nav>
 
         <div class="team-panel">
