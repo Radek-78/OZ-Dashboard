@@ -73,7 +73,7 @@ const App = {
 
   /** Stavové objekty pro jednotlivé sekce nastavení */
   branchesState:    { branches: [], stats: {}, sync: {}, canSync: false },
-  branchesFilter:   { query: '', sort: { col: null, dir: 'asc' }, colFilters: {} },
+  branchesFilter:   { query: '', sort: { col: null, dir: 'asc' }, colFilters: {}, quick: { lc: '', vt: '', rm: '' } },
   _branchColMenuCurrentCol: null,
   _branchColMenuCloseHandler: null,
   locationsState:   { locations: [] },
@@ -224,7 +224,9 @@ const App = {
         if (!btn) return;
         const col = this._branchColMenuCurrentCol;
         const action = btn.dataset.colAction;
-        if (action === 'sort-asc' || action === 'sort-desc') {
+        if (action === 'close') {
+          this.closeBranchColMenu();
+        } else if (action === 'sort-asc' || action === 'sort-desc') {
           const dir = action === 'sort-asc' ? 'asc' : 'desc';
           const cur = this.branchesFilter.sort;
           this.branchesFilter.sort = (cur.col === col && cur.dir === dir)
@@ -234,22 +236,38 @@ const App = {
           this.renderBranches();
         } else if (action === 'clear') {
           delete this.branchesFilter.colFilters[col];
-          const input = branchColMenu.querySelector('#branchColMenuFilter');
-          if (input) input.value = '';
-          btn.hidden = true;
+          this.renderBranchColMenuValues('');
+          this.renderBranches();
+        } else if (action === 'select-all') {
+          delete this.branchesFilter.colFilters[col];
+          this.renderBranchColMenuValues('');
           this.renderBranches();
         }
       });
       const filterInput = branchColMenu.querySelector('#branchColMenuFilter');
       if (filterInput) {
         filterInput.addEventListener('input', () => {
+          this.renderBranchColMenuValues(filterInput.value);
+        });
+      }
+      const valuesWrap = branchColMenu.querySelector('#branchColMenuValues');
+      if (valuesWrap) {
+        valuesWrap.addEventListener('change', (e) => {
+          const checkbox = e.target.closest('[data-col-value]');
           const col = this._branchColMenuCurrentCol;
-          if (!col) return;
-          const val = filterInput.value;
-          this.branchesFilter.colFilters[col] = val;
-          const clearBtn = branchColMenu.querySelector('[data-col-action="clear"]');
-          if (clearBtn) clearBtn.hidden = !val.trim();
+          if (!checkbox || !col) return;
+          const allValues = this.getBranchColumnValues(col);
+          const current = this.branchesFilter.colFilters[col];
+          const selectedSet = new Set(Array.isArray(current) ? current : allValues);
+          valuesWrap.querySelectorAll('[data-col-value]').forEach((item) => {
+            if (item.checked) selectedSet.add(item.value);
+            else selectedSet.delete(item.value);
+          });
+          const selected = allValues.filter((value) => selectedSet.has(value));
+          if (selected.length === allValues.length) delete this.branchesFilter.colFilters[col];
+          else this.branchesFilter.colFilters[col] = selected;
           this.renderBranches();
+          this.renderBranchColMenuValues(branchColMenu.querySelector('#branchColMenuFilter')?.value || '');
         });
       }
     }
@@ -592,8 +610,13 @@ const App = {
   },
 
   getFilteredBranches() {
-    const { query, sort, colFilters } = this.branchesFilter;
+    const { query, sort, colFilters, quick } = this.branchesFilter;
     let rows = this.branchesState.branches || [];
+
+    ['lc', 'vt', 'rm'].forEach((col) => {
+      const selected = quick && quick[col] ? String(quick[col]) : '';
+      if (selected) rows = rows.filter((branch) => this.getBranchColDisplayValue(branch, col) === selected);
+    });
 
     if (query) {
       rows = rows.filter((branch) => {
@@ -606,9 +629,13 @@ const App = {
     }
 
     Object.entries(colFilters).forEach(([col, val]) => {
+      if (Array.isArray(val)) {
+        if (!val.length) return;
+        rows = rows.filter((branch) => val.includes(this.getBranchColDisplayValue(branch, col)));
+        return;
+      }
       const v = (val || '').trim().toLowerCase();
-      if (!v) return;
-      rows = rows.filter((branch) => this.getBranchColDisplayValue(branch, col).toLowerCase().includes(v));
+      if (v) rows = rows.filter((branch) => this.getBranchColDisplayValue(branch, col).toLowerCase().includes(v));
     });
 
     if (sort.col) {
@@ -645,6 +672,7 @@ const App = {
     if (counter) counter.textContent = String(branches.length);
     this.renderBranchesSyncInfo();
     this.renderBranchesStats();
+    this.renderBranchesQuickFilters();
     this.renderBranchSettings();
     this.renderBranchesHeaders();
 
@@ -708,6 +736,55 @@ const App = {
     `).join('');
   },
 
+  renderBranchesQuickFilters() {
+    const container = document.querySelector('#branchesQuickFilters');
+    if (!container) return;
+    const quick = this.branchesFilter.quick || {};
+    const lcValues = this.getBranchColumnValues('lc');
+    const vtValues = this.getBranchColumnValues('vt');
+    const rmValues = this.getBranchColumnValues('rm');
+
+    const renderChipGroup = (label, col, values, limit) => {
+      const visible = values.slice(0, limit);
+      const active = quick[col] || '';
+      return `
+        <div class="branch-filter-group">
+          <span>${this.escape(label)}</span>
+          <button type="button" class="branch-filter-chip${active ? '' : ' is-active'}" data-quick-col="${col}" data-quick-value="">Vše</button>
+          ${visible.map((value) => `
+            <button type="button" class="branch-filter-chip${active === value ? ' is-active' : ''}" data-quick-col="${col}" data-quick-value="${this.escape(value)}">${this.escape(value)}</button>
+          `).join('')}
+        </div>
+      `;
+    };
+
+    container.innerHTML = `
+      ${renderChipGroup('LC', 'lc', lcValues, 8)}
+      ${renderChipGroup('VT', 'vt', vtValues, 12)}
+      <div class="branch-filter-group branch-filter-group-rm">
+        <span>RM</span>
+        <select class="branch-filter-select" data-quick-select="rm" aria-label="Filtrovat podle RM">
+          <option value="">Všichni RM</option>
+          ${rmValues.map((value) => `<option value="${this.escape(value)}" ${quick.rm === value ? 'selected' : ''}>${this.escape(value)}</option>`).join('')}
+        </select>
+      </div>
+    `;
+
+    container.querySelectorAll('[data-quick-col]').forEach((button) => {
+      button.addEventListener('click', () => {
+        const col = button.dataset.quickCol;
+        this.branchesFilter.quick[col] = button.dataset.quickValue || '';
+        this.renderBranches();
+      });
+    });
+    container.querySelectorAll('[data-quick-select]').forEach((select) => {
+      select.addEventListener('change', () => {
+        this.branchesFilter.quick[select.dataset.quickSelect] = select.value;
+        this.renderBranches();
+      });
+    });
+  },
+
   formatBranchHours(open, close) {
     if (!open && !close) return '-';
     if (open && close) return open + '–' + close;
@@ -736,12 +813,13 @@ const App = {
     this._branchColMenuCurrentCol = col;
     const { sort, colFilters } = this.branchesFilter;
     const isSorted = sort.col === col;
-    const filterVal = colFilters[col] || '';
+    const filterVal = '';
+
+    const title = menu.querySelector('#branchColMenuTitle');
+    if (title) title.textContent = this.getBranchColumnLabel(col);
 
     const input = menu.querySelector('#branchColMenuFilter');
     if (input) input.value = filterVal;
-    const clearBtn = menu.querySelector('[data-col-action="clear"]');
-    if (clearBtn) clearBtn.hidden = !filterVal.trim();
 
     menu.querySelectorAll('[data-col-action="sort-asc"], [data-col-action="sort-desc"]').forEach((btn) => {
       const isAsc = btn.dataset.colAction === 'sort-asc';
@@ -752,6 +830,7 @@ const App = {
     menu.style.top = (rect.bottom + 4) + 'px';
     menu.style.left = rect.left + 'px';
     menu.hidden = false;
+    this.renderBranchColMenuValues('');
 
     const menuRect = menu.getBoundingClientRect();
     if (menuRect.right > window.innerWidth - 8) {
@@ -766,6 +845,65 @@ const App = {
       };
       document.addEventListener('mousedown', this._branchColMenuCloseHandler);
     }, 0);
+  },
+
+  renderBranchColMenuValues(searchValue) {
+    const menu = document.querySelector('#branchColMenu');
+    const valuesWrap = document.querySelector('#branchColMenuValues');
+    const col = this._branchColMenuCurrentCol;
+    if (!menu || !valuesWrap || !col) return;
+
+    const query = String(searchValue || '').trim().toLowerCase();
+    const values = this.getBranchColumnValues(col);
+    const selected = this.branchesFilter.colFilters[col];
+    const selectedValues = Array.isArray(selected) ? selected : [];
+    const hasExplicitSelection = Array.isArray(selected);
+    const filtered = values.filter((value) => !query || value.toLowerCase().includes(query));
+
+    valuesWrap.innerHTML = filtered.length
+      ? filtered.map((value) => {
+        const checked = !hasExplicitSelection || selectedValues.includes(value);
+        return `
+          <label class="branch-col-value">
+            <input type="checkbox" data-col-value value="${this.escape(value)}" ${checked ? 'checked' : ''}>
+            <span>${this.escape(value || '(prázdné)')}</span>
+          </label>
+        `;
+      }).join('')
+      : '<div class="branch-col-menu-empty">Žádná hodnota</div>';
+
+    const clearBtn = menu.querySelector('[data-col-action="clear"]');
+    if (clearBtn) clearBtn.disabled = !hasExplicitSelection;
+  },
+
+  getBranchColumnValues(col) {
+    const values = (this.branchesState.branches || [])
+      .map((branch) => this.getBranchColDisplayValue(branch, col))
+      .filter((value) => value !== '');
+    return Array.from(new Set(values)).sort((a, b) => {
+      if (col === 'storeNumber') return (parseInt(a, 10) || 0) - (parseInt(b, 10) || 0);
+      return a.localeCompare(b, 'cs');
+    });
+  },
+
+  getBranchColumnLabel(col) {
+    const labels = {
+      storeNumber: 'Číslo',
+      storeName: 'Filiálka',
+      lc: 'LC',
+      storePhone: 'Telefon',
+      vt: 'VT',
+      rm: 'RM',
+      rmPhone: 'Telefon RM',
+      mondayOpen: 'Pondělí',
+      tuesdayOpen: 'Úterý',
+      wednesdayOpen: 'Středa',
+      thursdayOpen: 'Čtvrtek',
+      fridayOpen: 'Pátek',
+      saturdayOpen: 'Sobota',
+      sundayOpen: 'Neděle',
+    };
+    return labels[col] || col;
   },
 
   closeBranchColMenu() {
