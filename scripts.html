@@ -1172,7 +1172,21 @@ const App = {
     const values = (this.branchesState.branches || [])
       .map((branch) => this.getBranchColDisplayValue(branch, col))
       .filter((value) => value !== '');
-    return Array.from(new Set(values)).sort((a, b) => {
+    const unique = Array.from(new Set(values));
+
+    // LC chipy řadíme dle číselného kódu LC (5, 6, 7...), ne abecedně
+    if (col === 'lc') {
+      const lcs = this.branchesState.lcs || [];
+      const codeByAbbr = {};
+      lcs.forEach((lc) => { if (lc.abbreviation) codeByAbbr[lc.abbreviation] = parseInt(lc.code, 10) || 0; });
+      return unique.sort((a, b) => {
+        const ca = codeByAbbr[a] !== undefined ? codeByAbbr[a] : 999;
+        const cb = codeByAbbr[b] !== undefined ? codeByAbbr[b] : 999;
+        return ca !== cb ? ca - cb : a.localeCompare(b, 'cs');
+      });
+    }
+
+    return unique.sort((a, b) => {
       if (col === 'storeNumber') return (parseInt(a, 10) || 0) - (parseInt(b, 10) || 0);
       return a.localeCompare(b, 'cs');
     });
