@@ -743,6 +743,7 @@ const App = {
     const lcValues = this.getBranchColumnValues('lc');
     const vtValues = this.getBranchColumnValues('vt');
     const rmValues = this.getBranchColumnValues('rm');
+    const relatedRmValues = this.getBranchRelatedQuickValues('rm');
 
     const renderChipGroup = (label, col, values) => {
       const active = quick[col] || '';
@@ -768,16 +769,55 @@ const App = {
     container.innerHTML = `
       ${renderChipGroup('LC', 'lc', lcValues)}
       ${renderChipGroup('VT', 'vt', vtValues)}
-      ${renderChipGroup('RM', 'rm', rmValues)}
+      <div class="branch-filter-group branch-filter-group-rm">
+        <span class="branch-filter-label">RM</span>
+        <select class="branch-filter-select${quick.rm ? ' is-active' : ''}" data-quick-select="rm" aria-label="Filtrovat podle RM">
+          <option value="">Všichni RM</option>
+          ${rmValues.map((value) => {
+            const related = relatedRmValues.has(value);
+            return `<option value="${this.escape(value)}" ${quick.rm === value ? 'selected' : ''}>${related ? '● ' : '○ '}${this.escape(value)}</option>`;
+          }).join('')}
+        </select>
+      </div>
     `;
 
     container.querySelectorAll('[data-quick-col]').forEach((button) => {
       button.addEventListener('click', () => {
         const col = button.dataset.quickCol;
-        this.branchesFilter.quick[col] = button.dataset.quickValue || '';
+        this.setBranchQuickFilter(col, button.dataset.quickValue || '');
         this.renderBranches();
       });
     });
+    container.querySelectorAll('[data-quick-select]').forEach((select) => {
+      select.addEventListener('change', () => {
+        this.setBranchQuickFilter(select.dataset.quickSelect, select.value || '');
+        this.renderBranches();
+      });
+    });
+  },
+
+  setBranchQuickFilter(col, value) {
+    const quick = this.branchesFilter.quick || (this.branchesFilter.quick = {});
+    quick[col] = value || '';
+    if (!value) return;
+
+    const rows = (this.branchesState.branches || []).filter((branch) => {
+      return this.getBranchColDisplayValue(branch, col) === value;
+    });
+    const firstUnique = (field) => {
+      const values = Array.from(new Set(rows.map((branch) => this.getBranchColDisplayValue(branch, field)).filter(Boolean)));
+      return values.length === 1 ? values[0] : '';
+    };
+
+    if (col === 'rm') {
+      const vt = firstUnique('vt');
+      const lc = firstUnique('lc');
+      if (vt) quick.vt = vt;
+      if (lc) quick.lc = lc;
+    } else if (col === 'vt') {
+      const lc = firstUnique('lc');
+      if (lc) quick.lc = lc;
+    }
   },
 
   getBranchRelatedQuickValues(col) {
