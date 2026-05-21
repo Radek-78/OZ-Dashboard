@@ -3,7 +3,7 @@
   appSubtitle: '',
   logoFileId: '18mu_Lq1F_FqqSZcolMjLwG0aaQDPMdyD',
   logoUrl: 'https://drive.google.com/thumbnail?id=18mu_Lq1F_FqqSZcolMjLwG0aaQDPMdyD&sz=w320',
-  version: 'v0.8.2',
+  version: 'v0.9.0',
   theme: {
     blue: '#0050aa',
     darkBlue: '#002466',
@@ -16,6 +16,16 @@
 };
 
 const APP_CHANGELOG = [
+  {
+    version: 'v0.9.0',
+    date: '2026-05-21',
+    changes: [
+      'Opraveno zobrazení otevíracích časů filiálek',
+      'Ve sloupci Číslo se zobrazuje jen číslo filiálky',
+      'Ukotvena hlavička tabulky filiálek při rolování',
+      'Přidáno řazení a filtrování po kliknutí na záhlaví sloupce',
+    ],
+  },
   {
     version: 'v0.8.2',
     date: '2026-05-21',
