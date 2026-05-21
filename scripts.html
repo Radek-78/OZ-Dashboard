@@ -76,6 +76,7 @@ const App = {
   branchesFilter:   { query: '', sort: { col: null, dir: 'asc' }, colFilters: {}, quick: { lc: '', vt: '', rm: '' } },
   _branchColMenuCurrentCol: null,
   _branchColMenuCloseHandler: null,
+  _branchRmDropdownClose: null,
   locationsState:   { locations: [] },
   departmentsState: { departments: [] },
   subAppsState:     { subApps: [] },
@@ -272,8 +273,19 @@ const App = {
       }
     }
     document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape') this.closeBranchColMenu();
+      if (e.key === 'Escape') {
+        this.closeBranchColMenu();
+        this.closeBranchRmDropdown();
+      }
     });
+
+    const branchRmDropdown = document.querySelector('#branchRmDropdown');
+    if (branchRmDropdown) {
+      const rmSearch = branchRmDropdown.querySelector('#branchRmSearch');
+      if (rmSearch) {
+        rmSearch.addEventListener('input', () => this.renderBranchRmDropdownList(rmSearch.value));
+      }
+    }
 
     // Umístění
     const createLocation = document.querySelector('[data-action="create-location"]');
@@ -741,8 +753,6 @@ const App = {
     const quick = this.branchesFilter.quick || {};
     const lcValues = this.getBranchColumnValues('lc');
     const vtValues = this.getBranchColumnValues('vt');
-    const rmValues = this.getBranchColumnValues('rm');
-    const relatedRmValues = this.getBranchRelatedQuickValues('rm');
 
     const renderChipGroup = (label, col, values) => {
       const active = quick[col] || '';
@@ -776,13 +786,11 @@ const App = {
       <div class="branch-filter-group branch-filter-group-rm">
         <span class="branch-filter-label">RM</span>
         <div class="branch-filter-control">
-          <select class="branch-filter-select${quick.rm ? ' is-active' : ''}" data-quick-select="rm" aria-label="Filtrovat podle RM">
-            <option value="">Všichni RM</option>
-            ${rmValues.map((value) => {
-              const related = relatedRmValues.has(value);
-              return `<option value="${this.escape(value)}" ${quick.rm === value ? 'selected' : ''}>${related ? '● ' : '○ '}${this.escape(value)}</option>`;
-            }).join('')}
-          </select>
+          <button type="button" class="branch-rm-trigger${quick.rm ? ' is-active' : ''}" data-action="open-rm-dropdown">
+            ${quick.rm ? this.formatBranchQuickFilterLabel('rm', quick.rm) : '<span>Všichni RM</span>'}
+            <svg class="branch-rm-arrow" viewBox="0 0 10 6" fill="none" aria-hidden="true"><path d="M1 1l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+          ${quick.rm ? '<button type="button" class="branch-rm-clear" data-action="clear-rm" title="Vymazat filtr RM">×</button>' : ''}
         </div>
       </div>
     `;
@@ -794,11 +802,13 @@ const App = {
         this.renderBranches();
       });
     });
-    container.querySelectorAll('[data-quick-select]').forEach((select) => {
-      select.addEventListener('change', () => {
-        this.setBranchQuickFilter(select.dataset.quickSelect, select.value || '');
-        this.renderBranches();
-      });
+    const rmTrigger = container.querySelector('[data-action="open-rm-dropdown"]');
+    if (rmTrigger) rmTrigger.addEventListener('click', () => this.openBranchRmDropdown(rmTrigger));
+    const clearRm = container.querySelector('[data-action="clear-rm"]');
+    if (clearRm) clearRm.addEventListener('click', () => {
+      this.setBranchQuickFilter('rm', '');
+      this.closeBranchRmDropdown();
+      this.renderBranches();
     });
   },
 
@@ -983,6 +993,67 @@ const App = {
       this._branchColMenuCloseHandler = null;
     }
     this._branchColMenuCurrentCol = null;
+  },
+
+  openBranchRmDropdown(trigger) {
+    const dropdown = document.querySelector('#branchRmDropdown');
+    if (!dropdown) return;
+    if (!dropdown.hidden) { this.closeBranchRmDropdown(); return; }
+    const rect = trigger.getBoundingClientRect();
+    dropdown.style.top = (rect.bottom + 4) + 'px';
+    dropdown.style.left = rect.left + 'px';
+    dropdown.hidden = false;
+    this.renderBranchRmDropdownList('');
+    const search = dropdown.querySelector('#branchRmSearch');
+    if (search) { search.value = ''; search.focus(); }
+    const menuRect = dropdown.getBoundingClientRect();
+    if (menuRect.right > window.innerWidth - 8) {
+      dropdown.style.left = Math.max(8, rect.right - menuRect.width) + 'px';
+    }
+    setTimeout(() => {
+      this._branchRmDropdownClose = (e) => {
+        if (!dropdown.contains(e.target) && e.target !== trigger) this.closeBranchRmDropdown();
+      };
+      document.addEventListener('mousedown', this._branchRmDropdownClose);
+    }, 0);
+  },
+
+  renderBranchRmDropdownList(search) {
+    const list = document.querySelector('#branchRmList');
+    if (!list) return;
+    const query = (search || '').toLowerCase();
+    const values = this.getBranchColumnValues('rm');
+    const related = this.getBranchRelatedQuickValues('rm');
+    const quick = this.branchesFilter.quick || {};
+    const hasContext = !!(quick.lc || quick.vt);
+    const filtered = query ? values.filter((v) => v.toLowerCase().includes(query)) : values;
+    list.innerHTML = `
+      <button class="branch-rm-item${!quick.rm ? ' is-active' : ''}" data-rm-value=""><span>Všichni RM</span></button>
+      ${filtered.map((value) => {
+        const stateClass = quick.rm === value ? ' is-active'
+          : (hasContext ? (related.has(value) ? ' is-related' : ' is-unrelated') : '');
+        return `<button class="branch-rm-item${stateClass}" data-rm-value="${this.escape(value)}">${this.formatBranchQuickFilterLabel('rm', value)}</button>`;
+      }).join('')}
+    `;
+    list.querySelectorAll('[data-rm-value]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        this.setBranchQuickFilter('rm', btn.dataset.rmValue || '');
+        this.closeBranchRmDropdown();
+        this.renderBranches();
+      });
+    });
+    // Scroll active into view
+    const active = list.querySelector('.is-active');
+    if (active) active.scrollIntoView({ block: 'nearest' });
+  },
+
+  closeBranchRmDropdown() {
+    const dropdown = document.querySelector('#branchRmDropdown');
+    if (dropdown) dropdown.hidden = true;
+    if (this._branchRmDropdownClose) {
+      document.removeEventListener('mousedown', this._branchRmDropdownClose);
+      this._branchRmDropdownClose = null;
+    }
   },
 
   extractDriveFolderId(value) {

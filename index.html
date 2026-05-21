@@ -608,13 +608,22 @@
       </form>
     </dialog>
 
+    <div id="branchRmDropdown" class="branch-rm-dropdown" hidden>
+      <div class="branch-rm-dropdown-top">
+        <input type="search" id="branchRmSearch" class="branch-rm-search" placeholder="Hledat RM…" autocomplete="off">
+      </div>
+      <div id="branchRmList" class="branch-rm-list"></div>
+    </div>
+
     <div id="branchColMenu" class="branch-col-menu" hidden role="menu" aria-label="Možnosti sloupce">
       <div class="branch-col-menu-head">
         <strong id="branchColMenuTitle">Filtr</strong>
         <button type="button" class="branch-col-menu-x" data-col-action="close" aria-label="Zavřít">×</button>
       </div>
-      <button class="branch-col-menu-opt" data-col-action="sort-asc">Seřadit A → Z</button>
-      <button class="branch-col-menu-opt" data-col-action="sort-desc">Seřadit Z → A</button>
+      <div class="branch-col-menu-sorts">
+        <button class="branch-col-menu-opt" data-col-action="sort-asc">↑ A → Z</button>
+        <button class="branch-col-menu-opt" data-col-action="sort-desc">↓ Z → A</button>
+      </div>
       <div class="branch-col-menu-sep"></div>
       <div class="branch-col-menu-filter-wrap">
         <input type="text" id="branchColMenuFilter" class="branch-col-menu-input" placeholder="Hledat hodnotu…" autocomplete="off">
