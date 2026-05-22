@@ -3,7 +3,7 @@
   appSubtitle: '',
   logoFileId: '18mu_Lq1F_FqqSZcolMjLwG0aaQDPMdyD',
   logoUrl: 'https://drive.google.com/thumbnail?id=18mu_Lq1F_FqqSZcolMjLwG0aaQDPMdyD&sz=w320',
-  version: 'v0.16.0',
+  version: 'v0.16.1',
   theme: {
     blue: '#0050aa',
     darkBlue: '#002466',
@@ -16,6 +16,19 @@
 };
 
 const APP_CHANGELOG = [
+  {
+    version: 'v0.16.1',
+    date: '2026-05-22',
+    changes: [
+      'Tooltip akčních artiklů je interaktivní — kurzor může vjet do plochy a scrollovat seznam',
+      'Tooltip doplněn o sloupec se statusem artiklu (W nebo WW)',
+      'Záhlaví tabulky ukotveno jako celek, obě řady záhlaví se při posouvání nepohybují',
+      'Footer tabulky pevně ukotven, pod data neprojíždí',
+      'Svislé oddělovače v tmavém řádku záhlaví jsou viditelné',
+      'Hodnoty v peněžních sloupcích jsou vycentrovány',
+      'Přejezd řádku žlutou barvou nepřepisuje červené zvýraznění ve sloupcích procent',
+    ],
+  },
   {
     version: 'v0.16.0',
     date: '2026-05-22',
