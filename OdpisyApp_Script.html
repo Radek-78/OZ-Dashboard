@@ -224,9 +224,117 @@
       form.innerHTML = `
         <input type="text" id="odpisyFolderInput" placeholder="ID nebo URL složky odpisů" value="${this.escape(state.folderId || '')}">
         <button type="button" id="odpisyFolderSave">Uložit složku</button>
+        <button type="button" id="odpisyDebugLoad" class="odpisy-debug-button">Debug Telex</button>
       `;
       host.appendChild(form);
       form.querySelector('#odpisyFolderSave').addEventListener('click', () => this.saveFolder());
+      form.querySelector('#odpisyDebugLoad').addEventListener('click', () => this.loadDebugData(host));
+    },
+
+    loadDebugData(host) {
+      const target = host || document.querySelector('#odpisyTableFrame') || document.querySelector('#odpisyStateBox');
+      let panel = document.querySelector('#odpisyDebugPanel');
+      if (!panel) {
+        panel = document.createElement('section');
+        panel.id = 'odpisyDebugPanel';
+        panel.className = 'odpisy-debug-panel';
+        target.appendChild(panel);
+      }
+      panel.innerHTML = '<strong>Načítám diagnostiku Telexu...</strong>';
+      this.callServer('getOdpisyDebugData')
+        .then((data) => {
+          panel.innerHTML = this.renderDebugData(data || {});
+        })
+        .catch((err) => {
+          panel.innerHTML = `<strong>Debug se nepodařil</strong><p>${this.escape(err && err.message ? err.message : String(err))}</p>`;
+        });
+    },
+
+    renderDebugData(data) {
+      const files = (data.files || []).map((file) => `
+        <tr>
+          <td>${this.escape(file.kind || '')}</td>
+          <td>${this.escape(file.name || '')}</td>
+          <td>${this.escape(file.mimeType || '')}</td>
+          <td>${this.escape(file.sheetName || '')}</td>
+          <td class="num">${this.escape(file.rows || 0)}</td>
+          <td class="num">${this.escape(file.columns || 0)}</td>
+          <td>${this.escape(file.a1 || '')}</td>
+          <td>${this.escape(file.error || '')}</td>
+        </tr>
+      `).join('');
+
+      if (data.error || !data.telex) {
+        return `
+          <h2>Debug Telex</h2>
+          <p class="odpisy-debug-error">${this.escape(data.error || 'Telex diagnostika není dostupná.')}</p>
+          ${this.renderDebugFilesTable(files)}
+        `;
+      }
+
+      const telex = data.telex;
+      const actionColumn = telex.actionColumn
+        ? `${telex.actionColumn.col}: ${this.escape(telex.actionColumn.rawHeader || '')} → ${this.escape(telex.actionColumn.normalizedHeader || '')}`
+        : 'nenalezen';
+      const pluColumn = telex.pluColumn
+        ? `${telex.pluColumn.col}: ${this.escape(telex.pluColumn.rawHeader || '')} → ${this.escape(telex.pluColumn.normalizedHeader || '')}`
+        : 'nenalezen';
+
+      const scores = (telex.columnScores || []).map((col) => `
+        <tr>
+          <td class="num">${this.escape(col.col)}</td>
+          <td>${this.escape(col.rawHeader || '')}</td>
+          <td>${this.escape(col.normalizedHeader || '')}</td>
+          <td class="num">${this.escape(col.actionFlagCount || 0)}</td>
+          <td class="num">${this.escape(col.nonEmptyCount || 0)}</td>
+          <td>${this.escape((col.samples || []).join(' | '))}</td>
+        </tr>
+      `).join('');
+
+      const preview = (telex.previewRows || []).map((row, rowIndex) => `
+        <tr>
+          <th>${rowIndex + 1}</th>
+          ${row.map((cell) => `<td>${this.escape(cell)}</td>`).join('')}
+        </tr>
+      `).join('');
+
+      return `
+        <h2>Debug Telex</h2>
+        <div class="odpisy-debug-grid">
+          <span>Soubor <strong>${this.escape(telex.sourceName || '')}</strong></span>
+          <span>Rozměr <strong>${this.escape(telex.rows || 0)} × ${this.escape(telex.columns || 0)}</strong></span>
+          <span>Řádek hlavičky <strong>${this.escape(telex.headerRow || 'nenalezen')}</strong></span>
+          <span>Sloupec W/WW <strong>${actionColumn}</strong></span>
+          <span>Sloupec PLU <strong>${pluColumn}</strong></span>
+          <span>Akční PLU <strong>${this.escape(telex.akcniPluCount || 0)}</strong></span>
+        </div>
+        <p class="odpisy-debug-note">Hledané hlavičky: ${this.escape((telex.searchedHeaderKeywords || []).join(', '))}</p>
+        <p class="odpisy-debug-note">Ukázky akčních PLU: ${this.escape((telex.akcniPluSamples || []).join(', ') || '-')}</p>
+        ${this.renderDebugFilesTable(files)}
+        <h3>Skóre sloupců podle hodnot W/WW</h3>
+        <div class="odpisy-debug-scroll">
+          <table class="odpisy-debug-table">
+            <thead><tr><th>Sl.</th><th>Hlavička</th><th>Normalizace</th><th>W/WW</th><th>Neprázdné</th><th>Ukázky</th></tr></thead>
+            <tbody>${scores || '<tr><td colspan="6">Žádné kandidátní sloupce.</td></tr>'}</tbody>
+          </table>
+        </div>
+        <h3>Náhled prvních řádků Telexu</h3>
+        <div class="odpisy-debug-scroll">
+          <table class="odpisy-debug-preview"><tbody>${preview}</tbody></table>
+        </div>
+      `;
+    },
+
+    renderDebugFilesTable(rows) {
+      return `
+        <h3>Soubory ve zdrojové složce</h3>
+        <div class="odpisy-debug-scroll">
+          <table class="odpisy-debug-table">
+            <thead><tr><th>Typ</th><th>Název</th><th>MIME</th><th>List</th><th>Řádky</th><th>Sloupce</th><th>A1</th><th>Poznámka</th></tr></thead>
+            <tbody>${rows || '<tr><td colspan="8">Žádné soubory.</td></tr>'}</tbody>
+          </table>
+        </div>
+      `;
     },
 
     saveFolder() {

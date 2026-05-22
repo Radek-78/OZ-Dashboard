@@ -354,6 +354,89 @@
     cursor: pointer;
   }
 
+  .odpisy-config-inline .odpisy-debug-button {
+    background: #17233b;
+  }
+
+  .odpisy-debug-panel {
+    margin: 14px;
+    padding: 14px;
+    border: 1px solid #bac7d8;
+    border-radius: 6px;
+    background: #f8fbff;
+    color: #10213d;
+    font-size: 12px;
+  }
+
+  .odpisy-debug-panel h2,
+  .odpisy-debug-panel h3 {
+    margin: 0 0 10px;
+    color: #102f61;
+  }
+
+  .odpisy-debug-panel h3 {
+    margin-top: 14px;
+    font-size: 13px;
+  }
+
+  .odpisy-debug-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+    margin-bottom: 10px;
+  }
+
+  .odpisy-debug-grid span,
+  .odpisy-debug-note {
+    padding: 8px;
+    border: 1px solid #d6e0ee;
+    border-radius: 5px;
+    background: #fff;
+  }
+
+  .odpisy-debug-note {
+    margin: 6px 0;
+  }
+
+  .odpisy-debug-error {
+    color: var(--lidl-red);
+    font-weight: 800;
+  }
+
+  .odpisy-debug-scroll {
+    overflow: auto;
+    max-height: 360px;
+    border: 1px solid #d6e0ee;
+    background: #fff;
+  }
+
+  .odpisy-debug-table,
+  .odpisy-debug-preview {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 11px;
+  }
+
+  .odpisy-debug-table th,
+  .odpisy-debug-table td,
+  .odpisy-debug-preview th,
+  .odpisy-debug-preview td {
+    padding: 5px 7px;
+    border: 1px solid #e2e8f2;
+    text-align: left;
+    vertical-align: top;
+    white-space: nowrap;
+  }
+
+  .odpisy-debug-table th,
+  .odpisy-debug-preview th {
+    position: sticky;
+    top: 0;
+    background: #edf3fb;
+    color: #17386e;
+    z-index: 1;
+  }
+
   @media (max-width: 900px) {
     .odpisy-standalone {
       padding: 10px;
@@ -386,6 +469,10 @@
     .odpisy-summary-strip {
       align-items: flex-start;
       flex-direction: column;
+    }
+
+    .odpisy-debug-grid {
+      grid-template-columns: 1fr;
     }
   }
 </style>

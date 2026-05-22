@@ -29,6 +29,56 @@ function getOdpisyData() {
 }
 
 /**
+ * Vrátí diagnostiku načtení Telex souboru pro ladění akčních artiklů.
+ * Přístup: branches.sync (správce zdrojové složky).
+ * @returns {Object}
+ */
+function getOdpisyDebugData() {
+  const context = requirePermission_('branches.sync');
+  const props = PropertiesService.getScriptProperties();
+  const folderId = props.getProperty(ODPISY_SOURCE_FOLDER_ID_PROP) || '';
+  if (!folderId) {
+    return { configured: false, folderId: '', files: [], telex: null, error: 'Zdrojová složka odpisů není nastavena.' };
+  }
+
+  try {
+    const filesDebug = listOdpisySourceFilesDebug_(folderId);
+    const files = findOdpisyFiles_(folderId);
+    if (!files.telex) {
+      return {
+        configured: true,
+        folderId: folderId,
+        files: filesDebug,
+        telex: null,
+        error: 'Ve složce nebyl rozpoznán Telex soubor.',
+      };
+    }
+
+    const sheet = files.telex.spreadsheet.getSheets()[0];
+    const data = readOdpisySheetValues_(sheet);
+    const displayRows = readOdpisySheetDisplayPreview_(sheet, 18, 40);
+    const debug = buildOdpisyTelexDebug_(data, displayRows, files.telex.name);
+    return {
+      configured: true,
+      folderId: folderId,
+      files: filesDebug,
+      telex: debug,
+      error: null,
+      generatedAt: new Date().toISOString(),
+    };
+  } catch (e) {
+    Logger.log('[ODPISY_DEBUG_ERROR] %s', e && e.message ? e.message : e);
+    return {
+      configured: true,
+      folderId: folderId,
+      files: [],
+      telex: null,
+      error: e && e.message ? e.message : String(e),
+    };
+  }
+}
+
+/**
  * Uloží ID složky se zdrojovými soubory odpisů.
  * @param {{ folderId: string }} payload
  * @returns {Object}
@@ -265,6 +315,56 @@ function findOdpisyFiles_(folderId) {
 }
 
 /**
+ * Vrátí diagnostický seznam všech souborů ve zdrojové složce.
+ * @param {string} folderId
+ * @returns {Object[]}
+ */
+function listOdpisySourceFilesDebug_(folderId) {
+  const folder = DriveApp.getFolderById(folderId);
+  const files = folder.getFiles();
+  const result = [];
+
+  while (files.hasNext()) {
+    const file = files.next();
+    const info = {
+      name: file.getName(),
+      id: file.getId(),
+      mimeType: file.getMimeType(),
+      updatedAt: file.getLastUpdated().toISOString(),
+      kind: '',
+      sheetName: '',
+      rows: 0,
+      columns: 0,
+      a1: '',
+      error: '',
+    };
+
+    if (file.getMimeType() !== MimeType.GOOGLE_SHEETS) {
+      info.kind = 'ignored';
+      info.error = 'Soubor není Google Sheets, parser ho ignoruje.';
+      result.push(info);
+      continue;
+    }
+
+    try {
+      const ss = SpreadsheetApp.openById(file.getId());
+      const sheet = ss.getSheets()[0];
+      info.sheetName = sheet.getName();
+      info.rows = sheet.getLastRow();
+      info.columns = sheet.getLastColumn();
+      info.a1 = String(sheet.getRange(1, 1).getDisplayValue() || '');
+      info.kind = classifyOdpisySourceFile_(sheet, file.getName());
+    } catch (e) {
+      info.kind = 'error';
+      info.error = e && e.message ? e.message : String(e);
+    }
+    result.push(info);
+  }
+
+  return result;
+}
+
+/**
  * Odhadne typ zdrojového souboru z názvu a náhledu prvních řádků.
  * @param {Sheet} sheet
  * @param {string} fileName
@@ -424,6 +524,20 @@ function readOdpisySheetValues_(sheet) {
 }
 
 /**
+ * Načte zobrazované hodnoty horní části listu pro diagnostiku.
+ * @param {Sheet} sheet
+ * @param {number} maxRows
+ * @param {number} maxCols
+ * @returns {string[][]}
+ */
+function readOdpisySheetDisplayPreview_(sheet, maxRows, maxCols) {
+  const rows = Math.min(sheet.getLastRow(), maxRows);
+  const cols = Math.min(sheet.getLastColumn(), maxCols);
+  if (rows < 1 || cols < 1) return [];
+  return sheet.getRange(1, 1, rows, cols).getDisplayValues();
+}
+
+/**
  * Vrátí mapu týdnů s nulovými hodnotami.
  * @param {{ label: string }[]} weeks
  * @returns {Object}
@@ -431,6 +545,140 @@ function readOdpisySheetValues_(sheet) {
 function buildOdpisyEmptyWeekMap_(weeks) {
   const result = {};
   weeks.forEach(function(w) { result[w.label] = 0; });
+  return result;
+}
+
+/**
+ * Sestaví diagnostiku Telex parseru.
+ * @param {Array[]} data
+ * @param {string[][]} displayRows
+ * @param {string} sourceName
+ * @returns {Object}
+ */
+function buildOdpisyTelexDebug_(data, displayRows, sourceName) {
+  const headerKeywords = ['akcnicena', 'akce', 'akcni', 'plu', 'artikl', 'article', 'matnr', 'w', 'ww'];
+  const headerRow = findOdpisyHeaderRowByKeywords_(data, headerKeywords);
+  const result = {
+    sourceName: sourceName || '',
+    rows: data.length,
+    columns: data[0] ? data[0].length : 0,
+    searchedHeaderKeywords: headerKeywords,
+    headerRow: headerRow >= 0 ? headerRow + 1 : null,
+    normalizedHeaders: [],
+    rawHeaders: [],
+    actionColumn: null,
+    pluColumn: null,
+    columnScores: [],
+    actionSamples: [],
+    previewRows: displayRows,
+    akcniPluCount: 0,
+    akcniPluSamples: [],
+  };
+
+  if (headerRow < 0) return result;
+
+  const rawHeaders = data[headerRow].map(function(value) { return String(value === null || value === undefined ? '' : value); });
+  const headers = data[headerRow].map(normalizeOdpisyHeader_);
+  const preferredActionCol = findOdpisyColByKeywords_(headers, ['akcnicena', 'akcicena', 'akce', 'akcni', 'promo']);
+  const actionCol = findOdpisyActionFlagCol_(data, headerRow, headers);
+  const pluCol = findOdpisyColByKeywords_(headers, [
+    'artikl', 'artiklcislo', 'cisloartiklu', 'article', 'articleid', 'plu', 'matnr'
+  ]);
+
+  result.rawHeaders = rawHeaders.map(function(value, index) {
+    return { col: index + 1, value: value };
+  });
+  result.normalizedHeaders = headers.map(function(value, index) {
+    return { col: index + 1, value: value };
+  });
+  result.actionColumn = actionCol >= 0 ? {
+    col: actionCol + 1,
+    rawHeader: rawHeaders[actionCol],
+    normalizedHeader: headers[actionCol],
+    preferredByHeader: actionCol === preferredActionCol,
+  } : null;
+  result.pluColumn = pluCol >= 0 ? {
+    col: pluCol + 1,
+    rawHeader: rawHeaders[pluCol],
+    normalizedHeader: headers[pluCol],
+  } : null;
+
+  result.columnScores = scoreOdpisyActionColumns_(data, headerRow, rawHeaders, headers)
+    .filter(function(item) {
+      return item.actionFlagCount > 0 || item.nonEmptyCount > 0 || item.col === preferredActionCol + 1 || item.col === actionCol + 1 || item.col === pluCol + 1;
+    })
+    .sort(function(a, b) {
+      if (b.actionFlagCount !== a.actionFlagCount) return b.actionFlagCount - a.actionFlagCount;
+      return a.col - b.col;
+    })
+    .slice(0, 40);
+
+  if (actionCol >= 0) {
+    result.actionSamples = sampleOdpisyColumnValues_(data, headerRow, actionCol, 25);
+  }
+
+  const akcniPlu = readOdpisyAkcniPluFromValues_(data, sourceName);
+  result.akcniPluCount = akcniPlu.size;
+  result.akcniPluSamples = Array.from(akcniPlu).slice(0, 30);
+  return result;
+}
+
+/**
+ * Ohodnotí sloupce podle výskytu hodnot W/WW.
+ * @param {Array[]} data
+ * @param {number} headerRow
+ * @param {string[]} rawHeaders
+ * @param {string[]} headers
+ * @returns {Object[]}
+ */
+function scoreOdpisyActionColumns_(data, headerRow, rawHeaders, headers) {
+  const result = [];
+  const colCount = headers.length;
+  for (var col = 0; col < colCount; col++) {
+    var actionFlagCount = 0;
+    var nonEmptyCount = 0;
+    var samples = [];
+    for (var row = headerRow + 1; row < data.length; row++) {
+      var value = data[row][col];
+      var text = String(value === null || value === undefined ? '' : value).trim();
+      if (text) {
+        nonEmptyCount++;
+        if (samples.length < 8) samples.push(text);
+      }
+      if (isOdpisyActionFlag_(value)) actionFlagCount++;
+    }
+    result.push({
+      col: col + 1,
+      rawHeader: rawHeaders[col] || '',
+      normalizedHeader: headers[col] || '',
+      actionFlagCount: actionFlagCount,
+      nonEmptyCount: nonEmptyCount,
+      samples: samples,
+    });
+  }
+  return result;
+}
+
+/**
+ * Vrátí ukázky hodnot z jednoho sloupce.
+ * @param {Array[]} data
+ * @param {number} headerRow
+ * @param {number} col
+ * @param {number} limit
+ * @returns {Object[]}
+ */
+function sampleOdpisyColumnValues_(data, headerRow, col, limit) {
+  const result = [];
+  for (var row = headerRow + 1; row < data.length && result.length < limit; row++) {
+    var value = data[row][col];
+    var text = String(value === null || value === undefined ? '' : value).trim();
+    if (!text) continue;
+    result.push({
+      row: row + 1,
+      value: text,
+      isActionFlag: isOdpisyActionFlag_(value),
+    });
+  }
   return result;
 }
 
