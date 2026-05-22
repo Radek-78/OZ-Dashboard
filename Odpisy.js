@@ -437,7 +437,7 @@ function buildOdpisyCacheKey_(folderId, weeks, files) {
     return [key, f.id || '', f.updatedAt || ''].join(':');
   }).join('|');
   const weekSig = weeks.map(function(w) { return w.label; }).join('|');
-  return 'ODPISY_DATA_V3_' + Utilities.base64EncodeWebSafe(folderId + '|' + weekSig + '|' + fileSig + '|' + buster).slice(0, 120);
+  return 'ODPISY_DATA_V4_' + Utilities.base64EncodeWebSafe(folderId + '|' + weekSig + '|' + fileSig + '|' + buster).slice(0, 120);
 }
 
 /**
@@ -673,7 +673,7 @@ function buildOdpisyArticlesDebug_(data, displayRows, sourceName, weeks, akcniPl
     previewRows: displayRows || [],
   };
 
-  const headerRow = findOdpisyHeaderRowByKeywords_(data, result.searchedHeaderKeywords);
+  const headerRow = findOdpisyArticlesHeaderRow_(data, weeks);
   result.headerRow = headerRow >= 0 ? headerRow + 1 : null;
   if (headerRow < 0) return result;
 
@@ -1007,9 +1007,7 @@ function readOdpisyAkcniMetricsOptimized_(sheet, weeks, akcniPluSet, sourceName)
 
   const previewRows = Math.min(lastRow, 15);
   const preview = sheet.getRange(1, 1, previewRows, lastCol).getValues();
-  const headerRow = findOdpisyHeaderRowByKeywords_(preview, [
-    'artikl', 'artiklcislo', 'cisloartiklu', 'article', 'articleid', 'plu', 'matnr'
-  ]);
+  const headerRow = findOdpisyArticlesHeaderRow_(preview, weeks);
   if (headerRow < 0) {
     Logger.log('[ODPISY_ARTICLES] Nenalezen řádek záhlaví se sloupcem artiklu/PLU; source=%s', sourceName || '');
     return empty;
@@ -1095,9 +1093,7 @@ function readOdpisyAkcniByKtFromValues_(data, weeks, akcniPluSet, sourceName) {
     return emptyResult;
   }
 
-  const headerRow = findOdpisyHeaderRowByKeywords_(data, [
-    'artikl', 'artiklcislo', 'cisloartiklu', 'article', 'articleid', 'plu', 'matnr'
-  ]);
+  const headerRow = findOdpisyArticlesHeaderRow_(data, weeks);
   if (headerRow < 0) {
     Logger.log('[ODPISY_ARTICLES] Nenalezen řádek záhlaví se sloupcem artiklu/PLU; source=%s', sourceName || '');
     return {};
@@ -1168,6 +1164,37 @@ function findOdpisyHeaderRowByKeywords_(data, keywords) {
     }
   }
   return -1;
+}
+
+/**
+ * Najde skutečný tabulkový řádek hlavičky v poartiklovém exportu.
+ * Úvodní metadata mohou obsahovat slovo "artikl", proto vyžadujeme zároveň
+ * sloupec prodejny, sloupec PLU/artiklu a alespoň jeden KT sloupec.
+ * @param {Array[]} data
+ * @param {{ year: number, kt: number, label: string }[]} weeks
+ * @returns {number} index řádku nebo -1
+ */
+function findOdpisyArticlesHeaderRow_(data, weeks) {
+  var bestRow = -1;
+  var bestScore = 0;
+  for (var row = 0; row < Math.min(data.length, 30); row++) {
+    var rawHeaders = data[row] || [];
+    var headers = rawHeaders.map(normalizeOdpisyHeader_);
+    var pluCol = findOdpisyPluCol_(headers);
+    var storeCol = findOdpisyStoreCol_(headers);
+    var ktCols = buildOdpisyKtColMap_(rawHeaders, weeks, true);
+    var ktCount = Object.keys(ktCols).length;
+
+    if (pluCol < 0 || storeCol < 0 || ktCount < 1) continue;
+
+    var score = 10 + ktCount * 5;
+    if (headers.some(function(h) { return h.indexOf('tyden') >= 0 || h.indexOf('week') >= 0; })) score += 2;
+    if (score > bestScore) {
+      bestScore = score;
+      bestRow = row;
+    }
+  }
+  return bestRow;
 }
 
 /**
@@ -1291,9 +1318,10 @@ function isOdpisyActionFlag_(value) {
  * Sestaví mapu ktLabel → index sloupce v záhlaví.
  * @param {Array} headerRow - raw hodnoty řádku záhlaví
  * @param {{ year: number, kt: number, label: string }[]} weeks
+ * @param {boolean=} silent
  * @returns {Object}
  */
-function buildOdpisyKtColMap_(headerRow, weeks) {
+function buildOdpisyKtColMap_(headerRow, weeks, silent) {
   const map = {};
   weeks.forEach(function(w) {
     for (var i = 0; i < headerRow.length; i++) {
@@ -1307,7 +1335,7 @@ function buildOdpisyKtColMap_(headerRow, weeks) {
         break;
       }
     }
-    if (map[w.label] === undefined) {
+    if (map[w.label] === undefined && !silent) {
       Logger.log('[ODPISY_KT_COL] Nenalezen sloupec pro %s', w.label);
     }
   });
