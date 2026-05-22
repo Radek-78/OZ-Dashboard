@@ -17,9 +17,9 @@
 
   /* ── Toolbar ───────────────────────────────────────────────────────────── */
   .odpisy-toolbar {
-    display: flex;
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
     align-items: center;
-    gap: 0;
     padding: 0 14px 0 16px;
     background: var(--lidl-blue);
     color: #fff;
@@ -31,7 +31,6 @@
     display: flex;
     align-items: center;
     gap: 0;
-    flex: 1;
     min-width: 0;
   }
 
@@ -48,6 +47,7 @@
     font-weight: 700;
     text-decoration: none;
     white-space: nowrap;
+    flex-shrink: 0;
     transition: background .15s;
   }
 
@@ -63,48 +63,106 @@
     width: 1px;
     height: 20px;
     background: rgba(255,255,255,.28);
-    margin: 0 12px;
+    margin: 0 10px;
     flex-shrink: 0;
   }
 
+  /* Hide stats divider when stats area is empty */
+  .odpisy-toolbar-stats:empty ~ .odpisy-stats-divider { display: none; }
+
+  /* ── LC tab buttons in toolbar ─────────────────────────────────────────── */
+  .odpisy-lc-tabs-bar {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    overflow-x: auto;
+    scrollbar-width: none;
+    flex: 1;
+    min-width: 0;
+    padding: 0 2px;
+  }
+
+  .odpisy-lc-tabs-bar::-webkit-scrollbar { display: none; }
+
+  .odpisy-lc-tab {
+    display: inline-flex;
+    align-items: center;
+    height: 30px;
+    padding: 0 11px;
+    border-radius: 6px;
+    border: 1px solid rgba(255,255,255,.22);
+    background: transparent;
+    color: rgba(255,255,255,.8);
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+    white-space: nowrap;
+    flex-shrink: 0;
+    transition: background .15s, color .15s, border-color .15s;
+  }
+
+  .odpisy-lc-tab:hover:not(.is-active) {
+    background: rgba(255,255,255,.12);
+    color: #fff;
+  }
+
+  .odpisy-lc-tab.is-active {
+    background: var(--lidl-yellow);
+    border-color: var(--lidl-yellow);
+    color: #1a1100;
+  }
+
+  /* ── Centered toolbar title ────────────────────────────────────────────── */
   .odpisy-toolbar-title {
     margin: 0;
     font-size: 14px;
     font-weight: 800;
     color: #fff;
     white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    text-align: center;
+    padding: 0 8px;
   }
 
-  .odpisy-toolbar-center {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    flex-shrink: 0;
-    padding: 0 16px;
-  }
-
-  .odpisy-kt-chip {
-    display: inline-flex;
-    align-items: center;
-    height: 26px;
-    padding: 0 10px;
-    border-radius: 13px;
-    background: rgba(255,255,255,.15);
-    border: 1px solid rgba(255,255,255,.25);
-    color: #fff;
-    font-size: 11px;
-    font-weight: 700;
-    white-space: nowrap;
-  }
-
+  /* ── Toolbar right ─────────────────────────────────────────────────────── */
   .odpisy-toolbar-right {
     display: flex;
     align-items: center;
     gap: 6px;
-    flex-shrink: 0;
+    justify-self: end;
   }
+
+  /* ── Toolbar stats chips ───────────────────────────────────────────────── */
+  .odpisy-toolbar-stats {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+
+  .odpisy-toolbar-stat-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    height: 26px;
+    padding: 0 9px;
+    border-radius: 13px;
+    background: rgba(255,255,255,.12);
+    border: 1px solid rgba(255,255,255,.18);
+    color: rgba(255,255,255,.82);
+    font-size: 11px;
+    font-weight: 600;
+    white-space: nowrap;
+    cursor: default;
+    transition: background .15s;
+  }
+
+  .odpisy-toolbar-stat-chip strong {
+    color: #fff;
+    font-weight: 800;
+    font-size: 11.5px;
+  }
+
+  .odpisy-toolbar-stat-chip.has-tooltip { cursor: help; }
+  .odpisy-toolbar-stat-chip.has-tooltip:hover { background: rgba(255,255,255,.2); }
 
   .odpisy-toolbar-user {
     font-size: 11px;
@@ -112,8 +170,8 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    max-width: 200px;
-    margin-right: 4px;
+    max-width: 180px;
+    margin-right: 2px;
   }
 
   .odpisy-toolbar-btn {
@@ -132,11 +190,7 @@
 
   .odpisy-toolbar-btn:hover { background: rgba(255,255,255,.14); }
   .odpisy-toolbar-btn.is-loading { opacity: .5; pointer-events: none; }
-
-  .odpisy-toolbar-btn svg {
-    width: 16px;
-    height: 16px;
-  }
+  .odpisy-toolbar-btn svg { width: 16px; height: 16px; }
 
   .odpisy-settings-btn.has-config { border-color: var(--lidl-yellow); color: var(--lidl-yellow); }
 
@@ -144,53 +198,9 @@
   .odpisy-workbook {
     min-height: 0;
     display: grid;
-    grid-template-rows: auto 1fr;
+    grid-template-rows: 1fr;
     padding: 12px 18px 16px;
-    gap: 0;
     box-sizing: border-box;
-  }
-
-  .odpisy-sheet-tabs {
-    display: flex;
-    gap: 3px;
-    align-items: flex-end;
-    min-height: 32px;
-    padding: 0 6px;
-    overflow-x: auto;
-    scrollbar-width: none;
-  }
-
-  .odpisy-sheet-tabs::-webkit-scrollbar { display: none; }
-
-  .odpisy-sheet-tab {
-    min-width: 72px;
-    height: 28px;
-    border: 1px solid #9aabbf;
-    border-bottom: none;
-    border-radius: 6px 6px 0 0;
-    background: linear-gradient(to bottom, #eef3fb, #d8e3f2);
-    color: #2a4270;
-    font-size: 11.5px;
-    font-weight: 800;
-    cursor: pointer;
-    padding: 0 13px;
-    white-space: nowrap;
-    transition: background .1s, color .1s;
-  }
-
-  .odpisy-sheet-tab:hover:not(.is-active) {
-    background: linear-gradient(to bottom, #f5f8ff, #e3eaf6);
-    color: var(--lidl-blue);
-  }
-
-  .odpisy-sheet-tab.is-active {
-    height: 32px;
-    background: #fff;
-    border-color: #5a6e8a;
-    color: var(--lidl-blue);
-    position: relative;
-    z-index: 2;
-    font-size: 12px;
   }
 
   .odpisy-workbook-page {
@@ -200,7 +210,7 @@
     border-top-color: #1e2d47;
     border-top-width: 2.5px;
     display: grid;
-    grid-template-rows: auto auto auto 1fr;
+    grid-template-rows: auto auto 1fr;
     box-shadow: 0 8px 32px rgba(0,20,60,.10);
     overflow: hidden;
   }
@@ -314,48 +324,7 @@
 
   @keyframes odpisy-spin { to { transform: rotate(360deg); } }
 
-  /* ── Summary strip ─────────────────────────────────────────────────────── */
-  .odpisy-summary-strip {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    flex-wrap: wrap;
-    gap: 8px;
-    padding: 7px 14px;
-    border-bottom: 1px solid #c0cad8;
-    background: #f0f5fc;
-  }
-
-  .odpisy-summary-left { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
-
-  .odpisy-summary-chip {
-    display: inline-flex;
-    align-items: baseline;
-    gap: 5px;
-    height: 26px;
-    padding: 0 10px;
-    border: 1px solid #c4d0e3;
-    border-radius: 5px;
-    background: #fff;
-    color: #4c5c73;
-    font-size: 11.5px;
-    font-weight: 600;
-  }
-
-  .odpisy-summary-chip strong {
-    color: var(--lidl-blue);
-    font-size: 12.5px;
-    font-weight: 800;
-  }
-
-  .odpisy-summary-city {
-    font-size: 12px;
-    font-weight: 700;
-    color: #1a3060;
-    padding: 0 4px;
-  }
-
-  /* ── Table ─────────────────────────────────────────────────────────────── */
+  /* ── Table frame ───────────────────────────────────────────────────────── */
   .odpisy-table-frame {
     min-height: 0;
     overflow: auto;
@@ -363,6 +332,7 @@
     scrollbar-color: #b0bccf #f0f4fa;
   }
 
+  /* ── Data table ────────────────────────────────────────────────────────── */
   .odpisy-app-table {
     width: 100%;
     min-width: 1100px;
@@ -386,16 +356,26 @@
     font-size: 10.5px;
     font-weight: 800;
     text-align: center;
-    line-height: 1.2;
-    position: sticky;
-    top: 0;
-    z-index: 1;
+    line-height: 1.3;
   }
 
+  /* Two-row sticky thead:
+     Row 1 sticks at top:0 with explicit height so row 2 knows its offset. */
   .odpisy-app-table thead tr:first-child th {
+    position: sticky;
+    top: 0;
+    z-index: 3;
     background: var(--lidl-dark-blue);
     font-size: 11px;
     letter-spacing: .01em;
+    height: 29px;
+    box-sizing: border-box;
+  }
+
+  .odpisy-app-table thead tr:nth-child(2) th {
+    position: sticky;
+    top: 29px;
+    z-index: 2;
   }
 
   .odpisy-app-table td {
@@ -410,6 +390,7 @@
     transition: background .08s;
   }
 
+  /* RM group banding — alternating tints */
   .odpisy-app-table tbody tr.is-rm-band td { background: #eaf1fb; }
   .odpisy-app-table tbody tr:hover td      { background: #fffbe6 !important; }
 
@@ -421,7 +402,23 @@
 
   .odpisy-app-table td.center { text-align: center; }
 
-  /* Tfoot — Průměr za LC */
+  /* % columns — centered in both header and data cells */
+  .odpisy-app-table th.pct-col { text-align: center; }
+
+  .odpisy-app-table td.pct-col {
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+    font-size: 11px;
+  }
+
+  /* Above-average % highlight: red background, white bold text */
+  .odpisy-app-table td.pct-above-avg {
+    background: var(--lidl-red) !important;
+    color: #fff !important;
+    font-weight: 800 !important;
+  }
+
+  /* Tfoot — Průměr za LC, sticky at bottom */
   .odpisy-app-table tfoot td {
     background: var(--lidl-blue);
     color: #fff;
@@ -431,11 +428,83 @@
     font-weight: 700;
     position: sticky;
     bottom: 0;
-    z-index: 1;
+    z-index: 2;
   }
 
-  .odpisy-app-table tfoot td.num { font-size: 11px; font-weight: 800; }
-  .odpisy-app-table tfoot td:first-child { font-weight: 400; opacity: .75; font-size: 10px; }
+  .odpisy-app-table tfoot td.num {
+    text-align: right;
+    font-size: 11px;
+    font-weight: 800;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .odpisy-app-table tfoot td.pct-col {
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ── Popover tooltip ───────────────────────────────────────────────────── */
+  .odpisy-popover {
+    position: fixed;
+    z-index: 9000;
+    background: #fff;
+    border: 1.5px solid #c0cade;
+    border-radius: 10px;
+    box-shadow: 0 12px 40px rgba(0,20,60,.18);
+    min-width: 260px;
+    max-width: 400px;
+    pointer-events: none;
+  }
+
+  .odpisy-popover-head {
+    padding: 10px 14px 8px;
+    border-bottom: 1px solid #e8eef8;
+    background: #f4f8ff;
+    border-radius: 10px 10px 0 0;
+  }
+
+  .odpisy-popover-head h4 {
+    margin: 0;
+    font-size: 11.5px;
+    font-weight: 800;
+    color: #0d2040;
+  }
+
+  .odpisy-popover-body {
+    padding: 6px 0;
+    max-height: 280px;
+    overflow-y: auto;
+  }
+
+  .odpisy-popover-item {
+    display: grid;
+    grid-template-columns: 86px 1fr;
+    gap: 6px;
+    padding: 4px 14px;
+    font-size: 11.5px;
+    color: #1a2d4a;
+    border-bottom: 1px solid #f0f4fa;
+    align-items: baseline;
+  }
+
+  .odpisy-popover-item:last-child { border-bottom: none; }
+
+  .odpisy-popover-plu {
+    font-weight: 800;
+    color: var(--lidl-blue);
+    font-variant-numeric: tabular-nums;
+    font-size: 11px;
+  }
+
+  .odpisy-popover-note {
+    padding: 7px 14px 9px;
+    font-size: 10.5px;
+    color: #6a7e9a;
+    border-top: 1px solid #e8eef8;
+    background: #f9fbff;
+    border-radius: 0 0 10px 10px;
+    line-height: 1.55;
+  }
 
   /* ── Settings modal ────────────────────────────────────────────────────── */
   .odpisy-modal {
@@ -661,9 +730,11 @@
   }
 
   /* ── Responsive ────────────────────────────────────────────────────────── */
-  @media (max-width: 860px) {
+  @media (max-width: 900px) {
     .odpisy-toolbar-title { font-size: 13px; }
     .odpisy-toolbar-user  { display: none; }
+    .odpisy-toolbar-stats { display: none; }
+    .odpisy-stats-divider { display: none; }
 
     .odpisy-sheet-header {
       grid-template-columns: 64px 1fr;
@@ -675,6 +746,5 @@
     .odpisy-lidl-mark img { width: 46px; height: 46px; }
     .odpisy-trash-mark { display: none; }
     .odpisy-title-block h2 { font-size: 16px; }
-    .odpisy-summary-strip { flex-direction: column; align-items: flex-start; }
   }
 </style>

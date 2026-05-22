@@ -19,10 +19,12 @@
             OZ Dashboard
           </a>
           <span class="odpisy-toolbar-divider"></span>
-          <h1 class="odpisy-toolbar-title">Odpisy akčních artiklů</h1>
+          <nav class="odpisy-lc-tabs-bar" id="odpisyLcTabsBar" aria-label="Logistická centra"></nav>
         </div>
-        <div class="odpisy-toolbar-center" id="odpisyToolbarKt"></div>
+        <h1 class="odpisy-toolbar-title">Odpisy akčních artiklů</h1>
         <div class="odpisy-toolbar-right">
+          <div class="odpisy-toolbar-stats" id="odpisyToolbarStats"></div>
+          <span class="odpisy-toolbar-divider odpisy-stats-divider"></span>
           <span class="odpisy-toolbar-user"><?= app.user ?></span>
           <button class="odpisy-toolbar-btn" type="button" id="odpisyRefreshBtn" title="Obnovit data">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
@@ -35,7 +37,6 @@
 
       <!-- Workbook -->
       <section class="odpisy-workbook" aria-label="Vyhodnocení odpisů akčních artiklů">
-        <nav class="odpisy-sheet-tabs" id="odpisyTabs" aria-label="Logistická centra"></nav>
         <div class="odpisy-workbook-page">
           <section class="odpisy-sheet-header" id="odpisySheetHeader">
             <div class="odpisy-lidl-mark">
@@ -43,7 +44,7 @@
             </div>
             <div class="odpisy-title-block">
               <h2><span id="odpisyLcTitle">LC</span> | Vyhodnocení odpisů akčních artiklů</h2>
-              <p>Steuerung - Frischemanagement | <span id="odpisyKtTitle">KT</span> | <span id="odpisyDateTitle"></span></p>
+              <p>Steuerung - Frischemanagement | <span id="odpisyLcCity"></span></p>
             </div>
             <div class="odpisy-trash-mark" aria-hidden="true"><span></span></div>
           </section>
@@ -54,13 +55,15 @@
             <p>Kontroluji zdrojové soubory a páruji filiálky s LC.</p>
           </section>
 
-          <section class="odpisy-summary-strip" id="odpisySummary" hidden></section>
           <section class="odpisy-table-frame" id="odpisyTableFrame" hidden></section>
         </div>
       </section>
 
       <div class="toast-region" id="toastRegion" aria-live="polite" aria-atomic="true"></div>
     </main>
+
+    <!-- Popover tooltip -->
+    <div id="odpisyPopover" class="odpisy-popover" hidden></div>
 
     <!-- Settings modal -->
     <dialog class="odpisy-modal" id="odpisySettingsModal">

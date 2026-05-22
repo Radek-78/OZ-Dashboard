@@ -4,13 +4,6 @@
     activeLc: '',
 
     init() {
-      const dateEl = document.querySelector('#odpisyDateTitle');
-      if (dateEl) {
-        dateEl.textContent = new Date().toLocaleDateString('cs-CZ', {
-          day: '2-digit', month: '2-digit', year: 'numeric',
-        });
-      }
-
       document.querySelector('#odpisyRefreshBtn').addEventListener('click', () => this.loadData());
       document.querySelector('#odpisySettingsBtn').addEventListener('click', () => this.openSettings());
       document.querySelector('#odpisySettingsClose').addEventListener('click', () => this.closeSettings());
@@ -64,7 +57,7 @@
       if (status) { status.hidden = true; status.className = 'odpisy-modal-status'; status.textContent = ''; }
 
       const canConfigure = state.canConfigure;
-      if (input)  input.disabled  = !canConfigure;
+      if (input)   input.disabled   = !canConfigure;
       if (saveBtn) saveBtn.disabled = !canConfigure;
 
       if (!canConfigure && status) {
@@ -81,9 +74,9 @@
     },
 
     saveFolder() {
-      const input   = document.querySelector('#odpisyFolderInput');
-      const status  = document.querySelector('#odpisyModalStatus');
-      const saveBtn = document.querySelector('#odpisyFolderSave');
+      const input    = document.querySelector('#odpisyFolderInput');
+      const status   = document.querySelector('#odpisyModalStatus');
+      const saveBtn  = document.querySelector('#odpisyFolderSave');
       const folderId = input ? input.value.trim() : '';
 
       if (saveBtn) saveBtn.disabled = true;
@@ -110,8 +103,6 @@
 
     render() {
       const state = this.state || {};
-
-      this.renderToolbarKt(state.weeks);
 
       const settingsBtn = document.querySelector('#odpisySettingsBtn');
       if (settingsBtn) settingsBtn.classList.toggle('has-config', !!state.folderId);
@@ -143,78 +134,172 @@
         this.activeLc = state.lcs[0].abbreviation;
       }
 
-      this.renderTabs();
+      this.renderToolbarTabs();
       this.renderActiveLc();
     },
 
-    renderToolbarKt(weeks) {
-      const el = document.querySelector('#odpisyToolbarKt');
-      if (!el) return;
-      if (!weeks || !weeks.length) { el.innerHTML = ''; return; }
-      el.innerHTML = weeks.map((w) =>
-        `<span class="odpisy-kt-chip">${this.escape(w.label)}</span>`
-      ).join('');
-    },
+    // ── LC tabs in toolbar ──────────────────────────────────────────────────
 
-    renderTabs() {
-      const tabs  = document.querySelector('#odpisyTabs');
+    renderToolbarTabs() {
+      const el    = document.querySelector('#odpisyLcTabsBar');
       const state = this.state || {};
-      tabs.innerHTML = (state.lcs || []).map((lc) => {
-        const label = `${this.escape(String(Number(lc.code) || lc.code || ''))} ${this.escape(lc.abbreviation || '')}`.trim();
-        return `
-          <button class="odpisy-sheet-tab${lc.abbreviation === this.activeLc ? ' is-active' : ''}"
-            type="button"
-            title="${this.escape(lc.city || '')}"
-            data-lc="${this.escape(lc.abbreviation || '')}">
-            ${label}
-          </button>`;
+      if (!el) return;
+      el.innerHTML = (state.lcs || []).map((lc) => {
+        const code  = String(Number(lc.code) || lc.code || '');
+        const label = (code + ' ' + (lc.abbreviation || '')).trim();
+        return `<button class="odpisy-lc-tab${lc.abbreviation === this.activeLc ? ' is-active' : ''}"
+          type="button"
+          title="${this.escape(lc.city || '')}"
+          data-lc="${this.escape(lc.abbreviation || '')}">
+          ${this.escape(label)}
+        </button>`;
       }).join('');
 
-      tabs.querySelectorAll('.odpisy-sheet-tab').forEach((btn) => {
+      el.querySelectorAll('.odpisy-lc-tab').forEach((btn) => {
         btn.addEventListener('click', () => {
           this.activeLc = btn.dataset.lc || '';
           this.renderActiveLc();
-          this.renderTabs();
+          this.renderToolbarTabs();
         });
       });
     },
+
+    // ── Stats chips in toolbar ──────────────────────────────────────────────
+
+    renderToolbarStats(lc, state) {
+      const el = document.querySelector('#odpisyToolbarStats');
+      if (!el) return;
+
+      const pctTexts = (state.weeks || []).map((w) =>
+        this.formatPct(this.pct(state.globalAkcni, state.globalCelkem, w.label))
+      ).join(' / ');
+
+      const articles   = state.akcniArticles || [];
+      const countEsc   = this.escape(state.akcniCount || 0);
+      const storeCount = this.escape((lc.stores || []).length);
+
+      const artiklyChip = articles.length
+        ? `<span class="odpisy-toolbar-stat-chip has-tooltip" id="odpisyAkcniChip">
+             <strong>${countEsc}</strong>&nbsp;akčních artiklů
+           </span>`
+        : `<span class="odpisy-toolbar-stat-chip">
+             <strong>${countEsc}</strong>&nbsp;akčních artiklů
+           </span>`;
+
+      el.innerHTML = `
+        <span class="odpisy-toolbar-stat-chip">
+          <strong>${storeCount}</strong>&nbsp;filiálek
+        </span>
+        ${artiklyChip}
+        <span class="odpisy-toolbar-stat-chip">
+          <strong>${this.escape(pctTexts || '0,0 %')}</strong>&nbsp;akční podíl
+        </span>
+      `;
+
+      if (articles.length) {
+        const chip = document.querySelector('#odpisyAkcniChip');
+        if (chip) {
+          chip.addEventListener('mouseenter', (e) => this.showAkcniTooltip(e.currentTarget, articles, state));
+          chip.addEventListener('mouseleave', () => this.hideTooltip());
+        }
+      }
+    },
+
+    // ── Popover / tooltip ───────────────────────────────────────────────────
+
+    showAkcniTooltip(anchor, articles, state) {
+      const popover = document.querySelector('#odpisyPopover');
+      if (!popover) return;
+
+      const weeks    = state.weeks || [];
+      const pctLines = weeks.map((w) =>
+        this.escape(w.label) + ': ' + this.formatPct(this.pct(state.globalAkcni, state.globalCelkem, w.label))
+      );
+
+      const rows = articles.map((a) =>
+        `<div class="odpisy-popover-item">
+           <span class="odpisy-popover-plu">${this.escape(a.plu)}</span>
+           <span>${this.escape(a.name || '—')}</span>
+         </div>`
+      ).join('');
+
+      const noteHtml = pctLines.length
+        ? `<div class="odpisy-popover-note">
+             Akční podíl — ${pctLines.join(' &nbsp;/&nbsp; ')}<br>
+             Výpočet: |akční odpisy| ÷ |celkové odpisy| × 100
+           </div>`
+        : '';
+
+      popover.innerHTML = `
+        <div class="odpisy-popover-head">
+          <h4>Akční artikly — ${this.escape(articles.length)} PLU</h4>
+        </div>
+        <div class="odpisy-popover-body">${rows}</div>
+        ${noteHtml}
+      `;
+
+      popover.hidden = false;
+      const rect = anchor.getBoundingClientRect();
+      const popW = popover.offsetWidth;
+      let left   = rect.left;
+      if (left + popW > window.innerWidth - 8) left = window.innerWidth - popW - 8;
+      popover.style.top  = (rect.bottom + 6) + 'px';
+      popover.style.left = Math.max(8, left) + 'px';
+    },
+
+    hideTooltip() {
+      const popover = document.querySelector('#odpisyPopover');
+      if (popover) popover.hidden = true;
+    },
+
+    // ── Active LC ───────────────────────────────────────────────────────────
 
     renderActiveLc() {
       const state = this.state || {};
       const lc    = (state.lcs || []).find((item) => item.abbreviation === this.activeLc);
       if (!lc) return;
 
-      document.querySelector('#odpisyLcTitle').textContent  = lc.abbreviation || 'LC';
-      document.querySelector('#odpisyKtTitle').textContent  = this.currentKtLabel(state.weeks);
+      const lcTitleEl = document.querySelector('#odpisyLcTitle');
+      const lcCityEl  = document.querySelector('#odpisyLcCity');
+      if (lcTitleEl) lcTitleEl.textContent = lc.abbreviation || 'LC';
+      if (lcCityEl)  lcCityEl.textContent  = lc.city || lc.abbreviation || '';
 
       const stateBox = document.querySelector('#odpisyStateBox');
-      const summary  = document.querySelector('#odpisySummary');
       const frame    = document.querySelector('#odpisyTableFrame');
       stateBox.hidden = true;
-      summary.hidden  = false;
       frame.hidden    = false;
 
-      const pctTexts = (state.weeks || []).map((w) =>
-        this.formatPct(this.pct(state.globalAkcni, state.globalCelkem, w.label))
-      );
-      summary.innerHTML = `
-        <div class="odpisy-summary-left">
-          <span class="odpisy-summary-chip"><strong>${this.escape(lc.stores.length)}</strong> filiálek</span>
-          <span class="odpisy-summary-chip"><strong>${this.escape(state.akcniCount || 0)}</strong> akčních artiklů</span>
-          <span class="odpisy-summary-chip"><strong>${this.escape(pctTexts.join(' / ') || '0,0 %')}</strong> akční podíl</span>
-        </div>
-        <span class="odpisy-summary-city">${this.escape(lc.city || lc.abbreviation || '')}</span>
-      `;
-
+      this.renderToolbarStats(lc, state);
       frame.innerHTML = this.renderTable(lc, state.weeks || []);
     },
 
+    // ── Table ────────────────────────────────────────────────────────────────
+
     renderTable(lc, weeks) {
+      // Pre-compute per-KT % averages for above-average highlighting
+      const pctAvg = {};
+      weeks.forEach((w) => {
+        const vals = (lc.stores || []).map((s) =>
+          this.ratio(s.akcni && s.akcni[w.label] || 0, s[w.label] || 0)
+        );
+        pctAvg[w.label] = vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : 0;
+      });
+
+      const totalPctVals = (lc.stores || []).map((s) => {
+        const rt = weeks.reduce((sum, w) => sum + Number(s[w.label] || 0), 0);
+        const ra = weeks.reduce((sum, w) => sum + Number(s.akcni && s.akcni[w.label] || 0), 0);
+        return this.ratio(ra, rt);
+      });
+      const totalPctAvg = totalPctVals.length
+        ? totalPctVals.reduce((a, b) => a + b, 0) / totalPctVals.length
+        : 0;
+
+      // Table structure
       const weekGroups = weeks.map((w) => `<th colspan="3">${this.escape(w.label)}</th>`).join('');
       const weekCols   = weeks.map(() => `
         <th>Odpis<br>celkový</th>
         <th>Odpis<br>akce</th>
-        <th>%</th>
+        <th class="pct-col">%</th>
       `).join('');
       const colGroups = `
         <colgroup>
@@ -225,17 +310,28 @@
           <col class="money"><col class="money"><col class="percent">
         </colgroup>`;
 
-      let lastRm = '';
+      // Data rows — stores pre-sorted by RM on server
+      let lastRm = null;
       let band   = false;
       const rows = (lc.stores || []).map((store) => {
-        if ((store.rm || '') !== lastRm) { lastRm = store.rm || ''; band = !band; }
-        const weekCells = weeks.map((w) => `
-          <td class="num">${this.formatMoney(store[w.label] || 0)}</td>
-          <td class="num">${this.formatMoney(store.akcni && store.akcni[w.label] || 0)}</td>
-          <td class="num">${this.formatPct(this.ratio(store.akcni && store.akcni[w.label] || 0, store[w.label] || 0))}</td>
-        `).join('');
-        const rowTotal      = weeks.reduce((s, w) => s + Number(store[w.label] || 0), 0);
-        const rowAkcniTotal = weeks.reduce((s, w) => s + Number(store.akcni && store.akcni[w.label] || 0), 0);
+        const rm = store.rm || '';
+        if (rm !== lastRm) { lastRm = rm; band = !band; }
+
+        const weekCells = weeks.map((w) => {
+          const pctVal  = this.ratio(store.akcni && store.akcni[w.label] || 0, store[w.label] || 0);
+          const isAbove = pctVal > pctAvg[w.label];
+          return `
+            <td class="num">${this.formatMoney(store[w.label] || 0)}</td>
+            <td class="num">${this.formatMoney(store.akcni && store.akcni[w.label] || 0)}</td>
+            <td class="pct-col${isAbove ? ' pct-above-avg' : ''}">${this.formatPct(pctVal)}</td>
+          `;
+        }).join('');
+
+        const rowTotal      = weeks.reduce((sum, w) => sum + Number(store[w.label] || 0), 0);
+        const rowAkcniTotal = weeks.reduce((sum, w) => sum + Number(store.akcni && store.akcni[w.label] || 0), 0);
+        const rowTotalPct   = this.ratio(rowAkcniTotal, rowTotal);
+        const isTotalAbove  = rowTotalPct > totalPctAvg;
+
         return `
           <tr class="${band ? 'is-rm-band' : ''}">
             <td class="center">${this.escape(store.storeNumber || '')}</td>
@@ -244,22 +340,22 @@
             ${weekCells}
             <td class="num">${this.formatMoney(rowTotal)}</td>
             <td class="num">${this.formatMoney(rowAkcniTotal)}</td>
-            <td class="num">${this.formatPct(this.ratio(rowAkcniTotal, rowTotal))}</td>
+            <td class="pct-col${isTotalAbove ? ' pct-above-avg' : ''}">${this.formatPct(rowTotalPct)}</td>
           </tr>`;
       }).join('');
 
-      // Průměr za LC — server poskytuje avgTotals a avgAkcniTotals (sum / počet filiálek)
+      // Footer — Průměr za LC (server provides avgTotals & avgAkcniTotals = sum / storeCount)
       const avgWeekCells = weeks.map((w) => {
         const avg      = lc.avgTotals      && lc.avgTotals[w.label]      || 0;
         const avgAkcni = lc.avgAkcniTotals && lc.avgAkcniTotals[w.label] || 0;
         return `
           <td class="num">${this.formatMoney(avg)}</td>
           <td class="num">${this.formatMoney(avgAkcni)}</td>
-          <td class="num">${this.formatPct(this.ratio(avgAkcni, avg))}</td>
+          <td class="pct-col">${this.formatPct(this.ratio(avgAkcni, avg))}</td>
         `;
       }).join('');
-      const avgTotal      = weeks.reduce((s, w) => s + Number(lc.avgTotals      && lc.avgTotals[w.label]      || 0), 0);
-      const avgAkcniTotal = weeks.reduce((s, w) => s + Number(lc.avgAkcniTotals && lc.avgAkcniTotals[w.label] || 0), 0);
+      const avgTotal      = weeks.reduce((sum, w) => sum + Number(lc.avgTotals      && lc.avgTotals[w.label]      || 0), 0);
+      const avgAkcniTotal = weeks.reduce((sum, w) => sum + Number(lc.avgAkcniTotals && lc.avgAkcniTotals[w.label] || 0), 0);
 
       return `
         <table class="odpisy-app-table" aria-label="Odpisy ${this.escape(lc.abbreviation || '')}">
@@ -277,7 +373,7 @@
               ${weekCols}
               <th>Odpis<br>celkový</th>
               <th>Odpis<br>akce</th>
-              <th>%</th>
+              <th class="pct-col">%</th>
             </tr>
           </thead>
           <tbody>
@@ -290,21 +386,22 @@
               ${avgWeekCells}
               <td class="num">${this.formatMoney(avgTotal)}</td>
               <td class="num">${this.formatMoney(avgAkcniTotal)}</td>
-              <td class="num">${this.formatPct(this.ratio(avgAkcniTotal, avgTotal))}</td>
+              <td class="pct-col">${this.formatPct(this.ratio(avgAkcniTotal, avgTotal))}</td>
             </tr>
           </tfoot>
         </table>`;
     },
 
-    // ── UI helpers ──────────────────────────────────────────────────────────
+    // ── UI state helpers ────────────────────────────────────────────────────
 
     showLoading(title, text) {
-      const tabs     = document.querySelector('#odpisyTabs');
+      const lcTabs = document.querySelector('#odpisyLcTabsBar');
+      const stats  = document.querySelector('#odpisyToolbarStats');
+      if (lcTabs) lcTabs.innerHTML = '';
+      if (stats)  stats.innerHTML = '';
+
       const stateBox = document.querySelector('#odpisyStateBox');
-      const summary  = document.querySelector('#odpisySummary');
       const frame    = document.querySelector('#odpisyTableFrame');
-      tabs.innerHTML  = '';
-      summary.hidden  = true;
       frame.hidden    = true;
       stateBox.hidden = false;
       stateBox.innerHTML = `
@@ -315,12 +412,13 @@
     },
 
     showMessage(title, text, isError) {
-      const tabs     = document.querySelector('#odpisyTabs');
+      const lcTabs = document.querySelector('#odpisyLcTabsBar');
+      const stats  = document.querySelector('#odpisyToolbarStats');
+      if (lcTabs) lcTabs.innerHTML = '';
+      if (stats)  stats.innerHTML = '';
+
       const stateBox = document.querySelector('#odpisyStateBox');
-      const summary  = document.querySelector('#odpisySummary');
       const frame    = document.querySelector('#odpisyTableFrame');
-      tabs.innerHTML  = '';
-      summary.hidden  = true;
       frame.hidden    = true;
       stateBox.hidden = false;
       stateBox.innerHTML = `
@@ -335,12 +433,13 @@
     },
 
     showEmpty(title, text) {
-      const tabs     = document.querySelector('#odpisyTabs');
+      const lcTabs = document.querySelector('#odpisyLcTabsBar');
+      const stats  = document.querySelector('#odpisyToolbarStats');
+      if (lcTabs) lcTabs.innerHTML = '';
+      if (stats)  stats.innerHTML = '';
+
       const stateBox = document.querySelector('#odpisyStateBox');
-      const summary  = document.querySelector('#odpisySummary');
       const frame    = document.querySelector('#odpisyTableFrame');
-      tabs.innerHTML  = '';
-      summary.hidden  = true;
       frame.hidden    = true;
       stateBox.hidden = false;
       stateBox.innerHTML = `
@@ -364,13 +463,7 @@
       setTimeout(() => item.remove(), 3200);
     },
 
-    // ── Helpers ─────────────────────────────────────────────────────────────
-
-    currentKtLabel(weeks) {
-      if (!weeks || !weeks.length) return 'KT';
-      const w = weeks[weeks.length - 1];
-      return `KT ${String(w.kt || '').padStart(2, '0')}`;
-    },
+    // ── Calculation helpers ─────────────────────────────────────────────────
 
     pct(globalAkcni, globalCelkem, label) {
       const celkem = Number(globalCelkem && globalCelkem[label] || 0);

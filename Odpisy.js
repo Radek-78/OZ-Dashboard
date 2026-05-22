@@ -95,7 +95,8 @@ function buildOdpisyData_(context) {
 
     const readStartedAt = Date.now();
     const telexValues  = readOdpisySheetValues_(files.telex.spreadsheet.getSheets()[0]);
-    const akcniPluSet  = readOdpisyAkcniPluFromValues_(telexValues, files.telex.name);
+    const akcniTelex   = readOdpisyAkcniDataFromValues_(telexValues, files.telex.name);
+    const akcniPluSet  = akcniTelex.pluSet;
     const storesValues = readOdpisySheetValues_(files.stores.spreadsheet.getSheets()[0]);
     const storesData   = readOdpisyStoresFromValues_(storesValues, weeks);
     const storeValues  = storesData.byStore;
@@ -148,6 +149,10 @@ function buildOdpisyData_(context) {
         const abbr  = lc.abbreviation.toUpperCase();
         const group = lcGroups[abbr] || { stores: [] };
         const storesSorted = group.stores.slice().sort(function(a, b) {
+          var rmA = (a.rm || '').toLowerCase();
+          var rmB = (b.rm || '').toLowerCase();
+          if (rmA < rmB) return -1;
+          if (rmA > rmB) return 1;
           return a.storeNumber - b.storeNumber;
         });
         const storeCount = storesSorted.length || 1;
@@ -197,9 +202,10 @@ function buildOdpisyData_(context) {
       configured:   true,
       canConfigure: canConfigure,
       folderId:     folderId,
-      weeks:        weeks,
-      lcs:          lcsResult,
-      akcniCount:   akcniPluSet.size,
+      weeks:          weeks,
+      lcs:            lcsResult,
+      akcniCount:     akcniPluSet.size,
+      akcniArticles:  akcniTelex.articles,
       globalAkcni:  globalAkcni,
       globalCelkem: globalCelkem,
       error:        null,
@@ -426,6 +432,53 @@ function buildOdpisyEmptyWeekMap_(weeks) {
   const result = {};
   weeks.forEach(function(w) { result[w.label] = 0; });
   return result;
+}
+
+/**
+ * Vrátí akční PLU set + seznam artiklů {plu, name} z hodnot Telex souboru.
+ * @param {Array[]} data
+ * @param {string=} sourceName
+ * @returns {{ pluSet: Set<string>, articles: {plu:string,name:string}[] }}
+ */
+function readOdpisyAkcniDataFromValues_(data, sourceName) {
+  if (data.length < 2) return { pluSet: new Set(), articles: [] };
+
+  const headerRow = findOdpisyHeaderRowByKeywords_(data, [
+    'akcnicena', 'akce', 'akcni', 'plu', 'artikl', 'article', 'matnr', 'w', 'ww',
+  ]);
+  if (headerRow < 0) {
+    Logger.log('[ODPISY_TELEX] Nenalezen řádek záhlaví; source=%s', sourceName || '');
+    return { pluSet: new Set(), articles: [] };
+  }
+
+  const headers  = data[headerRow].map(normalizeOdpisyHeader_);
+  const akcniCol = findOdpisyActionFlagCol_(data, headerRow, headers);
+  const pluCol   = findOdpisyPluCol_(headers);
+  const nameCol  = findOdpisyArtiklNameCol_(headers);
+
+  if (akcniCol < 0 || pluCol < 0) {
+    Logger.log('[ODPISY_TELEX] Chybí sloupce; source=%s headerRow=%s akcniCol=%s pluCol=%s',
+      sourceName || '', headerRow + 1, akcniCol, pluCol);
+    return { pluSet: new Set(), articles: [] };
+  }
+
+  const pluSet  = new Set();
+  const articles = [];
+  for (var row = headerRow + 1; row < data.length; row++) {
+    var flag = String(data[row][akcniCol] || '').trim().toUpperCase();
+    if (flag === 'W' || flag === 'WW') {
+      var plu = normalizeOdpisyPlu_(data[row][pluCol]);
+      if (plu && !pluSet.has(plu)) {
+        pluSet.add(plu);
+        var name = nameCol >= 0 ? String(data[row][nameCol] || '').trim() : '';
+        articles.push({ plu: plu, name: name });
+      }
+    }
+  }
+
+  Logger.log('[ODPISY_TELEX] source=%s headerRow=%s pluCol=%s nameCol=%s pluSet.size=%s',
+    sourceName || '', headerRow + 1, pluCol + 1, nameCol, pluSet.size);
+  return { pluSet: pluSet, articles: articles };
 }
 
 /**
@@ -726,6 +779,28 @@ function findOdpisyStoreCol_(headers) {
       if (h.indexOf('nazev') >= 0 || h.indexOf('name') >= 0) continue;
       if (h.indexOf(keyword) >= 0) return i;
     }
+  }
+  return -1;
+}
+
+/**
+ * Najde sloupec s názvem/označením artiklu (textový popis).
+ * @param {string[]} headers
+ * @returns {number}
+ */
+function findOdpisyArtiklNameCol_(headers) {
+  const strongKeywords = ['bezeichnung', 'artiklnazev', 'nazevartiklu', 'description', 'artiklbez'];
+  for (var k = 0; k < strongKeywords.length; k++) {
+    var keyword = normalizeOdpisyHeader_(strongKeywords[k]);
+    for (var i = 0; i < headers.length; i++) {
+      if (headers[i].indexOf(keyword) >= 0) return i;
+    }
+  }
+  var pluColIdx = findOdpisyPluCol_(headers);
+  for (var j = 0; j < headers.length; j++) {
+    if (j === pluColIdx) continue;
+    var h = String(headers[j] || '');
+    if (h.indexOf('nazev') >= 0 || h.indexOf('name') >= 0) return j;
   }
   return -1;
 }
