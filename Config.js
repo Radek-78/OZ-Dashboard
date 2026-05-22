@@ -3,7 +3,7 @@
   appSubtitle: '',
   logoFileId: '18mu_Lq1F_FqqSZcolMjLwG0aaQDPMdyD',
   logoUrl: 'https://drive.google.com/thumbnail?id=18mu_Lq1F_FqqSZcolMjLwG0aaQDPMdyD&sz=w320',
-  version: 'v0.15.0',
+  version: 'v0.16.0',
   theme: {
     blue: '#0050aa',
     darkBlue: '#002466',
@@ -16,6 +16,21 @@
 };
 
 const APP_CHANGELOG = [
+  {
+    version: 'v0.16.0',
+    date: '2026-05-22',
+    changes: [
+      'Záložky logistických center přesunuty do toolbaru vedle tlačítka OZ Dashboard',
+      'Název subaplikace vycentrován ve středu toolbaru',
+      'Přehledové statistiky (filiálky, akční artikly, akční podíl) přesunuty do toolbaru',
+      'Tooltip na čipu akčních artiklů zobrazuje seznam PLU s názvy a vysvětlení výpočtu',
+      'Opravena kotvení obou řádků záhlaví tabulky při posouvání',
+      'Footer tabulky ukotven při posouvání, barva první buňky sjednocena',
+      'Filiálky řazeny abecedně dle RM, skupiny RM střídavě podbarveny',
+      'Sloupce % vycentrovány, hodnoty nad průměrem zvýrazněny červeně a tučně bíle',
+      'Z hlavičky dokumentu odstraněny popisky roku a KT',
+    ],
+  },
   {
     version: 'v0.15.0',
     date: '2026-05-22',
