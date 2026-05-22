@@ -144,10 +144,10 @@ const App = {
         this.setActiveNav(section);
         if (section === 'branches')   { this.showView('branches');   this.loadBranches(); return; }
         if (section === 'lcBranches') { this.showView('lcBranches'); this.loadBranches(); return; }
-        if (section === 'users')       { this.showView('users');       this.renderUserOptions(); this.renderUsers(); return; }
-        if (section === 'locations')   { this.showView('locations');   this.renderLocations();   return; }
-        if (section === 'departments') { this.showView('departments'); this.renderDepartments(); return; }
-        if (section === 'subapps')     { this.showView('subapps');     this.renderSubApps();     return; }
+        if (section === 'users')       { this.showView('users');       this.ensureSettingsData(); return; }
+        if (section === 'locations')   { this.showView('locations');   this.ensureSettingsData(); return; }
+        if (section === 'departments') { this.showView('departments'); this.ensureSettingsData(); return; }
+        if (section === 'subapps')     { this.showView('subapps');     this.ensureSettingsData(); return; }
         if (section === 'roles')       { this.showView('roles');       this.loadRoles();         return; }
         this.showView('home');
         this.loadHome();
@@ -437,6 +437,21 @@ const App = {
         this.renderTeam(data.team || []);
       })
       .catch((err) => this.toast(err.message, 'error'));
+  },
+
+  /** Načte administrativní číselníky až při otevření Nastavení. */
+  ensureSettingsData() {
+    if (this.settingsReady) {
+      this.renderCurrentSettingsView();
+      return;
+    }
+
+    this.callServer('getUsersAdminData', null, { loaderText: 'Načítám nastavení...' })
+      .then((data) => {
+        this.applySettingsState(data || {});
+        this.renderCurrentSettingsView();
+      })
+      .catch((err) => this.toast(err.message || 'Nepodařilo se načíst nastavení.', 'error'));
   },
 
   /**

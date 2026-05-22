@@ -33,16 +33,14 @@ function doGet(e) {
     return renderOdpisyAppPage_();
   }
 
-  const bootstrap = getAppBootstrap();
-
   return renderPage('index', {
     appName:    APP_CONFIG.appName,
     appSubtitle: APP_CONFIG.appSubtitle,
     logoUrl:    APP_CONFIG.logoUrl,
     version:    APP_CONFIG.version,
     theme:      APP_CONFIG.theme,
-    user:       bootstrap.user.email,
-    auth:       bootstrap.auth,
+    user:       getRenderUserEmail_(),
+    auth:       { hasAccess: true, permissions: [], subApps: {} },
     webAppUrl:  getWebAppUrl_(),
     renderedAt: new Date().toISOString(),
     changelog:  APP_CHANGELOG,
@@ -161,25 +159,13 @@ function getInitData() {
     };
 
     try {
-      updateUserLastVisit_(context.database.spreadsheet, context.user.id);
+      updateUserLastVisitThrottled_(context.database.spreadsheet, context.user.id);
     } catch (e) {
       Logger.log('[VISIT_UPDATE_FAIL] user=%s error=%s', context.user.email, e && e.message ? e.message : e);
     }
   }
 
-  let settingsData = null;
-  if (context.auth.hasAccess && hasPermission_(context.auth, 'users.manage')) {
-    settingsData = buildUsersAdminData_(context);
-  }
-
-  // Zajistíme správné targetUrl pro interní subaplikace (idempotentní)
-  try {
-    ensureInternalSubAppUrls_(context.database.spreadsheet);
-  } catch (e) {
-    Logger.log('[ENSURE_INTERNAL_URLS_FAIL] %s', e && e.message ? e.message : e);
-  }
-
-  return { bootstrap, homeData, settingsData };
+  return { bootstrap, homeData, settingsData: null };
 }
 
 /**
@@ -191,6 +177,20 @@ function getWebAppUrl_() {
     return ScriptApp.getService().getUrl() || '';
   } catch (e) {
     Logger.log('[WEB_APP_URL_FAIL] %s', e && e.message ? e.message : e);
+    return '';
+  }
+}
+
+/**
+ * Vrátí e-mail pro prvotní HTML render bez otevření databáze.
+ * Plný auth kontext se načte až v getInitData().
+ * @returns {string}
+ */
+function getRenderUserEmail_() {
+  try {
+    return Session.getActiveUser().getEmail() || '';
+  } catch (e) {
+    Logger.log('[RENDER_USER_EMAIL_FAIL] %s', e && e.message ? e.message : e);
     return '';
   }
 }

@@ -200,6 +200,23 @@ function updateUserLastVisit_(spreadsheet, userId) {
   }
 }
 
+/**
+ * Aktualizuje poslední návštěvu nejvýše jednou za 6 hodin na uživatele.
+ * @param {Spreadsheet} spreadsheet
+ * @param {string} userId
+ */
+function updateUserLastVisitThrottled_(spreadsheet, userId) {
+  const normalized = String(userId || '').trim();
+  if (!normalized) return;
+
+  const cache = CacheService.getScriptCache();
+  const key = 'LAST_VISIT_UPDATED_' + normalized;
+  if (cache.get(key)) return;
+
+  updateUserLastVisit_(spreadsheet, normalized);
+  cache.put(key, '1', 21600);
+}
+
 // ---------------------------------------------------------------------------
 // Normalizace a validace payloadu
 // ---------------------------------------------------------------------------
