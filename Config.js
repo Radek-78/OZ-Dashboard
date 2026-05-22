@@ -3,7 +3,7 @@
   appSubtitle: '',
   logoFileId: '18mu_Lq1F_FqqSZcolMjLwG0aaQDPMdyD',
   logoUrl: 'https://drive.google.com/thumbnail?id=18mu_Lq1F_FqqSZcolMjLwG0aaQDPMdyD&sz=w320',
-  version: 'v0.17.1',
+  version: 'v0.18.0',
   theme: {
     blue: '#0050aa',
     darkBlue: '#002466',
@@ -16,6 +16,16 @@
 };
 
 const APP_CHANGELOG = [
+  {
+    version: 'v0.18.0',
+    date: '2026-05-22',
+    changes: [
+      'Přidán automatický monitoring zdrojových souborů odpisů',
+      'Trigger každých 30 minut kontroluje mtime všech tří souborů a při změně přegeneruje data',
+      'Toolbar Odpisů zobrazuje čas posledního zpracování dat',
+      'Odstraněn hover efekt pohybu dlaždic',
+    ],
+  },
   {
     version: 'v0.17.1',
     date: '2026-05-22',
