@@ -10,17 +10,30 @@
   </head>
   <body class="odpisy-standalone-body">
     <main class="odpisy-standalone">
-      <header class="odpisy-app-topbar">
-        <a class="odpisy-dashboard-link" href="<?= app.dashboardUrl ?>" target="_top">
-          <span aria-hidden="true">‹</span>
-          OZ Dashboard
-        </a>
-        <div class="odpisy-userline">
-          <strong><?= app.user ?></strong>
-          <span>v<?= app.version ?></span>
+
+      <!-- Toolbar -->
+      <header class="odpisy-toolbar">
+        <div class="odpisy-toolbar-left">
+          <a class="odpisy-back-link" href="<?= app.dashboardUrl ?>" target="_top">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+            OZ Dashboard
+          </a>
+          <span class="odpisy-toolbar-divider"></span>
+          <h1 class="odpisy-toolbar-title">Odpisy akčních artiklů</h1>
+        </div>
+        <div class="odpisy-toolbar-center" id="odpisyToolbarKt"></div>
+        <div class="odpisy-toolbar-right">
+          <span class="odpisy-toolbar-user"><?= app.user ?></span>
+          <button class="odpisy-toolbar-btn" type="button" id="odpisyRefreshBtn" title="Obnovit data">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+          </button>
+          <button class="odpisy-toolbar-btn odpisy-settings-btn" type="button" id="odpisySettingsBtn" title="Nastavení">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+          </button>
         </div>
       </header>
 
+      <!-- Workbook -->
       <section class="odpisy-workbook" aria-label="Vyhodnocení odpisů akčních artiklů">
         <nav class="odpisy-sheet-tabs" id="odpisyTabs" aria-label="Logistická centra"></nav>
         <div class="odpisy-workbook-page">
@@ -29,12 +42,10 @@
               <img src="<?= app.logoUrl ?>" alt="Lidl">
             </div>
             <div class="odpisy-title-block">
-              <h1><span id="odpisyLcTitle">LC</span> | Vyhodnocení odpisů akčních artiklů</h1>
+              <h2><span id="odpisyLcTitle">LC</span> | Vyhodnocení odpisů akčních artiklů</h2>
               <p>Steuerung - Frischemanagement | <span id="odpisyKtTitle">KT</span> | <span id="odpisyDateTitle"></span></p>
             </div>
-            <div class="odpisy-trash-mark" aria-hidden="true">
-              <span></span>
-            </div>
+            <div class="odpisy-trash-mark" aria-hidden="true"><span></span></div>
           </section>
 
           <section class="odpisy-state" id="odpisyStateBox">
@@ -50,6 +61,36 @@
 
       <div class="toast-region" id="toastRegion" aria-live="polite" aria-atomic="true"></div>
     </main>
+
+    <!-- Settings modal -->
+    <dialog class="odpisy-modal" id="odpisySettingsModal">
+      <div class="odpisy-modal-inner">
+        <header class="odpisy-modal-head">
+          <div class="odpisy-modal-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+          </div>
+          <div>
+            <p class="odpisy-modal-kicker">Konfigurace</p>
+            <h3>Nastavení zdrojové složky</h3>
+          </div>
+          <button class="odpisy-modal-close" type="button" id="odpisySettingsClose" aria-label="Zavřít">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </header>
+        <div class="odpisy-modal-body">
+          <p class="odpisy-modal-desc">Zadejte ID nebo URL Google Drive složky se třemi zdrojovými soubory: <strong>Telex</strong>, <strong>odpisy po filiálkách</strong> a <strong>odpisy po artiklech</strong> (jako Google Sheets).</p>
+          <label class="odpisy-field">
+            <span>Zdrojová složka</span>
+            <input type="text" id="odpisyFolderInput" placeholder="ID nebo URL složky…" autocomplete="off">
+          </label>
+          <div class="odpisy-modal-status" id="odpisyModalStatus" hidden></div>
+        </div>
+        <footer class="odpisy-modal-foot">
+          <button class="odpisy-btn odpisy-btn-ghost" type="button" id="odpisySettingsCancel">Zrušit</button>
+          <button class="odpisy-btn odpisy-btn-primary" type="button" id="odpisyFolderSave">Uložit složku</button>
+        </footer>
+      </div>
+    </dialog>
 
     <script>
       window.APP_BOOTSTRAP = <?!= JSON.stringify(app) ?>;

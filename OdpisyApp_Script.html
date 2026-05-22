@@ -1,71 +1,141 @@
 <script>
   const OdpisyApp = {
-    state: null,
+    state:    null,
     activeLc: '',
 
     init() {
-      this.setStaticHeader();
-      this.loadData();
-    },
-
-    setStaticHeader() {
       const dateEl = document.querySelector('#odpisyDateTitle');
       if (dateEl) {
         dateEl.textContent = new Date().toLocaleDateString('cs-CZ', {
-          day: '2-digit', month: '2-digit', year: 'numeric'
+          day: '2-digit', month: '2-digit', year: 'numeric',
         });
       }
+
+      document.querySelector('#odpisyRefreshBtn').addEventListener('click', () => this.loadData());
+      document.querySelector('#odpisySettingsBtn').addEventListener('click', () => this.openSettings());
+      document.querySelector('#odpisySettingsClose').addEventListener('click', () => this.closeSettings());
+      document.querySelector('#odpisySettingsCancel').addEventListener('click', () => this.closeSettings());
+      document.querySelector('#odpisyFolderSave').addEventListener('click', () => this.saveFolder());
+      document.querySelector('#odpisySettingsModal').addEventListener('click', (e) => {
+        if (e.target === e.currentTarget) this.closeSettings();
+      });
+
+      this.loadData();
     },
 
     callServer(fnName, payload) {
       return new Promise((resolve, reject) => {
-        const runner = google.script.run
-          .withSuccessHandler(resolve)
-          .withFailureHandler(reject);
+        const runner = google.script.run.withSuccessHandler(resolve).withFailureHandler(reject);
         if (payload === undefined) runner[fnName]();
         else runner[fnName](payload);
       });
     },
 
     loadData() {
+      this.setRefreshing(true);
       this.showLoading('Načítám odpisy', 'Kontroluji zdrojové soubory a páruji filiálky s LC.');
       this.callServer('getOdpisyData')
         .then((data) => {
           this.state = data || {};
+          this.setRefreshing(false);
           this.render();
         })
         .catch((err) => {
+          this.setRefreshing(false);
           this.showMessage('Nepodařilo se načíst odpisy', err && err.message ? err.message : String(err), true);
         });
     },
 
+    setRefreshing(on) {
+      const btn = document.querySelector('#odpisyRefreshBtn');
+      if (btn) btn.classList.toggle('is-loading', on);
+    },
+
+    // ── Settings modal ──────────────────────────────────────────────────────
+
+    openSettings() {
+      const modal   = document.querySelector('#odpisySettingsModal');
+      const input   = document.querySelector('#odpisyFolderInput');
+      const status  = document.querySelector('#odpisyModalStatus');
+      const saveBtn = document.querySelector('#odpisyFolderSave');
+      const state   = this.state || {};
+
+      if (input)  input.value = state.folderId || '';
+      if (status) { status.hidden = true; status.className = 'odpisy-modal-status'; status.textContent = ''; }
+
+      const canConfigure = state.canConfigure;
+      if (input)  input.disabled  = !canConfigure;
+      if (saveBtn) saveBtn.disabled = !canConfigure;
+
+      if (!canConfigure && status) {
+        status.hidden    = false;
+        status.className = 'odpisy-modal-status is-error';
+        status.textContent = 'Nemáte oprávnění měnit nastavení zdrojové složky.';
+      }
+
+      modal.showModal();
+    },
+
+    closeSettings() {
+      document.querySelector('#odpisySettingsModal').close();
+    },
+
+    saveFolder() {
+      const input   = document.querySelector('#odpisyFolderInput');
+      const status  = document.querySelector('#odpisyModalStatus');
+      const saveBtn = document.querySelector('#odpisyFolderSave');
+      const folderId = input ? input.value.trim() : '';
+
+      if (saveBtn) saveBtn.disabled = true;
+      if (status)  { status.hidden = false; status.className = 'odpisy-modal-status'; status.textContent = 'Ukládám…'; }
+
+      this.callServer('saveOdpisySourceFolder', { folderId })
+        .then((data) => {
+          this.state = data || {};
+          this.closeSettings();
+          this.toast('Složka odpisů uložena.');
+          this.render();
+        })
+        .catch((err) => {
+          if (status) {
+            status.hidden    = false;
+            status.className = 'odpisy-modal-status is-error';
+            status.textContent = err && err.message ? err.message : 'Nepodařilo se uložit složku.';
+          }
+          if (saveBtn) saveBtn.disabled = false;
+        });
+    },
+
+    // ── Render ──────────────────────────────────────────────────────────────
+
     render() {
       const state = this.state || {};
+
+      this.renderToolbarKt(state.weeks);
+
+      const settingsBtn = document.querySelector('#odpisySettingsBtn');
+      if (settingsBtn) settingsBtn.classList.toggle('has-config', !!state.folderId);
+
       if (state.error) {
         this.showMessage('Chyba při zpracování dat', state.error, true);
-        if (!state.configured || state.canConfigure) this.appendConfig();
         return;
       }
 
       if (!state.configured) {
-        this.showMessage(
+        this.showEmpty(
           'Subaplikace není nakonfigurována',
           state.canConfigure
-            ? 'Zadejte ID nebo URL složky se třemi zdrojovými Google Sheets soubory.'
-            : 'Požádejte správce aplikace o nastavení složky se zdrojovými soubory.',
-          false
+            ? 'Klikněte na tlačítko ⚙ Nastavení a zadejte složku se zdrojovými soubory.'
+            : 'Požádejte správce aplikace o nastavení složky se zdrojovými soubory odpisů.'
         );
-        if (state.canConfigure) this.appendConfig();
         return;
       }
 
       if (!state.lcs || !state.lcs.length) {
-        this.showMessage(
+        this.showEmpty(
           'Data zatím nejsou dostupná',
-          'Žádné filiálky nebylo možné spárovat s logistickými centry. Zkontrolujte synchronizaci filiálek a přiřazení LC.',
-          false
+          'Žádné filiálky nebylo možné spárovat s logistickými centry. Zkontrolujte synchronizaci filiálek a přiřazení LC.'
         );
-        if (state.canConfigure) this.appendConfig();
         return;
       }
 
@@ -77,8 +147,17 @@
       this.renderActiveLc();
     },
 
+    renderToolbarKt(weeks) {
+      const el = document.querySelector('#odpisyToolbarKt');
+      if (!el) return;
+      if (!weeks || !weeks.length) { el.innerHTML = ''; return; }
+      el.innerHTML = weeks.map((w) =>
+        `<span class="odpisy-kt-chip">${this.escape(w.label)}</span>`
+      ).join('');
+    },
+
     renderTabs() {
-      const tabs = document.querySelector('#odpisyTabs');
+      const tabs  = document.querySelector('#odpisyTabs');
       const state = this.state || {};
       tabs.innerHTML = (state.lcs || []).map((lc) => {
         const label = `${this.escape(String(Number(lc.code) || lc.code || ''))} ${this.escape(lc.abbreviation || '')}`.trim();
@@ -91,9 +170,9 @@
           </button>`;
       }).join('');
 
-      tabs.querySelectorAll('.odpisy-sheet-tab').forEach((button) => {
-        button.addEventListener('click', () => {
-          this.activeLc = button.dataset.lc || '';
+      tabs.querySelectorAll('.odpisy-sheet-tab').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          this.activeLc = btn.dataset.lc || '';
           this.renderActiveLc();
           this.renderTabs();
         });
@@ -102,36 +181,37 @@
 
     renderActiveLc() {
       const state = this.state || {};
-      const lc = (state.lcs || []).find((item) => item.abbreviation === this.activeLc);
+      const lc    = (state.lcs || []).find((item) => item.abbreviation === this.activeLc);
       if (!lc) return;
 
-      document.querySelector('#odpisyLcTitle').textContent = lc.abbreviation || 'LC';
-      document.querySelector('#odpisyKtTitle').textContent = this.currentKtLabel(state.weeks);
+      document.querySelector('#odpisyLcTitle').textContent  = lc.abbreviation || 'LC';
+      document.querySelector('#odpisyKtTitle').textContent  = this.currentKtLabel(state.weeks);
 
       const stateBox = document.querySelector('#odpisyStateBox');
-      const summary = document.querySelector('#odpisySummary');
-      const frame = document.querySelector('#odpisyTableFrame');
+      const summary  = document.querySelector('#odpisySummary');
+      const frame    = document.querySelector('#odpisyTableFrame');
       stateBox.hidden = true;
-      summary.hidden = false;
-      frame.hidden = false;
+      summary.hidden  = false;
+      frame.hidden    = false;
 
-      const pctTexts = (state.weeks || []).map((w) => this.formatPct(this.pct(state.globalAkcni, state.globalCelkem, w.label)));
+      const pctTexts = (state.weeks || []).map((w) =>
+        this.formatPct(this.pct(state.globalAkcni, state.globalCelkem, w.label))
+      );
       summary.innerHTML = `
-        <div>
+        <div class="odpisy-summary-left">
           <span class="odpisy-summary-chip"><strong>${this.escape(lc.stores.length)}</strong> filiálek</span>
           <span class="odpisy-summary-chip"><strong>${this.escape(state.akcniCount || 0)}</strong> akčních artiklů</span>
           <span class="odpisy-summary-chip"><strong>${this.escape(pctTexts.join(' / ') || '0,0 %')}</strong> akční podíl</span>
         </div>
-        <div class="odpisy-summary-chip"><strong>${this.escape(lc.city || lc.abbreviation || '')}</strong></div>
+        <span class="odpisy-summary-city">${this.escape(lc.city || lc.abbreviation || '')}</span>
       `;
 
       frame.innerHTML = this.renderTable(lc, state.weeks || []);
-      if (state.canConfigure) this.appendConfig(frame);
     },
 
     renderTable(lc, weeks) {
       const weekGroups = weeks.map((w) => `<th colspan="3">${this.escape(w.label)}</th>`).join('');
-      const weekCols = weeks.map(() => `
+      const weekCols   = weeks.map(() => `
         <th>Odpis<br>celkový</th>
         <th>Odpis<br>akce</th>
         <th>%</th>
@@ -146,19 +226,16 @@
         </colgroup>`;
 
       let lastRm = '';
-      let band = false;
+      let band   = false;
       const rows = (lc.stores || []).map((store) => {
-        if ((store.rm || '') !== lastRm) {
-          lastRm = store.rm || '';
-          band = !band;
-        }
+        if ((store.rm || '') !== lastRm) { lastRm = store.rm || ''; band = !band; }
         const weekCells = weeks.map((w) => `
           <td class="num">${this.formatMoney(store[w.label] || 0)}</td>
           <td class="num">${this.formatMoney(store.akcni && store.akcni[w.label] || 0)}</td>
           <td class="num">${this.formatPct(this.ratio(store.akcni && store.akcni[w.label] || 0, store[w.label] || 0))}</td>
         `).join('');
-        const rowTotal = weeks.reduce((sum, w) => sum + Number(store[w.label] || 0), 0);
-        const rowAkcniTotal = weeks.reduce((sum, w) => sum + Number(store.akcni && store.akcni[w.label] || 0), 0);
+        const rowTotal      = weeks.reduce((s, w) => s + Number(store[w.label] || 0), 0);
+        const rowAkcniTotal = weeks.reduce((s, w) => s + Number(store.akcni && store.akcni[w.label] || 0), 0);
         return `
           <tr class="${band ? 'is-rm-band' : ''}">
             <td class="center">${this.escape(store.storeNumber || '')}</td>
@@ -171,17 +248,18 @@
           </tr>`;
       }).join('');
 
-      const totalWeekCells = weeks.map((w) => {
-        const total = lc.totals && lc.totals[w.label] || 0;
-        const akcni = lc.akcniTotals && lc.akcniTotals[w.label] || 0;
+      // Průměr za LC — server poskytuje avgTotals a avgAkcniTotals (sum / počet filiálek)
+      const avgWeekCells = weeks.map((w) => {
+        const avg      = lc.avgTotals      && lc.avgTotals[w.label]      || 0;
+        const avgAkcni = lc.avgAkcniTotals && lc.avgAkcniTotals[w.label] || 0;
         return `
-          <td class="num">${this.formatMoney(total)}</td>
-          <td class="num">${this.formatMoney(akcni)}</td>
-          <td class="num">${this.formatPct(this.ratio(akcni, total))}</td>
+          <td class="num">${this.formatMoney(avg)}</td>
+          <td class="num">${this.formatMoney(avgAkcni)}</td>
+          <td class="num">${this.formatPct(this.ratio(avgAkcni, avg))}</td>
         `;
       }).join('');
-      const lcTotal = weeks.reduce((sum, w) => sum + Number(lc.totals && lc.totals[w.label] || 0), 0);
-      const akcniTotal = weeks.reduce((sum, w) => sum + Number(lc.akcniTotals && lc.akcniTotals[w.label] || 0), 0);
+      const avgTotal      = weeks.reduce((s, w) => s + Number(lc.avgTotals      && lc.avgTotals[w.label]      || 0), 0);
+      const avgAkcniTotal = weeks.reduce((s, w) => s + Number(lc.avgAkcniTotals && lc.avgAkcniTotals[w.label] || 0), 0);
 
       return `
         <table class="odpisy-app-table" aria-label="Odpisy ${this.escape(lc.abbreviation || '')}">
@@ -203,211 +281,31 @@
             </tr>
           </thead>
           <tbody>
-            ${rows || `<tr><td colspan="${6 + weeks.length * 3}" class="center">Žádné filiálky</td></tr>`}
+            ${rows || `<tr><td colspan="${6 + weeks.length * 3}" class="center" style="padding:24px;color:#6a7e9a">Žádné filiálky</td></tr>`}
           </tbody>
           <tfoot>
             <tr>
-              <td colspan="3">Průměr za LC</td>
-              ${totalWeekCells}
-              <td class="num">${this.formatMoney(lcTotal)}</td>
-              <td class="num">${this.formatMoney(akcniTotal)}</td>
-              <td class="num">${this.formatPct(this.ratio(akcniTotal, lcTotal))}</td>
+              <td>∅</td>
+              <td colspan="2">Průměr za LC</td>
+              ${avgWeekCells}
+              <td class="num">${this.formatMoney(avgTotal)}</td>
+              <td class="num">${this.formatMoney(avgAkcniTotal)}</td>
+              <td class="num">${this.formatPct(this.ratio(avgAkcniTotal, avgTotal))}</td>
             </tr>
           </tfoot>
         </table>`;
     },
 
-    appendConfig(target) {
-      const host = target || document.querySelector('#odpisyStateBox');
-      const state = this.state || {};
-      const form = document.createElement('div');
-      form.className = 'odpisy-config-inline';
-      form.innerHTML = `
-        <input type="text" id="odpisyFolderInput" placeholder="ID nebo URL složky odpisů" value="${this.escape(state.folderId || '')}">
-        <button type="button" id="odpisyFolderSave">Uložit složku</button>
-        <button type="button" id="odpisyDebugLoad" class="odpisy-debug-button">Debug odpisů</button>
-      `;
-      host.appendChild(form);
-      form.querySelector('#odpisyFolderSave').addEventListener('click', () => this.saveFolder());
-      form.querySelector('#odpisyDebugLoad').addEventListener('click', () => this.loadDebugData(host));
-    },
-
-    loadDebugData(host) {
-      const target = host || document.querySelector('#odpisyTableFrame') || document.querySelector('#odpisyStateBox');
-      let panel = document.querySelector('#odpisyDebugPanel');
-      if (!panel) {
-        panel = document.createElement('section');
-        panel.id = 'odpisyDebugPanel';
-        panel.className = 'odpisy-debug-panel';
-        target.appendChild(panel);
-      }
-      panel.innerHTML = '<strong>Načítám diagnostiku odpisů...</strong>';
-      this.callServer('getOdpisyDebugData')
-        .then((data) => {
-          panel.innerHTML = this.renderDebugData(data || {});
-        })
-        .catch((err) => {
-          panel.innerHTML = `<strong>Debug se nepodařil</strong><p>${this.escape(err && err.message ? err.message : String(err))}</p>`;
-        });
-    },
-
-    renderDebugData(data) {
-      const files = (data.files || []).map((file) => `
-        <tr>
-          <td>${this.escape(file.kind || '')}</td>
-          <td>${this.escape(file.name || '')}</td>
-          <td>${this.escape(file.mimeType || '')}</td>
-          <td>${this.escape(file.sheetName || '')}</td>
-          <td class="num">${this.escape(file.rows || 0)}</td>
-          <td class="num">${this.escape(file.columns || 0)}</td>
-          <td>${this.escape(file.a1 || '')}</td>
-          <td>${this.escape(file.error || '')}</td>
-        </tr>
-      `).join('');
-
-      if (data.error || !data.articles) {
-        return `
-          <h2>Debug odpisů</h2>
-          <p class="odpisy-debug-error">${this.escape(data.error || 'Diagnostika odpisů není dostupná.')}</p>
-          ${this.renderDebugFilesTable(files)}
-        `;
-      }
-
-      const articles = data.articles;
-      const pluColumn = articles.pluColumn
-        ? `${articles.pluColumn.col}: ${this.escape(articles.pluColumn.rawHeader || '')} → ${this.escape(articles.pluColumn.normalizedHeader || '')}`
-        : 'nenalezen';
-      const storeColumn = articles.storeColumn
-        ? `${articles.storeColumn.col}: ${this.escape(articles.storeColumn.rawHeader || '')} → ${this.escape(articles.storeColumn.normalizedHeader || '')}`
-        : 'nenalezen';
-
-      const ktColumns = (articles.ktColumns || []).map((col) => `
-        <tr>
-          <td>${this.escape(col.label || '')}</td>
-          <td class="num">${this.escape(col.col || '-')}</td>
-          <td>${this.escape(col.rawHeader || '')}</td>
-          <td>${this.escape(col.normalizedHeader || '')}</td>
-          <td>${col.found ? 'ano' : 'ne'}</td>
-        </tr>
-      `).join('');
-
-      const scores = (articles.columnScores || []).slice(0, 40).map((col) => `
-        <tr>
-          <td class="num">${this.escape(col.col)}</td>
-          <td>${this.escape(col.rawHeader || '')}</td>
-          <td>${this.escape(col.normalizedHeader || '')}</td>
-          <td class="num">${this.escape(col.actionPluHits || 0)}</td>
-          <td class="num">${this.escape(col.storeLikeCount || 0)}</td>
-          <td class="num">${this.escape(col.numericCount || 0)}</td>
-          <td class="num">${this.escape(col.nonEmptyCount || 0)}</td>
-          <td>${this.escape((col.samples || []).join(' | '))}</td>
-        </tr>
-      `).join('');
-
-      const samples = (articles.matchedSamples || []).map((item) => {
-        const amounts = Object.keys(item.amounts || {}).map((key) => `${key}: ${this.formatMoney(item.amounts[key] || 0)}`).join(' | ');
-        return `
-          <tr>
-            <td class="num">${this.escape(item.row || '')}</td>
-            <td>${this.escape(item.plu || '')}</td>
-            <td>${this.escape(item.store || '')}</td>
-            <td>${this.escape(amounts || '-')}</td>
-          </tr>`;
-      }).join('');
-
-      const totals = Object.keys(articles.globalTotals || {}).map((key) => `
-        <span>${this.escape(key)} <strong>${this.formatMoney(articles.globalTotals[key] || 0)}</strong></span>
-      `).join('');
-
-      const preview = (articles.previewRows || []).map((row, rowIndex) => `
-        <tr>
-          <th>${rowIndex + 1}</th>
-          ${row.map((cell) => `<td>${this.escape(cell)}</td>`).join('')}
-        </tr>
-      `).join('');
-
-      return `
-        <h2>Debug odpisů po artiklech</h2>
-        <div class="odpisy-debug-grid">
-          <span>Soubor <strong>${this.escape(articles.sourceName || '')}</strong></span>
-          <span>Rozměr <strong>${this.escape(articles.rows || 0)} × ${this.escape(articles.columns || 0)}</strong></span>
-          <span>Řádek hlavičky <strong>${this.escape(articles.headerRow || 'nenalezen')}</strong></span>
-          <span>Sloupec PLU <strong>${pluColumn}</strong></span>
-          <span>Sloupec prodejny <strong>${storeColumn}</strong></span>
-          <span>Akční PLU z Telexu <strong>${this.escape(articles.actionPluCount || 0)}</strong></span>
-          <span>Spárované řádky <strong>${this.escape(articles.matchedRows || 0)}</strong></span>
-          <span>Spárované řádky s prodejnou <strong>${this.escape(articles.matchedRowsWithStore || 0)}</strong></span>
-          <span>Nenulové spárované řádky <strong>${this.escape(articles.nonZeroMatchedRows || 0)}</strong></span>
-          <span>Filiálky s akčním odpisem <strong>${this.escape(articles.storesWithActionWaste || 0)}</strong></span>
-          ${totals}
-        </div>
-        <p class="odpisy-debug-note">Hledané hlavičky: ${this.escape((articles.searchedHeaderKeywords || []).join(', '))}</p>
-        <p class="odpisy-debug-note">Akční PLU z Telexu nenalezená v poartiklovém souboru: ${this.escape((articles.actionPluNotFoundSamples || []).join(', ') || '-')}</p>
-        ${this.renderDebugFilesTable(files)}
-        <h3>KT sloupce</h3>
-        <div class="odpisy-debug-scroll">
-          <table class="odpisy-debug-table">
-            <thead><tr><th>KT</th><th>Sl.</th><th>Hlavička</th><th>Normalizace</th><th>Nalezeno</th></tr></thead>
-            <tbody>${ktColumns || '<tr><td colspan="5">Žádné KT sloupce.</td></tr>'}</tbody>
-          </table>
-        </div>
-        <h3>Skóre sloupců poartiklového souboru</h3>
-        <div class="odpisy-debug-scroll">
-          <table class="odpisy-debug-table">
-            <thead><tr><th>Sl.</th><th>Hlavička</th><th>Normalizace</th><th>Akční PLU zásahy</th><th>Jako prodejna</th><th>Číselné</th><th>Neprázdné</th><th>Ukázky</th></tr></thead>
-            <tbody>${scores || '<tr><td colspan="8">Žádné kandidátní sloupce.</td></tr>'}</tbody>
-          </table>
-        </div>
-        <h3>Ukázky spárovaných akčních řádků</h3>
-        <div class="odpisy-debug-scroll">
-          <table class="odpisy-debug-table">
-            <thead><tr><th>Řádek</th><th>PLU</th><th>Prodejna</th><th>Částky</th></tr></thead>
-            <tbody>${samples || '<tr><td colspan="4">Žádné spárované řádky.</td></tr>'}</tbody>
-          </table>
-        </div>
-        <h3>Náhled prvních řádků poartiklového souboru</h3>
-        <div class="odpisy-debug-scroll">
-          <table class="odpisy-debug-preview"><tbody>${preview}</tbody></table>
-        </div>
-      `;
-    },
-
-    renderDebugFilesTable(rows) {
-      return `
-        <h3>Soubory ve zdrojové složce</h3>
-        <div class="odpisy-debug-scroll">
-          <table class="odpisy-debug-table">
-            <thead><tr><th>Typ</th><th>Název</th><th>MIME</th><th>List</th><th>Řádky</th><th>Sloupce</th><th>A1</th><th>Poznámka</th></tr></thead>
-            <tbody>${rows || '<tr><td colspan="8">Žádné soubory.</td></tr>'}</tbody>
-          </table>
-        </div>
-      `;
-    },
-
-    saveFolder() {
-      const input = document.querySelector('#odpisyFolderInput');
-      const folderId = input ? input.value.trim() : '';
-      this.showLoading('Ukládám složku', 'Po uložení znovu načtu zdrojová data.');
-      this.callServer('saveOdpisySourceFolder', { folderId })
-        .then((data) => {
-          this.state = data || {};
-          this.toast('Složka odpisů uložena.');
-          this.render();
-        })
-        .catch((err) => {
-          this.toast(err && err.message ? err.message : 'Nepodařilo se uložit složku.', 'error');
-          this.render();
-        });
-    },
+    // ── UI helpers ──────────────────────────────────────────────────────────
 
     showLoading(title, text) {
-      const tabs = document.querySelector('#odpisyTabs');
+      const tabs     = document.querySelector('#odpisyTabs');
       const stateBox = document.querySelector('#odpisyStateBox');
-      const summary = document.querySelector('#odpisySummary');
-      const frame = document.querySelector('#odpisyTableFrame');
-      tabs.innerHTML = '';
-      summary.hidden = true;
-      frame.hidden = true;
+      const summary  = document.querySelector('#odpisySummary');
+      const frame    = document.querySelector('#odpisyTableFrame');
+      tabs.innerHTML  = '';
+      summary.hidden  = true;
+      frame.hidden    = true;
       stateBox.hidden = false;
       stateBox.innerHTML = `
         <div class="odpisy-loader"></div>
@@ -417,17 +315,42 @@
     },
 
     showMessage(title, text, isError) {
-      const tabs = document.querySelector('#odpisyTabs');
+      const tabs     = document.querySelector('#odpisyTabs');
       const stateBox = document.querySelector('#odpisyStateBox');
-      const summary = document.querySelector('#odpisySummary');
-      const frame = document.querySelector('#odpisyTableFrame');
-      tabs.innerHTML = '';
-      summary.hidden = true;
-      frame.hidden = true;
+      const summary  = document.querySelector('#odpisySummary');
+      const frame    = document.querySelector('#odpisyTableFrame');
+      tabs.innerHTML  = '';
+      summary.hidden  = true;
+      frame.hidden    = true;
       stateBox.hidden = false;
       stateBox.innerHTML = `
-        <strong>${this.escape(title)}</strong>
-        <p${isError ? ' style="color:var(--lidl-red)"' : ''}>${this.escape(text)}</p>
+        <div class="odpisy-empty-state">
+          <div class="odpisy-empty-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+          </div>
+          <strong>${this.escape(title)}</strong>
+          <p${isError ? ' style="color:var(--lidl-red)"' : ''}>${this.escape(text)}</p>
+        </div>
+      `;
+    },
+
+    showEmpty(title, text) {
+      const tabs     = document.querySelector('#odpisyTabs');
+      const stateBox = document.querySelector('#odpisyStateBox');
+      const summary  = document.querySelector('#odpisySummary');
+      const frame    = document.querySelector('#odpisyTableFrame');
+      tabs.innerHTML  = '';
+      summary.hidden  = true;
+      frame.hidden    = true;
+      stateBox.hidden = false;
+      stateBox.innerHTML = `
+        <div class="odpisy-empty-state">
+          <div class="odpisy-empty-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          </div>
+          <strong>${this.escape(title)}</strong>
+          <p>${this.escape(text)}</p>
+        </div>
       `;
     },
 
@@ -435,35 +358,36 @@
       const region = document.querySelector('#toastRegion');
       if (!region) return;
       const item = document.createElement('div');
-      item.className = `toast ${tone === 'error' ? 'toast-error' : ''}`;
+      item.className = `toast${tone === 'error' ? ' toast-error' : ''}`;
       item.textContent = message;
       region.appendChild(item);
-      setTimeout(() => item.remove(), 3000);
+      setTimeout(() => item.remove(), 3200);
     },
+
+    // ── Helpers ─────────────────────────────────────────────────────────────
 
     currentKtLabel(weeks) {
       if (!weeks || !weeks.length) return 'KT';
-      const current = weeks[weeks.length - 1];
-      return `KT ${String(current.kt || '').padStart(2, '0')}`;
+      const w = weeks[weeks.length - 1];
+      return `KT ${String(w.kt || '').padStart(2, '0')}`;
     },
 
     pct(globalAkcni, globalCelkem, label) {
       const celkem = Number(globalCelkem && globalCelkem[label] || 0);
-      const akcni = Number(globalAkcni && globalAkcni[label] || 0);
+      const akcni  = Number(globalAkcni  && globalAkcni[label]  || 0);
       return this.ratio(akcni, celkem);
     },
 
     ratio(part, total) {
-      const base = Number(total || 0);
-      const value = Number(part || 0);
+      const base  = Number(total || 0);
+      const value = Number(part  || 0);
       return base ? Math.abs(value) / Math.abs(base) * 100 : 0;
     },
 
     formatMoney(value) {
-      const number = Number(value || 0);
-      return number.toLocaleString('cs-CZ', {
+      return Number(value || 0).toLocaleString('cs-CZ', {
         minimumFractionDigits: 2,
-        maximumFractionDigits: 2
+        maximumFractionDigits: 2,
       }) + ' Kč';
     },
 
