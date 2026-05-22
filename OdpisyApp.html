@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="cs">
+  <head>
+    <base target="_top">
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title><?= app.appName ?></title>
+    <?!= include('styles'); ?>
+    <?!= include('OdpisyApp_Style'); ?>
+  </head>
+  <body class="odpisy-standalone-body">
+    <main class="odpisy-standalone">
+      <header class="odpisy-app-topbar">
+        <a class="odpisy-dashboard-link" href="<?= app.dashboardUrl ?>" target="_top">
+          <span aria-hidden="true">‹</span>
+          OZ Dashboard
+        </a>
+        <div class="odpisy-userline">
+          <strong><?= app.user ?></strong>
+          <span>v<?= app.version ?></span>
+        </div>
+      </header>
+
+      <section class="odpisy-workbook" aria-label="Vyhodnocení odpisů akčních artiklů">
+        <nav class="odpisy-sheet-tabs" id="odpisyTabs" aria-label="Logistická centra"></nav>
+        <div class="odpisy-workbook-page">
+          <section class="odpisy-sheet-header" id="odpisySheetHeader">
+            <div class="odpisy-lidl-mark">
+              <img src="<?= app.logoUrl ?>" alt="Lidl">
+            </div>
+            <div class="odpisy-title-block">
+              <h1><span id="odpisyLcTitle">LC</span> | Vyhodnocení odpisů akčních artiklů</h1>
+              <p>Steuerung - Frischemanagement | <span id="odpisyKtTitle">KT</span> | <span id="odpisyDateTitle"></span></p>
+            </div>
+            <div class="odpisy-trash-mark" aria-hidden="true">
+              <span></span>
+            </div>
+          </section>
+
+          <section class="odpisy-state" id="odpisyStateBox">
+            <div class="odpisy-loader"></div>
+            <strong>Načítám odpisy</strong>
+            <p>Kontroluji zdrojové soubory a páruji filiálky s LC.</p>
+          </section>
+
+          <section class="odpisy-summary-strip" id="odpisySummary" hidden></section>
+          <section class="odpisy-table-frame" id="odpisyTableFrame" hidden></section>
+        </div>
+      </section>
+
+      <div class="toast-region" id="toastRegion" aria-live="polite" aria-atomic="true"></div>
+    </main>
+
+    <script>
+      window.APP_BOOTSTRAP = <?!= JSON.stringify(app) ?>;
+    </script>
+    <?!= include('OdpisyApp_Script'); ?>
+  </body>
+</html>

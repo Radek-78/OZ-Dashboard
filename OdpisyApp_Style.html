@@ -1,0 +1,391 @@
+<style>
+  .odpisy-standalone-body {
+    margin: 0;
+    min-height: 100vh;
+    background: #e9eef6;
+    color: var(--text);
+    overflow: hidden;
+  }
+
+  .odpisy-standalone {
+    height: 100vh;
+    display: grid;
+    grid-template-rows: auto 1fr;
+    padding: 14px 22px 20px;
+    box-sizing: border-box;
+    gap: 10px;
+  }
+
+  .odpisy-app-topbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    min-height: 34px;
+  }
+
+  .odpisy-dashboard-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    height: 32px;
+    padding: 0 12px;
+    border: 1px solid rgba(0,80,170,.18);
+    border-radius: 6px;
+    background: #fff;
+    color: var(--lidl-blue);
+    font-size: 12px;
+    font-weight: 800;
+    text-decoration: none;
+    box-shadow: 0 8px 18px rgba(0,31,85,.06);
+  }
+
+  .odpisy-dashboard-link span {
+    font-size: 20px;
+    line-height: 1;
+  }
+
+  .odpisy-userline {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    color: #54627a;
+    font-size: 11px;
+  }
+
+  .odpisy-userline strong {
+    color: #17386e;
+  }
+
+  .odpisy-workbook {
+    min-height: 0;
+    display: grid;
+    grid-template-rows: auto 1fr;
+  }
+
+  .odpisy-sheet-tabs {
+    display: flex;
+    gap: 4px;
+    align-items: flex-end;
+    min-height: 34px;
+    padding: 0 8px;
+    overflow-x: auto;
+    scrollbar-width: thin;
+  }
+
+  .odpisy-sheet-tab {
+    min-width: 68px;
+    height: 30px;
+    border: 1px solid #aeb7c8;
+    border-bottom-color: #222;
+    border-radius: 8px 8px 0 0;
+    background: linear-gradient(180deg, #f9fbff, #dce4f0);
+    color: #18345f;
+    font-size: 12px;
+    font-weight: 900;
+    cursor: pointer;
+    padding: 0 12px;
+    white-space: nowrap;
+  }
+
+  .odpisy-sheet-tab.is-active {
+    height: 34px;
+    background: #fff;
+    border-color: #1c1c1c;
+    border-bottom-color: #fff;
+    color: var(--lidl-blue);
+    position: relative;
+    z-index: 2;
+  }
+
+  .odpisy-workbook-page {
+    min-height: 0;
+    overflow: hidden;
+    background: #fff;
+    border: 2px solid #1e1e1e;
+    display: grid;
+    grid-template-rows: auto auto 1fr;
+    box-shadow: 0 20px 50px rgba(0,31,85,.09);
+  }
+
+  .odpisy-sheet-header {
+    display: grid;
+    grid-template-columns: 96px 1fr 96px;
+    align-items: center;
+    min-height: 104px;
+    padding: 0 22px;
+    border-bottom: 3px solid #111;
+  }
+
+  .odpisy-lidl-mark {
+    width: 78px;
+    height: 78px;
+    display: grid;
+    place-items: center;
+    background: var(--lidl-blue);
+    border: 1px solid #244b84;
+  }
+
+  .odpisy-lidl-mark img {
+    width: 70px;
+    height: 70px;
+    object-fit: contain;
+  }
+
+  .odpisy-title-block {
+    text-align: center;
+    min-width: 0;
+  }
+
+  .odpisy-title-block h1 {
+    margin: 0 0 12px;
+    font-size: 30px;
+    line-height: 1.08;
+    font-weight: 1000;
+    color: #050505;
+  }
+
+  .odpisy-title-block p {
+    margin: 0;
+    color: #030303;
+    font-size: 13px;
+  }
+
+  .odpisy-trash-mark {
+    justify-self: end;
+    width: 72px;
+    height: 72px;
+    position: relative;
+  }
+
+  .odpisy-trash-mark::before,
+  .odpisy-trash-mark::after,
+  .odpisy-trash-mark span {
+    content: "";
+    position: absolute;
+    border: 6px solid var(--lidl-dark-blue);
+  }
+
+  .odpisy-trash-mark::before {
+    left: 18px;
+    bottom: 4px;
+    width: 34px;
+    height: 48px;
+    border-top: none;
+    border-radius: 0 0 10px 10px;
+  }
+
+  .odpisy-trash-mark::after {
+    left: 10px;
+    top: 14px;
+    width: 50px;
+    height: 8px;
+    border-bottom: none;
+    border-radius: 12px 12px 0 0;
+  }
+
+  .odpisy-trash-mark span {
+    left: 26px;
+    top: 3px;
+    width: 18px;
+    height: 12px;
+    border-bottom: none;
+    border-radius: 12px 12px 0 0;
+  }
+
+  .odpisy-state {
+    align-self: center;
+    justify-self: center;
+    text-align: center;
+    display: grid;
+    gap: 10px;
+    color: #5e6c82;
+    padding: 34px;
+  }
+
+  .odpisy-state strong {
+    color: #102f61;
+    font-size: 16px;
+  }
+
+  .odpisy-state p {
+    margin: 0;
+    font-size: 13px;
+  }
+
+  .odpisy-loader {
+    width: 34px;
+    height: 34px;
+    justify-self: center;
+    border: 4px solid #d8e2f1;
+    border-top-color: var(--lidl-blue);
+    border-radius: 50%;
+    animation: odpisy-spin .8s linear infinite;
+  }
+
+  @keyframes odpisy-spin { to { transform: rotate(360deg); } }
+
+  .odpisy-summary-strip {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 8px 14px;
+    border-bottom: 1px solid #8792a4;
+    background: #f2f6fc;
+    font-size: 12px;
+  }
+
+  .odpisy-summary-chip {
+    display: inline-flex;
+    gap: 6px;
+    align-items: baseline;
+    min-height: 24px;
+    padding: 0 10px;
+    border: 1px solid #cbd6e5;
+    border-radius: 5px;
+    background: #fff;
+    color: #4c5c73;
+    font-weight: 800;
+  }
+
+  .odpisy-summary-chip strong {
+    color: var(--lidl-blue);
+    font-size: 13px;
+  }
+
+  .odpisy-table-frame {
+    min-height: 0;
+    overflow: auto;
+  }
+
+  .odpisy-app-table {
+    width: 100%;
+    min-width: 1180px;
+    border-collapse: collapse;
+    table-layout: fixed;
+    font-size: 12px;
+    color: #030b1d;
+  }
+
+  .odpisy-app-table col.store-number { width: 78px; }
+  .odpisy-app-table col.store-name { width: 220px; }
+  .odpisy-app-table col.rm { width: 150px; }
+  .odpisy-app-table col.money,
+  .odpisy-app-table col.percent { width: 100px; }
+
+  .odpisy-app-table th {
+    background: var(--lidl-blue);
+    color: #fff;
+    border: 2px solid #111;
+    padding: 5px 7px;
+    font-size: 11px;
+    font-weight: 1000;
+    text-align: center;
+    line-height: 1.15;
+  }
+
+  .odpisy-app-table thead tr:first-child th {
+    background: var(--lidl-dark-blue);
+    border-bottom-width: 1px;
+  }
+
+  .odpisy-app-table td {
+    border: 1px dotted #1f2937;
+    border-top: none;
+    padding: 5px 6px;
+    height: 23px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    background: #fff;
+  }
+
+  .odpisy-app-table tbody tr.is-rm-band td {
+    background: #dce8f7;
+  }
+
+  .odpisy-app-table tbody tr:hover td {
+    background: #fff8d9;
+  }
+
+  .odpisy-app-table td.num {
+    text-align: right !important;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .odpisy-app-table td.center {
+    text-align: center;
+  }
+
+  .odpisy-app-table tfoot td {
+    background: var(--lidl-blue);
+    color: #fff;
+    border: 2px solid #111;
+    padding: 8px 7px;
+    font-size: 15px;
+    font-weight: 1000;
+  }
+
+  .odpisy-config-inline {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 8px;
+    margin-top: 12px;
+  }
+
+  .odpisy-config-inline input {
+    width: min(520px, 74vw);
+    height: 34px;
+    padding: 0 10px;
+    border: 1px solid #bac7d8;
+    border-radius: 5px;
+    font-size: 13px;
+  }
+
+  .odpisy-config-inline button {
+    height: 34px;
+    padding: 0 14px;
+    border: none;
+    border-radius: 5px;
+    background: var(--lidl-blue);
+    color: #fff;
+    font-weight: 900;
+    cursor: pointer;
+  }
+
+  @media (max-width: 900px) {
+    .odpisy-standalone {
+      padding: 10px;
+    }
+
+    .odpisy-sheet-header {
+      grid-template-columns: 64px 1fr;
+      min-height: 88px;
+      padding: 0 12px;
+    }
+
+    .odpisy-lidl-mark {
+      width: 54px;
+      height: 54px;
+    }
+
+    .odpisy-lidl-mark img {
+      width: 48px;
+      height: 48px;
+    }
+
+    .odpisy-trash-mark {
+      display: none;
+    }
+
+    .odpisy-title-block h1 {
+      font-size: 20px;
+    }
+
+    .odpisy-summary-strip {
+      align-items: flex-start;
+      flex-direction: column;
+    }
+  }
+</style>

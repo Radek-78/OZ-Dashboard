@@ -607,6 +607,13 @@ const App = {
           if (viewName === 'odpisyPage') this.loadOdpisy();
           return;
         }
+        if (url.startsWith('?')) {
+          const baseUrl = (window.APP_BOOTSTRAP && window.APP_BOOTSTRAP.webAppUrl)
+            ? window.APP_BOOTSTRAP.webAppUrl
+            : window.location.href.split(/[?#]/)[0];
+          window.top.location.href = baseUrl + url;
+          return;
+        }
         if (url) {
           window.open(url, '_blank', 'noopener');
         } else {

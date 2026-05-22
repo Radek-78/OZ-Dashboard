@@ -14,7 +14,7 @@ var SUBAPP_STATUSES = ['ACTIVE', 'PREPARING', 'DISABLED'];
  * Přidejte každou novou interní subaplikaci sem.
  */
 var INTERNAL_SUBAPP_URLS = [
-  { nameContains: 'vyhodnoceniodpisuakcnich', url: '#odpisyPage' },
+  { nameContains: 'vyhodnoceniodpisuakcnich', url: '?page=odpisy' },
 ];
 
 // ---------------------------------------------------------------------------

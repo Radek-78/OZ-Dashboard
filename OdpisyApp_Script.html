@@ -1,0 +1,324 @@
+<script>
+  const OdpisyApp = {
+    state: null,
+    activeLc: '',
+
+    init() {
+      this.setStaticHeader();
+      this.loadData();
+    },
+
+    setStaticHeader() {
+      const dateEl = document.querySelector('#odpisyDateTitle');
+      if (dateEl) {
+        dateEl.textContent = new Date().toLocaleDateString('cs-CZ', {
+          day: '2-digit', month: '2-digit', year: 'numeric'
+        });
+      }
+    },
+
+    callServer(fnName, payload) {
+      return new Promise((resolve, reject) => {
+        const runner = google.script.run
+          .withSuccessHandler(resolve)
+          .withFailureHandler(reject);
+        if (payload === undefined) runner[fnName]();
+        else runner[fnName](payload);
+      });
+    },
+
+    loadData() {
+      this.showLoading('Načítám odpisy', 'Kontroluji zdrojové soubory a páruji filiálky s LC.');
+      this.callServer('getOdpisyData')
+        .then((data) => {
+          this.state = data || {};
+          this.render();
+        })
+        .catch((err) => {
+          this.showMessage('Nepodařilo se načíst odpisy', err && err.message ? err.message : String(err), true);
+        });
+    },
+
+    render() {
+      const state = this.state || {};
+      if (state.error) {
+        this.showMessage('Chyba při zpracování dat', state.error, true);
+        if (!state.configured || state.canConfigure) this.appendConfig();
+        return;
+      }
+
+      if (!state.configured) {
+        this.showMessage(
+          'Subaplikace není nakonfigurována',
+          state.canConfigure
+            ? 'Zadejte ID nebo URL složky se třemi zdrojovými Google Sheets soubory.'
+            : 'Požádejte správce aplikace o nastavení složky se zdrojovými soubory.',
+          false
+        );
+        if (state.canConfigure) this.appendConfig();
+        return;
+      }
+
+      if (!state.lcs || !state.lcs.length) {
+        this.showMessage(
+          'Data zatím nejsou dostupná',
+          'Žádné filiálky nebylo možné spárovat s logistickými centry. Zkontrolujte synchronizaci filiálek a přiřazení LC.',
+          false
+        );
+        if (state.canConfigure) this.appendConfig();
+        return;
+      }
+
+      if (!this.activeLc || !state.lcs.some((lc) => lc.abbreviation === this.activeLc)) {
+        this.activeLc = state.lcs[0].abbreviation;
+      }
+
+      this.renderTabs();
+      this.renderActiveLc();
+    },
+
+    renderTabs() {
+      const tabs = document.querySelector('#odpisyTabs');
+      const state = this.state || {};
+      tabs.innerHTML = (state.lcs || []).map((lc) => {
+        const label = `${this.escape(String(Number(lc.code) || lc.code || ''))} ${this.escape(lc.abbreviation || '')}`.trim();
+        return `
+          <button class="odpisy-sheet-tab${lc.abbreviation === this.activeLc ? ' is-active' : ''}"
+            type="button"
+            title="${this.escape(lc.city || '')}"
+            data-lc="${this.escape(lc.abbreviation || '')}">
+            ${label}
+          </button>`;
+      }).join('');
+
+      tabs.querySelectorAll('.odpisy-sheet-tab').forEach((button) => {
+        button.addEventListener('click', () => {
+          this.activeLc = button.dataset.lc || '';
+          this.renderActiveLc();
+          this.renderTabs();
+        });
+      });
+    },
+
+    renderActiveLc() {
+      const state = this.state || {};
+      const lc = (state.lcs || []).find((item) => item.abbreviation === this.activeLc);
+      if (!lc) return;
+
+      document.querySelector('#odpisyLcTitle').textContent = lc.abbreviation || 'LC';
+      document.querySelector('#odpisyKtTitle').textContent = this.currentKtLabel(state.weeks);
+
+      const stateBox = document.querySelector('#odpisyStateBox');
+      const summary = document.querySelector('#odpisySummary');
+      const frame = document.querySelector('#odpisyTableFrame');
+      stateBox.hidden = true;
+      summary.hidden = false;
+      frame.hidden = false;
+
+      const pctTexts = (state.weeks || []).map((w) => this.formatPct(this.pct(state.globalAkcni, state.globalCelkem, w.label)));
+      summary.innerHTML = `
+        <div>
+          <span class="odpisy-summary-chip"><strong>${this.escape(lc.stores.length)}</strong> filiálek</span>
+          <span class="odpisy-summary-chip"><strong>${this.escape(state.akcniCount || 0)}</strong> akčních artiklů</span>
+          <span class="odpisy-summary-chip"><strong>${this.escape(pctTexts.join(' / ') || '0,0 %')}</strong> akční podíl</span>
+        </div>
+        <div class="odpisy-summary-chip"><strong>${this.escape(lc.city || lc.abbreviation || '')}</strong></div>
+      `;
+
+      frame.innerHTML = this.renderTable(lc, state.weeks || [], state.globalAkcni || {}, state.globalCelkem || {});
+      if (state.canConfigure) this.appendConfig(frame);
+    },
+
+    renderTable(lc, weeks, globalAkcni, globalCelkem) {
+      const weekGroups = weeks.map((w) => `<th colspan="3">${this.escape(w.label)}</th>`).join('');
+      const weekCols = weeks.map(() => `
+        <th>Odpis<br>celkový</th>
+        <th>Odpis<br>akce</th>
+        <th>%</th>
+      `).join('');
+      const colGroups = `
+        <colgroup>
+          <col class="store-number">
+          <col class="store-name">
+          <col class="rm">
+          ${weeks.map(() => '<col class="money"><col class="money"><col class="percent">').join('')}
+          <col class="money"><col class="money"><col class="percent">
+        </colgroup>`;
+
+      let lastRm = '';
+      let band = false;
+      const rows = (lc.stores || []).map((store) => {
+        if ((store.rm || '') !== lastRm) {
+          lastRm = store.rm || '';
+          band = !band;
+        }
+        const weekCells = weeks.map((w) => `
+          <td class="num">${this.formatMoney(store[w.label] || 0)}</td>
+          <td class="num">-</td>
+          <td class="center">-</td>
+        `).join('');
+        const rowTotal = weeks.reduce((sum, w) => sum + Number(store[w.label] || 0), 0);
+        return `
+          <tr class="${band ? 'is-rm-band' : ''}">
+            <td class="center">${this.escape(store.storeNumber || '')}</td>
+            <td title="${this.escape(store.storeName || '')}">${this.escape(store.storeName || '')}</td>
+            <td title="${this.escape(store.rm || '')}">${this.escape(store.rm || '')}</td>
+            ${weekCells}
+            <td class="num">${this.formatMoney(rowTotal)}</td>
+            <td class="num">-</td>
+            <td class="center">-</td>
+          </tr>`;
+      }).join('');
+
+      const totalWeekCells = weeks.map((w) => {
+        const pct = this.pct(globalAkcni, globalCelkem, w.label);
+        return `
+          <td class="num">${this.formatMoney(lc.totals && lc.totals[w.label] || 0)}</td>
+          <td class="num">${this.formatMoney(globalAkcni[w.label] || 0)}</td>
+          <td class="num">${this.formatPct(pct)}</td>
+        `;
+      }).join('');
+      const lcTotal = weeks.reduce((sum, w) => sum + Number(lc.totals && lc.totals[w.label] || 0), 0);
+      const akcniTotal = weeks.reduce((sum, w) => sum + Number(globalAkcni[w.label] || 0), 0);
+      const celkemTotal = weeks.reduce((sum, w) => sum + Number(globalCelkem[w.label] || 0), 0);
+
+      return `
+        <table class="odpisy-app-table" aria-label="Odpisy ${this.escape(lc.abbreviation || '')}">
+          ${colGroups}
+          <thead>
+            <tr>
+              <th colspan="3">Akční artikly</th>
+              ${weekGroups}
+              <th colspan="3">Celkem</th>
+            </tr>
+            <tr>
+              <th>Č.</th>
+              <th>Prodejna</th>
+              <th>RM</th>
+              ${weekCols}
+              <th>Odpis<br>celkový</th>
+              <th>Odpis<br>akce</th>
+              <th>%</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rows || `<tr><td colspan="${6 + weeks.length * 3}" class="center">Žádné filiálky</td></tr>`}
+          </tbody>
+          <tfoot>
+            <tr>
+              <td colspan="3">Průměr za LC</td>
+              ${totalWeekCells}
+              <td class="num">${this.formatMoney(lcTotal)}</td>
+              <td class="num">${this.formatMoney(akcniTotal)}</td>
+              <td class="num">${this.formatPct(celkemTotal ? Math.abs(akcniTotal) / Math.abs(celkemTotal) * 100 : 0)}</td>
+            </tr>
+          </tfoot>
+        </table>`;
+    },
+
+    appendConfig(target) {
+      const host = target || document.querySelector('#odpisyStateBox');
+      const state = this.state || {};
+      const form = document.createElement('div');
+      form.className = 'odpisy-config-inline';
+      form.innerHTML = `
+        <input type="text" id="odpisyFolderInput" placeholder="ID nebo URL složky odpisů" value="${this.escape(state.folderId || '')}">
+        <button type="button" id="odpisyFolderSave">Uložit složku</button>
+      `;
+      host.appendChild(form);
+      form.querySelector('#odpisyFolderSave').addEventListener('click', () => this.saveFolder());
+    },
+
+    saveFolder() {
+      const input = document.querySelector('#odpisyFolderInput');
+      const folderId = input ? input.value.trim() : '';
+      this.showLoading('Ukládám složku', 'Po uložení znovu načtu zdrojová data.');
+      this.callServer('saveOdpisySourceFolder', { folderId })
+        .then((data) => {
+          this.state = data || {};
+          this.toast('Složka odpisů uložena.');
+          this.render();
+        })
+        .catch((err) => {
+          this.toast(err && err.message ? err.message : 'Nepodařilo se uložit složku.', 'error');
+          this.render();
+        });
+    },
+
+    showLoading(title, text) {
+      const tabs = document.querySelector('#odpisyTabs');
+      const stateBox = document.querySelector('#odpisyStateBox');
+      const summary = document.querySelector('#odpisySummary');
+      const frame = document.querySelector('#odpisyTableFrame');
+      tabs.innerHTML = '';
+      summary.hidden = true;
+      frame.hidden = true;
+      stateBox.hidden = false;
+      stateBox.innerHTML = `
+        <div class="odpisy-loader"></div>
+        <strong>${this.escape(title)}</strong>
+        <p>${this.escape(text)}</p>
+      `;
+    },
+
+    showMessage(title, text, isError) {
+      const tabs = document.querySelector('#odpisyTabs');
+      const stateBox = document.querySelector('#odpisyStateBox');
+      const summary = document.querySelector('#odpisySummary');
+      const frame = document.querySelector('#odpisyTableFrame');
+      tabs.innerHTML = '';
+      summary.hidden = true;
+      frame.hidden = true;
+      stateBox.hidden = false;
+      stateBox.innerHTML = `
+        <strong>${this.escape(title)}</strong>
+        <p${isError ? ' style="color:var(--lidl-red)"' : ''}>${this.escape(text)}</p>
+      `;
+    },
+
+    toast(message, tone) {
+      const region = document.querySelector('#toastRegion');
+      if (!region) return;
+      const item = document.createElement('div');
+      item.className = `toast ${tone === 'error' ? 'toast-error' : ''}`;
+      item.textContent = message;
+      region.appendChild(item);
+      setTimeout(() => item.remove(), 3000);
+    },
+
+    currentKtLabel(weeks) {
+      if (!weeks || !weeks.length) return 'KT';
+      const current = weeks[weeks.length - 1];
+      return `KT ${String(current.kt || '').padStart(2, '0')}`;
+    },
+
+    pct(globalAkcni, globalCelkem, label) {
+      const celkem = Number(globalCelkem && globalCelkem[label] || 0);
+      const akcni = Number(globalAkcni && globalAkcni[label] || 0);
+      return celkem ? Math.abs(akcni) / Math.abs(celkem) * 100 : 0;
+    },
+
+    formatMoney(value) {
+      const number = Number(value || 0);
+      return number.toLocaleString('cs-CZ', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+      }) + ' Kč';
+    },
+
+    formatPct(value) {
+      return Number(value || 0).toFixed(1).replace('.', ',') + ' %';
+    },
+
+    escape(value) {
+      return String(value === null || value === undefined ? '' : value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    },
+  };
+
+  document.addEventListener('DOMContentLoaded', () => OdpisyApp.init());
+</script>

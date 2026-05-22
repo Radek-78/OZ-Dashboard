@@ -98,11 +98,13 @@ function buildOdpisyData_(context) {
 
     const storeToLcAbbr = {};
     const storeToName   = {};
+    const storeToRm     = {};
     branches.forEach(function(b) {
       if (!b.active || !b.storeNumber) return;
       const key = String(b.storeNumber);
       storeToLcAbbr[key] = b.lc || '';
       storeToName[key]   = b.storeName || '';
+      storeToRm[key]     = b.rm || '';
     });
 
     // Seskupení obchodů do LC skupin
@@ -115,6 +117,7 @@ function buildOdpisyData_(context) {
       lcGroups[abbr].stores.push({
         storeNumber: parseInt(storeNum, 10) || 0,
         storeName:   storeToName[storeNum] || '',
+        rm:          storeToRm[storeNum] || '',
         values:      storeValues[storeNum],
       });
     });
@@ -159,6 +162,7 @@ function buildOdpisyData_(context) {
             const row = {
               storeNumber: s.storeNumber,
               storeName:   s.storeName,
+              rm:          s.rm || '',
             };
             weeks.forEach(function(w) { row[w.label] = s.values[w.label] || 0; });
             return row;
@@ -295,17 +299,19 @@ function readOdpisyAkcniPlu_(sheet) {
   const data = sheet.getDataRange().getValues();
   if (data.length < 2) return new Set();
 
-  const headerRow = findOdpisyHeaderRow_(data, 'akcnicena');
+  const headerRow = findOdpisyHeaderRowByKeywords_(data, [
+    'akcnicena', 'akce', 'akcni', 'plu', 'artikl', 'article'
+  ]);
   if (headerRow < 0) {
-    Logger.log('[ODPISY_TELEX] Nenalezen řádek záhlaví s "akcnicena"');
+    Logger.log('[ODPISY_TELEX] Nenalezen řádek záhlaví Telexu s akčním příznakem nebo artiklem');
     return new Set();
   }
 
   const headers  = data[headerRow].map(normalizeOdpisyHeader_);
-  const akcniCol = findOdpisyColByKeyword_(headers, 'akcnicena');
-  const pluCol   = findOdpisyColByKeyword_(headers, 'artikl') >= 0
-    ? findOdpisyColByKeyword_(headers, 'artikl')
-    : findOdpisyColByKeyword_(headers, 'plu');
+  const akcniCol = findOdpisyActionFlagCol_(data, headerRow, headers);
+  const pluCol   = findOdpisyColByKeywords_(headers, [
+    'artikl', 'artiklcislo', 'cisloartiklu', 'article', 'articleid', 'plu', 'matnr'
+  ]);
 
   if (akcniCol < 0 || pluCol < 0) {
     Logger.log('[ODPISY_TELEX] Chybí sloupce: akcniCol=%s pluCol=%s', akcniCol, pluCol);
@@ -402,14 +408,18 @@ function readOdpisyAkcniByKt_(sheet, weeks, akcniPluSet) {
   const data = sheet.getDataRange().getValues();
   if (data.length < 2) return {};
 
-  const headerRow = findOdpisyHeaderRow_(data, 'artikl');
+  const headerRow = findOdpisyHeaderRowByKeywords_(data, [
+    'artikl', 'artiklcislo', 'cisloartiklu', 'article', 'articleid', 'plu', 'matnr'
+  ]);
   if (headerRow < 0) {
-    Logger.log('[ODPISY_ARTICLES] Nenalezen řádek záhlaví s "artikl"');
+    Logger.log('[ODPISY_ARTICLES] Nenalezen řádek záhlaví se sloupcem artiklu/PLU');
     return {};
   }
 
   const headers = data[headerRow].map(normalizeOdpisyHeader_);
-  const pluCol  = findOdpisyColByKeyword_(headers, 'artikl');
+  const pluCol  = findOdpisyColByKeywords_(headers, [
+    'artikl', 'artiklcislo', 'cisloartiklu', 'article', 'articleid', 'plu', 'matnr'
+  ]);
   if (pluCol < 0) return {};
 
   const ktCols = buildOdpisyKtColMap_(data[headerRow], weeks);
@@ -449,6 +459,23 @@ function findOdpisyHeaderRow_(data, keyword) {
 }
 
 /**
+ * Najde index prvního řádku záhlaví, jehož normalizovaný obsah obsahuje alespoň jedno z klíčových slov.
+ * @param {Array[]} data
+ * @param {string[]} keywords
+ * @returns {number} index řádku nebo -1
+ */
+function findOdpisyHeaderRowByKeywords_(data, keywords) {
+  for (var row = 0; row < Math.min(data.length, 15); row++) {
+    var normalized = data[row].map(normalizeOdpisyHeader_);
+    for (var k = 0; k < keywords.length; k++) {
+      var keyword = normalizeOdpisyHeader_(keywords[k]);
+      if (normalized.some(function(h) { return h.indexOf(keyword) >= 0; })) return row;
+    }
+  }
+  return -1;
+}
+
+/**
  * Najde index sloupce, jehož normalizovaný název obsahuje keyword.
  * @param {string[]} headers - normalizovaná záhlaví
  * @param {string} keyword
@@ -459,6 +486,53 @@ function findOdpisyColByKeyword_(headers, keyword) {
     if (headers[i].indexOf(keyword) >= 0) return i;
   }
   return -1;
+}
+
+/**
+ * Najde index sloupce podle více možných názvů.
+ * @param {string[]} headers - normalizovaná záhlaví
+ * @param {string[]} keywords
+ * @returns {number} index nebo -1
+ */
+function findOdpisyColByKeywords_(headers, keywords) {
+  for (var k = 0; k < keywords.length; k++) {
+    var col = findOdpisyColByKeyword_(headers, normalizeOdpisyHeader_(keywords[k]));
+    if (col >= 0) return col;
+  }
+  return -1;
+}
+
+/**
+ * Najde sloupec s příznakem akce. Nejdřív podle hlavičky, potom podle hodnot W/WW ve sloupci.
+ * @param {Array[]} data
+ * @param {number} headerRow
+ * @param {string[]} headers
+ * @returns {number} index nebo -1
+ */
+function findOdpisyActionFlagCol_(data, headerRow, headers) {
+  const byHeader = findOdpisyColByKeywords_(headers, [
+    'akcnicena', 'akcicena', 'akce', 'akcni', 'promo'
+  ]);
+  if (byHeader >= 0) return byHeader;
+
+  var bestCol = -1;
+  var bestScore = 0;
+  for (var col = 0; col < headers.length; col++) {
+    var score = 0;
+    for (var row = headerRow + 1; row < data.length; row++) {
+      var value = String(data[row][col] || '').trim().toUpperCase();
+      if (value === 'W' || value === 'WW') score++;
+    }
+    if (score > bestScore) {
+      bestScore = score;
+      bestCol = col;
+    }
+  }
+
+  if (bestCol >= 0) {
+    Logger.log('[ODPISY_TELEX] Sloupec akčního příznaku nalezen podle hodnot W/WW: col=%s rows=%s', bestCol, bestScore);
+  }
+  return bestScore > 0 ? bestCol : -1;
 }
 
 /**

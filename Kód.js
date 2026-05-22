@@ -24,9 +24,15 @@
 /**
  * Zpracuje GET request — vrátí renderovanou HTML stránku.
  * Nasazení: "Execute as: User accessing the web app", "Who has access: Anyone within Lidl".
+ * @param {Object=} e - GET event s query parametry.
  * @returns {HtmlOutput}
  */
-function doGet() {
+function doGet(e) {
+  const page = String(e && e.parameter && e.parameter.page || '').trim().toLowerCase();
+  if (page === 'odpisy' || page === 'vyhodnoceni-odpisu-akcnich-artiklu') {
+    return renderOdpisyAppPage_();
+  }
+
   const bootstrap = getAppBootstrap();
 
   return renderPage('index', {
@@ -37,10 +43,35 @@ function doGet() {
     theme:      APP_CONFIG.theme,
     user:       bootstrap.user.email,
     auth:       bootstrap.auth,
+    webAppUrl:  getWebAppUrl_(),
     renderedAt: new Date().toISOString(),
     changelog:  APP_CHANGELOG,
   })
     .setTitle(APP_CONFIG.appName)
+    .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+}
+
+/**
+ * Renderuje samostatnou stránku subaplikace Vyhodnocení odpisů.
+ * @returns {HtmlOutput}
+ */
+function renderOdpisyAppPage_() {
+  const bootstrap = getAppBootstrap();
+  const webAppUrl = getWebAppUrl_();
+
+  return renderPage('OdpisyApp', {
+    appName:      'Vyhodnocení odpisů akčních artiklů',
+    appSubtitle:  APP_CONFIG.appName,
+    logoUrl:      APP_CONFIG.logoUrl,
+    version:      APP_CONFIG.version,
+    theme:        APP_CONFIG.theme,
+    user:         bootstrap.user.email,
+    auth:         bootstrap.auth,
+    webAppUrl:    webAppUrl,
+    dashboardUrl: webAppUrl,
+    renderedAt:   new Date().toISOString(),
+  })
+    .setTitle('Vyhodnocení odpisů akčních artiklů')
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
 }
 
@@ -85,6 +116,7 @@ function getAppBootstrap() {
     theme:       APP_CONFIG.theme,
     user:        context.user,
     auth:        context.auth,
+    webAppUrl:   getWebAppUrl_(),
     database: {
       spreadsheetId:  context.database.spreadsheetId,
       spreadsheetUrl: context.database.spreadsheetUrl,
@@ -109,6 +141,7 @@ function getInitData() {
     theme:       APP_CONFIG.theme,
     user:        context.user,
     auth:        context.auth,
+    webAppUrl:   getWebAppUrl_(),
     database: {
       spreadsheetId:  context.database.spreadsheetId,
       spreadsheetUrl: context.database.spreadsheetUrl,
@@ -147,6 +180,19 @@ function getInitData() {
   }
 
   return { bootstrap, homeData, settingsData };
+}
+
+/**
+ * Bezpečně vrátí URL aktuálně nasazené web aplikace.
+ * @returns {string}
+ */
+function getWebAppUrl_() {
+  try {
+    return ScriptApp.getService().getUrl() || '';
+  } catch (e) {
+    Logger.log('[WEB_APP_URL_FAIL] %s', e && e.message ? e.message : e);
+    return '';
+  }
 }
 
 // ---------------------------------------------------------------------------
