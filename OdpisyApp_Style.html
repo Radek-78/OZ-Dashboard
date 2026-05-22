@@ -210,20 +210,14 @@
     border-top-color: #1e2d47;
     border-top-width: 2.5px;
     display: grid;
-    grid-template-rows: auto auto 1fr;
+    grid-template-rows: auto 1fr;
     box-shadow: 0 8px 32px rgba(0,20,60,.10);
     overflow: hidden;
   }
 
-  /* ── Document header ───────────────────────────────────────────────────── */
+  /* ── Document header — hidden in web UI, visible only for PDF export ───── */
   .odpisy-sheet-header {
-    display: grid;
-    grid-template-columns: 88px 1fr 88px;
-    align-items: center;
-    min-height: 88px;
-    padding: 0 20px;
-    border-bottom: 3px solid #111;
-    background: #fff;
+    display: none;
   }
 
   .odpisy-lidl-mark {
@@ -336,7 +330,10 @@
   .odpisy-app-table {
     width: 100%;
     min-width: 1100px;
-    border-collapse: collapse;
+    /* border-collapse: separate is the ONLY reliable way to sticky thead/tfoot;
+       border-collapse: collapse shares borders across elements which breaks sticky */
+    border-collapse: separate;
+    border-spacing: 0;
     table-layout: fixed;
     font-size: 11.5px;
     color: #030b1d;
@@ -348,10 +345,16 @@
   .odpisy-app-table col.money        { width: 108px; }
   .odpisy-app-table col.percent      { width: 72px; }
 
+  /* With border-collapse: separate, each cell owns its own borders.
+     Strategy: set border-right + border-bottom on every cell,
+     and only add border-left / border-top at the table outer edges. */
+
   .odpisy-app-table th {
     background: var(--lidl-blue);
     color: #fff;
-    border: 1.5px solid #0d2a5e;
+    /* right + bottom on all header cells */
+    border-right:  1.5px solid #0d2a5e;
+    border-bottom: 1.5px solid #0d2a5e;
     padding: 5px 7px;
     font-size: 10.5px;
     font-weight: 800;
@@ -364,16 +367,30 @@
     position: sticky;
     top: 0;
     z-index: 4;
-    /* shadow masks the collapsed border gap that appears on scroll */
-    box-shadow: 0 2px 0 #0d2a5e;
+    /* no box-shadow needed — separate borders don't bleed */
   }
 
+  /* Outer top edge of the entire table */
+  .odpisy-app-table thead tr:first-child th {
+    border-top: 1.5px solid #0d2a5e;
+  }
+
+  /* Outer left edge: first <th> in every header row */
+  .odpisy-app-table thead tr th:first-child {
+    border-left: 1.5px solid #0d2a5e;
+  }
+
+  /* Dark first row — override border colors so dividers are visible */
   .odpisy-app-table thead tr:first-child th {
     background: var(--lidl-dark-blue);
     font-size: 11px;
     letter-spacing: .01em;
-    /* visible vertical dividers on the dark background */
-    border-color: rgba(255,255,255,.22);
+    border-top-color:    rgba(255,255,255,.22);
+    border-right-color:  rgba(255,255,255,.22);
+    border-bottom-color: rgba(255,255,255,.22);
+  }
+  .odpisy-app-table thead tr:first-child th:first-child {
+    border-left-color: rgba(255,255,255,.22);
   }
 
   /* ── Sticky tfoot — whole element sticks at bottom ────────────────────── */
@@ -381,12 +398,13 @@
     position: sticky;
     bottom: 0;
     z-index: 3;
-    box-shadow: 0 -2px 0 #0d2a5e;
+    /* no box-shadow needed — separate borders don't bleed */
   }
 
   /* ── Body cells ─────────────────────────────────────────────────────────── */
   .odpisy-app-table td {
-    border-right: 1px solid #d0d8e6;
+    /* right + bottom on all body cells */
+    border-right:  1px solid #d0d8e6;
     border-bottom: 1px solid #e2e8f2;
     padding: 4px 6px;
     height: 22px;
@@ -397,6 +415,11 @@
     transition: background .08s;
   }
 
+  /* Outer left edge of the body */
+  .odpisy-app-table tbody tr td:first-child {
+    border-left: 1px solid #d0d8e6;
+  }
+
   /* RM group banding — alternating tints */
   .odpisy-app-table tbody tr.is-rm-band td { background: #eaf1fb; }
 
@@ -405,7 +428,7 @@
 
   /* Numeric cells — centered (tabular-nums keeps digit columns aligned) */
   .odpisy-app-table td.num {
-    text-align: center;
+    text-align: center !important;
     font-variant-numeric: tabular-nums;
     font-size: 11px;
   }
@@ -428,14 +451,19 @@
     font-weight: 800 !important;
   }
 
-  /* Tfoot cells */
+  /* Tfoot cells — outer edges: top + left on first-child + right + bottom on all */
   .odpisy-app-table tfoot td {
     background: var(--lidl-blue);
     color: #fff;
-    border: 1.5px solid #0d2a5e;
+    border-top:    1.5px solid #0d2a5e;   /* strong separator from body */
+    border-right:  1.5px solid #0d2a5e;
+    border-bottom: 1.5px solid #0d2a5e;   /* outer bottom edge */
     padding: 6px 7px;
     font-size: 11.5px;
     font-weight: 700;
+  }
+  .odpisy-app-table tfoot td:first-child {
+    border-left: 1.5px solid #0d2a5e;
   }
 
   .odpisy-app-table tfoot td.num {
