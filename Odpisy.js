@@ -581,9 +581,7 @@ function buildOdpisyTelexDebug_(data, displayRows, sourceName) {
   const headers = data[headerRow].map(normalizeOdpisyHeader_);
   const preferredActionCol = findOdpisyColByKeywords_(headers, ['akcnicena', 'akcicena', 'akce', 'akcni', 'promo']);
   const actionCol = findOdpisyActionFlagCol_(data, headerRow, headers);
-  const pluCol = findOdpisyColByKeywords_(headers, [
-    'artikl', 'artiklcislo', 'cisloartiklu', 'article', 'articleid', 'plu', 'matnr'
-  ]);
+  const pluCol = findOdpisyPluCol_(headers);
 
   result.rawHeaders = rawHeaders.map(function(value, index) {
     return { col: index + 1, value: value };
@@ -711,9 +709,7 @@ function readOdpisyAkcniPluFromValues_(data, sourceName) {
 
   const headers  = data[headerRow].map(normalizeOdpisyHeader_);
   const akcniCol = findOdpisyActionFlagCol_(data, headerRow, headers);
-  const pluCol   = findOdpisyColByKeywords_(headers, [
-    'artikl', 'artiklcislo', 'cisloartiklu', 'article', 'articleid', 'plu', 'matnr'
-  ]);
+  const pluCol = findOdpisyPluCol_(headers);
 
   if (akcniCol < 0 || pluCol < 0) {
     Logger.log('[ODPISY_TELEX] Chybí sloupce: source=%s headerRow=%s akcniCol=%s pluCol=%s headers=%s',
@@ -836,9 +832,7 @@ function readOdpisyAkcniByKtOptimized_(sheet, weeks, akcniPluSet, sourceName) {
 
   const header = preview[headerRow];
   const headers = header.map(normalizeOdpisyHeader_);
-  const pluCol = findOdpisyColByKeywords_(headers, [
-    'artikl', 'artiklcislo', 'cisloartiklu', 'article', 'articleid', 'plu', 'matnr'
-  ]);
+  const pluCol = findOdpisyPluCol_(headers);
   if (pluCol < 0) {
     Logger.log('[ODPISY_ARTICLES] Nenalezen sloupec artiklu/PLU; source=%s headerRow=%s headers=%s',
       sourceName || '', headerRow + 1, headers.slice(0, 30).join('|'));
@@ -902,9 +896,7 @@ function readOdpisyAkcniByKtFromValues_(data, weeks, akcniPluSet, sourceName) {
   }
 
   const headers = data[headerRow].map(normalizeOdpisyHeader_);
-  const pluCol  = findOdpisyColByKeywords_(headers, [
-    'artikl', 'artiklcislo', 'cisloartiklu', 'article', 'articleid', 'plu', 'matnr'
-  ]);
+  const pluCol = findOdpisyPluCol_(headers);
   if (pluCol < 0) {
     Logger.log('[ODPISY_ARTICLES] Nenalezen sloupec artiklu/PLU; source=%s headerRow=%s headers=%s',
       sourceName || '', headerRow + 1, headers.slice(0, 30).join('|'));
@@ -994,6 +986,32 @@ function findOdpisyColByKeywords_(headers, keywords) {
     var col = findOdpisyColByKeyword_(headers, normalizeOdpisyHeader_(keywords[k]));
     if (col >= 0) return col;
   }
+  return -1;
+}
+
+/**
+ * Najde sloupec s číselným identifikátorem artiklu/PLU.
+ * Sloupce s názvem artiklu záměrně ignoruje, protože obsahují textový název zboží.
+ * @param {string[]} headers - normalizovaná záhlaví
+ * @returns {number} index nebo -1
+ */
+function findOdpisyPluCol_(headers) {
+  const strongKeywords = ['plu', 'matnr', 'artiklcislo', 'cisloartiklu', 'articleid', 'artcislo'];
+  for (var k = 0; k < strongKeywords.length; k++) {
+    var keyword = normalizeOdpisyHeader_(strongKeywords[k]);
+    for (var i = 0; i < headers.length; i++) {
+      var header = String(headers[i] || '');
+      if (header.indexOf('nazev') >= 0 || header.indexOf('name') >= 0) continue;
+      if (header.indexOf(keyword) >= 0) return i;
+    }
+  }
+
+  for (var col = 0; col < headers.length; col++) {
+    var h = String(headers[col] || '');
+    if (h.indexOf('nazev') >= 0 || h.indexOf('name') >= 0) continue;
+    if (h.indexOf('artikl') >= 0 || h.indexOf('article') >= 0) return col;
+  }
+
   return -1;
 }
 
