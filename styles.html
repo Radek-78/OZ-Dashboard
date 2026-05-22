@@ -1666,6 +1666,20 @@
   flex-direction: column;
   min-height: 208px;
   padding: 24px;
+  transition: box-shadow .16s ease, transform .14s ease;
+}
+
+.dashboard-card:not(.is-disabled) {
+  cursor: pointer;
+}
+
+.dashboard-card:not(.is-disabled):hover {
+  box-shadow: 0 6px 28px rgba(0, 75, 190, .17);
+  transform: translateY(-2px);
+}
+
+.dashboard-card:not(.is-disabled):hover .card-arrow {
+  color: var(--lidl-blue);
 }
 
 .dashboard-card[data-accent="green"] {
@@ -1770,10 +1784,11 @@
   background: transparent;
   border: 0;
   color: #90a0b8;
-  cursor: pointer;
+  cursor: default;
   display: inline-flex;
   height: 30px;
   justify-content: center;
+  pointer-events: none;
   width: 30px;
 }
 

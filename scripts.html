@@ -587,7 +587,13 @@ const App = {
     }
 
     grid.innerHTML = modules.map((item) => `
-      <article class="dashboard-card${item.enabled ? '' : ' is-disabled'}" data-accent="${this.escape(item.accent || 'blue')}">
+      <article class="dashboard-card${item.enabled ? '' : ' is-disabled'}"
+        data-accent="${this.escape(item.accent || 'blue')}"
+        data-title="${this.escape(item.title)}"
+        data-url="${this.escape(item.targetUrl || '')}"
+        data-enabled="${item.enabled ? '1' : '0'}"
+        ${item.enabled ? 'role="button" tabindex="0"' : ''}
+        aria-label="${item.enabled ? 'Otevřít ' + this.escape(item.title) : this.escape(item.title)}">
         <span class="dashboard-card-icon">
           <svg><use href="#${this.iconSymbol(item.icon)}"></use></svg>
         </span>
@@ -598,22 +604,16 @@ const App = {
         </div>
         <footer>
           <span class="pill">${this.escape(item.status)}</span>
-          <button class="card-arrow" type="button"
-            data-title="${this.escape(item.title)}"
-            data-url="${this.escape(item.targetUrl || '')}"
-            data-enabled="${item.enabled ? '1' : '0'}"
-            ${item.enabled ? '' : 'disabled'}
-            aria-label="Otevřít ${this.escape(item.title)}">
+          <button class="card-arrow" type="button" aria-hidden="true" tabindex="-1">
             <svg><use href="#i-chevron-right"></use></svg>
           </button>
         </footer>
       </article>
     `).join('');
 
-    grid.querySelectorAll('.card-arrow').forEach((button) => {
-      button.addEventListener('click', () => {
-        if (button.dataset.enabled !== '1') return;
-        const url = button.dataset.url || '';
+    grid.querySelectorAll('.dashboard-card[data-enabled="1"]').forEach((card) => {
+      const navigate = () => {
+        const url = card.dataset.url || '';
         if (url.startsWith('#')) {
           // Interní subapp — navigace bez načtení nové stránky
           const viewName = url.slice(1);
@@ -632,8 +632,12 @@ const App = {
         if (url) {
           window.open(url, '_blank', 'noopener');
         } else {
-          this.openModal(button.dataset.title || 'Subaplikace', 'Dlaždice je aktivní, ale zatím nemá nastavenou cílovou URL.');
+          this.openModal(card.dataset.title || 'Subaplikace', 'Dlaždice je aktivní, ale zatím nemá nastavenou cílovou URL.');
         }
+      };
+      card.addEventListener('click', navigate);
+      card.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigate(); }
       });
     });
   },
@@ -1904,12 +1908,13 @@ const App = {
     if (!form) return;
     form.reset();
     this.setText('#subAppModalTitle', item ? 'Upravit dlaždici' : 'Nová dlaždice');
-    form.elements.id.value          = item ? item.id                  : '';
-    form.elements.name.value        = item ? item.name                : '';
-    form.elements.key.value         = item ? item.key                 : '';
-    form.elements.status.value      = item ? item.status              : 'ACTIVE';
-    form.elements.description.value = item ? (item.description || '') : '';
-    form.elements.active.checked    = item ? Boolean(item.active)     : true;
+    form.elements.id.value            = item ? item.id                    : '';
+    form.elements.name.value          = item ? item.name                  : '';
+    form.elements.key.value           = item ? item.key                   : '';
+    form.elements.status.value        = item ? item.status                : 'ACTIVE';
+    form.elements.description.value   = item ? (item.description     || '') : '';
+    form.elements.lastUpdatedAt.value = item ? (item.lastUpdatedAt   || '') : '';
+    form.elements.active.checked      = item ? Boolean(item.active)       : true;
     this.setSubAppIcon(item ? (item.icon || 'briefcase') : 'briefcase');
     const iconSearch = document.querySelector('#iconSearch');
     if (iconSearch) iconSearch.value = '';
@@ -1922,13 +1927,14 @@ const App = {
   saveSubAppFromForm() {
     const form    = document.querySelector('#subAppForm');
     const payload = {
-      id:          form.elements.id.value,
-      key:         form.elements.key.value,
-      name:        form.elements.name.value,
-      status:      form.elements.status.value,
-      icon:        form.elements.icon.value,
-      description: form.elements.description.value,
-      active:      form.elements.active.checked,
+      id:            form.elements.id.value,
+      key:           form.elements.key.value,
+      name:          form.elements.name.value,
+      status:        form.elements.status.value,
+      icon:          form.elements.icon.value,
+      description:   form.elements.description.value,
+      lastUpdatedAt: form.elements.lastUpdatedAt.value,
+      active:        form.elements.active.checked,
     };
     this.closeSubAppForm();
 
@@ -1942,7 +1948,7 @@ const App = {
           id: tempId,
           key: payload.key.toUpperCase().replace(/[^A-Z0-9_]/g, '_'),
           name: payload.name, status: payload.status, icon: payload.icon,
-          description: payload.description, lastUpdatedAt: '',
+          description: payload.description, lastUpdatedAt: payload.lastUpdatedAt || '',
           sortOrder: isNew ? this.nextSubAppSortOrder() : (existing || {}).sortOrder || 0,
           active: payload.active,
           createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
