@@ -125,11 +125,11 @@
         <div class="odpisy-summary-chip"><strong>${this.escape(lc.city || lc.abbreviation || '')}</strong></div>
       `;
 
-      frame.innerHTML = this.renderTable(lc, state.weeks || [], state.globalAkcni || {}, state.globalCelkem || {});
+      frame.innerHTML = this.renderTable(lc, state.weeks || []);
       if (state.canConfigure) this.appendConfig(frame);
     },
 
-    renderTable(lc, weeks, globalAkcni, globalCelkem) {
+    renderTable(lc, weeks) {
       const weekGroups = weeks.map((w) => `<th colspan="3">${this.escape(w.label)}</th>`).join('');
       const weekCols = weeks.map(() => `
         <th>Odpis<br>celkový</th>
@@ -154,10 +154,11 @@
         }
         const weekCells = weeks.map((w) => `
           <td class="num">${this.formatMoney(store[w.label] || 0)}</td>
-          <td class="num">-</td>
-          <td class="center">-</td>
+          <td class="num">${this.formatMoney(store.akcni && store.akcni[w.label] || 0)}</td>
+          <td class="num">${this.formatPct(this.ratio(store.akcni && store.akcni[w.label] || 0, store[w.label] || 0))}</td>
         `).join('');
         const rowTotal = weeks.reduce((sum, w) => sum + Number(store[w.label] || 0), 0);
+        const rowAkcniTotal = weeks.reduce((sum, w) => sum + Number(store.akcni && store.akcni[w.label] || 0), 0);
         return `
           <tr class="${band ? 'is-rm-band' : ''}">
             <td class="center">${this.escape(store.storeNumber || '')}</td>
@@ -165,22 +166,22 @@
             <td title="${this.escape(store.rm || '')}">${this.escape(store.rm || '')}</td>
             ${weekCells}
             <td class="num">${this.formatMoney(rowTotal)}</td>
-            <td class="num">-</td>
-            <td class="center">-</td>
+            <td class="num">${this.formatMoney(rowAkcniTotal)}</td>
+            <td class="num">${this.formatPct(this.ratio(rowAkcniTotal, rowTotal))}</td>
           </tr>`;
       }).join('');
 
       const totalWeekCells = weeks.map((w) => {
-        const pct = this.pct(globalAkcni, globalCelkem, w.label);
+        const total = lc.totals && lc.totals[w.label] || 0;
+        const akcni = lc.akcniTotals && lc.akcniTotals[w.label] || 0;
         return `
-          <td class="num">${this.formatMoney(lc.totals && lc.totals[w.label] || 0)}</td>
-          <td class="num">${this.formatMoney(globalAkcni[w.label] || 0)}</td>
-          <td class="num">${this.formatPct(pct)}</td>
+          <td class="num">${this.formatMoney(total)}</td>
+          <td class="num">${this.formatMoney(akcni)}</td>
+          <td class="num">${this.formatPct(this.ratio(akcni, total))}</td>
         `;
       }).join('');
       const lcTotal = weeks.reduce((sum, w) => sum + Number(lc.totals && lc.totals[w.label] || 0), 0);
-      const akcniTotal = weeks.reduce((sum, w) => sum + Number(globalAkcni[w.label] || 0), 0);
-      const celkemTotal = weeks.reduce((sum, w) => sum + Number(globalCelkem[w.label] || 0), 0);
+      const akcniTotal = weeks.reduce((sum, w) => sum + Number(lc.akcniTotals && lc.akcniTotals[w.label] || 0), 0);
 
       return `
         <table class="odpisy-app-table" aria-label="Odpisy ${this.escape(lc.abbreviation || '')}">
@@ -210,7 +211,7 @@
               ${totalWeekCells}
               <td class="num">${this.formatMoney(lcTotal)}</td>
               <td class="num">${this.formatMoney(akcniTotal)}</td>
-              <td class="num">${this.formatPct(celkemTotal ? Math.abs(akcniTotal) / Math.abs(celkemTotal) * 100 : 0)}</td>
+              <td class="num">${this.formatPct(this.ratio(akcniTotal, lcTotal))}</td>
             </tr>
           </tfoot>
         </table>`;
@@ -403,7 +404,13 @@
     pct(globalAkcni, globalCelkem, label) {
       const celkem = Number(globalCelkem && globalCelkem[label] || 0);
       const akcni = Number(globalAkcni && globalAkcni[label] || 0);
-      return celkem ? Math.abs(akcni) / Math.abs(celkem) * 100 : 0;
+      return this.ratio(akcni, celkem);
+    },
+
+    ratio(part, total) {
+      const base = Number(total || 0);
+      const value = Number(part || 0);
+      return base ? Math.abs(value) / Math.abs(base) * 100 : 0;
     },
 
     formatMoney(value) {

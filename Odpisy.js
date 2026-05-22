@@ -154,9 +154,11 @@ function buildOdpisyData_(context) {
     const storeValues  = storesData.byStore;
     const globalCelkem = storesData.globalCelkem;
     const articlesRows = akcniPluSet.size > 0 ? files.articles.spreadsheet.getSheets()[0].getLastRow() : 0;
-    const globalAkcni = akcniPluSet.size > 0
-      ? readOdpisyAkcniByKtOptimized_(files.articles.spreadsheet.getSheets()[0], weeks, akcniPluSet, files.articles.name)
-      : buildOdpisyEmptyWeekMap_(weeks);
+    const akcniData = akcniPluSet.size > 0
+      ? readOdpisyAkcniMetricsOptimized_(files.articles.spreadsheet.getSheets()[0], weeks, akcniPluSet, files.articles.name)
+      : { byStore: {}, global: buildOdpisyEmptyWeekMap_(weeks) };
+    const akcniByStore = akcniData.byStore || {};
+    const globalAkcni = akcniData.global || buildOdpisyEmptyWeekMap_(weeks);
     Logger.log('[ODPISY_READ] telexRows=%s storesRows=%s articlesRows=%s elapsedMs=%s',
       telexValues.length, storesValues.length, articlesRows, Date.now() - readStartedAt);
 
@@ -188,6 +190,7 @@ function buildOdpisyData_(context) {
         storeName:   storeToName[storeNum] || '',
         rm:          storeToRm[storeNum] || '',
         values:      storeValues[storeNum],
+        akcniValues:  akcniByStore[storeNum] || buildOdpisyEmptyWeekMap_(weeks),
       });
     });
 
@@ -208,18 +211,21 @@ function buildOdpisyData_(context) {
 
         // Sumové totaly za LC per KT
         const totals = {};
+        const akcniTotals = {};
         weeks.forEach(function(w) { totals[w.label] = 0; });
+        weeks.forEach(function(w) { akcniTotals[w.label] = 0; });
         storesSorted.forEach(function(s) {
           weeks.forEach(function(w) {
             totals[w.label] += (s.values[w.label] || 0);
+            akcniTotals[w.label] += (s.akcniValues[w.label] || 0);
           });
         });
 
-        // Procentuální podíl akčních artiklů: globální akční / globální celkový
+        // Procentuální podíl akčních artiklů v rámci aktuálního LC.
         const pct = {};
         weeks.forEach(function(w) {
-          const celkem = globalCelkem[w.label] || 0;
-          const akcni  = globalAkcni[w.label]  || 0;
+          const celkem = totals[w.label] || 0;
+          const akcni  = akcniTotals[w.label]  || 0;
           pct[w.label] = (celkem !== 0) ? Math.abs(akcni) / Math.abs(celkem) * 100 : 0;
         });
 
@@ -234,9 +240,12 @@ function buildOdpisyData_(context) {
               rm:          s.rm || '',
             };
             weeks.forEach(function(w) { row[w.label] = s.values[w.label] || 0; });
+            row.akcni = {};
+            weeks.forEach(function(w) { row.akcni[w.label] = s.akcniValues[w.label] || 0; });
             return row;
           }),
           totals: totals,
+          akcniTotals: akcniTotals,
           pct:    pct,
         };
       });
@@ -416,7 +425,7 @@ function buildOdpisyCacheKey_(folderId, weeks, files) {
     return [key, f.id || '', f.updatedAt || ''].join(':');
   }).join('|');
   const weekSig = weeks.map(function(w) { return w.label; }).join('|');
-  return 'ODPISY_DATA_V2_' + Utilities.base64EncodeWebSafe(folderId + '|' + weekSig + '|' + fileSig + '|' + buster).slice(0, 120);
+  return 'ODPISY_DATA_V3_' + Utilities.base64EncodeWebSafe(folderId + '|' + weekSig + '|' + fileSig + '|' + buster).slice(0, 120);
 }
 
 /**
@@ -803,22 +812,23 @@ function readOdpisyAkcniByKt_(sheet, weeks, akcniPluSet) {
 }
 
 /**
- * Vrátí mapu ktLabel → akční odpis s načtením pouze potřebných sloupců.
+ * Vrátí mapy akčních odpisů z poartiklového souboru.
  * @param {Sheet} sheet
  * @param {{ year: number, kt: number, label: string }[]} weeks
  * @param {Set<string>} akcniPluSet
  * @param {string=} sourceName
- * @returns {Object}
+ * @returns {{ byStore: Object, global: Object }}
  */
-function readOdpisyAkcniByKtOptimized_(sheet, weeks, akcniPluSet, sourceName) {
+function readOdpisyAkcniMetricsOptimized_(sheet, weeks, akcniPluSet, sourceName) {
+  const empty = { byStore: {}, global: buildOdpisyEmptyWeekMap_(weeks) };
   if (!akcniPluSet || akcniPluSet.size === 0) {
     Logger.log('[ODPISY_ARTICLES] Přeskakuji výpočet akčních odpisů, protože Telex nevrátil žádná akční PLU; source=%s', sourceName || '');
-    return buildOdpisyEmptyWeekMap_(weeks);
+    return empty;
   }
 
   const lastRow = sheet.getLastRow();
   const lastCol = sheet.getLastColumn();
-  if (lastRow < 2 || lastCol < 1) return buildOdpisyEmptyWeekMap_(weeks);
+  if (lastRow < 2 || lastCol < 1) return empty;
 
   const previewRows = Math.min(lastRow, 15);
   const preview = sheet.getRange(1, 1, previewRows, lastCol).getValues();
@@ -827,25 +837,26 @@ function readOdpisyAkcniByKtOptimized_(sheet, weeks, akcniPluSet, sourceName) {
   ]);
   if (headerRow < 0) {
     Logger.log('[ODPISY_ARTICLES] Nenalezen řádek záhlaví se sloupcem artiklu/PLU; source=%s', sourceName || '');
-    return buildOdpisyEmptyWeekMap_(weeks);
+    return empty;
   }
 
   const header = preview[headerRow];
   const headers = header.map(normalizeOdpisyHeader_);
   const pluCol = findOdpisyPluCol_(headers);
-  if (pluCol < 0) {
-    Logger.log('[ODPISY_ARTICLES] Nenalezen sloupec artiklu/PLU; source=%s headerRow=%s headers=%s',
-      sourceName || '', headerRow + 1, headers.slice(0, 30).join('|'));
-    return buildOdpisyEmptyWeekMap_(weeks);
+  const storeCol = findOdpisyStoreCol_(headers);
+  if (pluCol < 0 || storeCol < 0) {
+    Logger.log('[ODPISY_ARTICLES] Chybí sloupce pro výpočet po filiálkách: source=%s headerRow=%s pluCol=%s storeCol=%s headers=%s',
+      sourceName || '', headerRow + 1, pluCol, storeCol, headers.slice(0, 30).join('|'));
+    return empty;
   }
 
   const ktCols = buildOdpisyKtColMap_(header, weeks);
   const dataStartRow = headerRow + 2;
   const numRows = Math.max(lastRow - headerRow - 1, 0);
-  const result = buildOdpisyEmptyWeekMap_(weeks);
-  if (numRows < 1) return result;
+  if (numRows < 1) return empty;
 
   const pluValues = sheet.getRange(dataStartRow, pluCol + 1, numRows, 1).getValues();
+  const storeValues = sheet.getRange(dataStartRow, storeCol + 1, numRows, 1).getValues();
   const weekValues = {};
   weeks.forEach(function(w) {
     if (ktCols[w.label] !== undefined) {
@@ -853,21 +864,43 @@ function readOdpisyAkcniByKtOptimized_(sheet, weeks, akcniPluSet, sourceName) {
     }
   });
 
+  const byStore = {};
+  const global = buildOdpisyEmptyWeekMap_(weeks);
   var matchedRows = 0;
+  var matchedRowsWithStore = 0;
+
   for (var row = 0; row < numRows; row++) {
     var plu = normalizeOdpisyPlu_(pluValues[row][0]);
     if (!plu || !akcniPluSet.has(plu)) continue;
     matchedRows++;
+
+    var storeNum = normalizeOdpisyStoreNum_(storeValues[row][0]);
+    if (storeNum && !byStore[storeNum]) byStore[storeNum] = buildOdpisyEmptyWeekMap_(weeks);
+    if (storeNum) matchedRowsWithStore++;
+
     weeks.forEach(function(w) {
-      if (weekValues[w.label]) {
-        result[w.label] += parseOdpisyValue_(weekValues[w.label][row][0]);
-      }
+      if (!weekValues[w.label]) return;
+      var value = parseOdpisyValue_(weekValues[w.label][row][0]);
+      global[w.label] += value;
+      if (storeNum) byStore[storeNum][w.label] += value;
     });
   }
 
-  Logger.log('[ODPISY_ARTICLES_OPT] source=%s headerRow=%s pluCol=%s matchedRows=%s akcniPlu=%s rows=%s',
-    sourceName || '', headerRow + 1, pluCol + 1, matchedRows, akcniPluSet.size, numRows);
-  return result;
+  Logger.log('[ODPISY_ARTICLES_OPT] source=%s headerRow=%s pluCol=%s storeCol=%s matchedRows=%s matchedStores=%s stores=%s akcniPlu=%s rows=%s',
+    sourceName || '', headerRow + 1, pluCol + 1, storeCol + 1, matchedRows, matchedRowsWithStore, Object.keys(byStore).length, akcniPluSet.size, numRows);
+  return { byStore: byStore, global: global };
+}
+
+/**
+ * Vrátí mapu ktLabel → akční odpis s načtením pouze potřebných sloupců.
+ * @param {Sheet} sheet
+ * @param {{ year: number, kt: number, label: string }[]} weeks
+ * @param {Set<string>} akcniPluSet
+ * @param {string=} sourceName
+ * @returns {Object}
+ */
+function readOdpisyAkcniByKtOptimized_(sheet, weeks, akcniPluSet, sourceName) {
+  return readOdpisyAkcniMetricsOptimized_(sheet, weeks, akcniPluSet, sourceName).global;
 }
 
 /**
@@ -1012,6 +1045,24 @@ function findOdpisyPluCol_(headers) {
     if (h.indexOf('artikl') >= 0 || h.indexOf('article') >= 0) return col;
   }
 
+  return -1;
+}
+
+/**
+ * Najde sloupec s číslem filiálky/prodejny.
+ * @param {string[]} headers - normalizovaná záhlaví
+ * @returns {number} index nebo -1
+ */
+function findOdpisyStoreCol_(headers) {
+  const keywords = ['prodejna', 'filialka', 'filiale', 'store', 'pobocka'];
+  for (var k = 0; k < keywords.length; k++) {
+    var keyword = normalizeOdpisyHeader_(keywords[k]);
+    for (var i = 0; i < headers.length; i++) {
+      var header = String(headers[i] || '');
+      if (header.indexOf('nazev') >= 0 || header.indexOf('name') >= 0) continue;
+      if (header.indexOf(keyword) >= 0) return i;
+    }
+  }
   return -1;
 }
 
