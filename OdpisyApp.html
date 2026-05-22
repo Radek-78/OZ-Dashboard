@@ -87,6 +87,18 @@
             <input type="text" id="odpisyFolderInput" placeholder="ID nebo URL složky…" autocomplete="off">
           </label>
           <div class="odpisy-modal-status" id="odpisyModalStatus" hidden></div>
+          <div class="odpisy-modal-divider"></div>
+          <div class="odpisy-trigger-section">
+            <div class="odpisy-trigger-info">
+              <strong>Automatická kontrola souborů</strong>
+              <p>Po nastavení se každých 30 minut zkontroluje, zda byly aktualizovány všechny tři zdrojové soubory. Při změně se data automaticky přegenerují a dlaždice dashboardu zobrazí čas aktualizace.</p>
+            </div>
+            <div class="odpisy-modal-status" id="odpisyTriggerStatus" hidden></div>
+            <button class="odpisy-btn odpisy-btn-secondary" type="button" id="odpisySetupTriggerBtn">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:15px;height:15px"><circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/></svg>
+              Nastavit automatickou kontrolu
+            </button>
+          </div>
         </div>
         <footer class="odpisy-modal-foot">
           <button class="odpisy-btn odpisy-btn-ghost" type="button" id="odpisySettingsCancel">Zrušit</button>

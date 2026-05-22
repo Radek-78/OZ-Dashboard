@@ -10,6 +10,7 @@
       document.querySelector('#odpisySettingsClose').addEventListener('click', () => this.closeSettings());
       document.querySelector('#odpisySettingsCancel').addEventListener('click', () => this.closeSettings());
       document.querySelector('#odpisyFolderSave').addEventListener('click', () => this.saveFolder());
+      document.querySelector('#odpisySetupTriggerBtn').addEventListener('click', () => this.setupTrigger());
       document.querySelector('#odpisySettingsModal').addEventListener('click', (e) => {
         if (e.target === e.currentTarget) this.closeSettings();
       });
@@ -79,6 +80,30 @@
 
     closeSettings() {
       document.querySelector('#odpisySettingsModal').close();
+    },
+
+    setupTrigger() {
+      const btn    = document.querySelector('#odpisySetupTriggerBtn');
+      const status = document.querySelector('#odpisyTriggerStatus');
+      if (btn) btn.disabled = true;
+      if (status) { status.hidden = false; status.className = 'odpisy-modal-status'; status.textContent = 'Nastavuji trigger…'; }
+
+      this.callServer('setupOdpisyTrigger')
+        .then((res) => {
+          if (status) {
+            status.className  = res && res.ok ? 'odpisy-modal-status is-ok' : 'odpisy-modal-status is-error';
+            status.textContent = res && res.message ? res.message : 'Hotovo.';
+          }
+          if (btn) btn.disabled = false;
+        })
+        .catch((err) => {
+          if (status) {
+            status.hidden    = false;
+            status.className = 'odpisy-modal-status is-error';
+            status.textContent = err && err.message ? err.message : 'Nepodařilo se nastavit trigger.';
+          }
+          if (btn) btn.disabled = false;
+        });
     },
 
     saveFolder() {
@@ -194,6 +219,14 @@
              <strong>${countEsc}</strong>&nbsp;akčních artiklů
            </span>`;
 
+      const lastBuild = state.lastBuildTs || '';
+      const updateChip = lastBuild
+        ? `<span class="odpisy-toolbar-stat-chip odpisy-update-chip" title="Poslední zpracování zdrojových souborů">
+             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
+             <strong>${this.escape(this.formatOdpisyTime(lastBuild))}</strong>
+           </span>`
+        : '';
+
       el.innerHTML = `
         <span class="odpisy-toolbar-stat-chip">
           <strong>${storeCount}</strong>&nbsp;filiálek
@@ -202,6 +235,7 @@
         <span class="odpisy-toolbar-stat-chip">
           <strong>${this.escape(pctTexts || '0,0 %')}</strong>&nbsp;akční podíl
         </span>
+        ${updateChip}
       `;
 
       if (articles.length) {
@@ -516,6 +550,14 @@
 
     formatPct(value) {
       return Number(value || 0).toFixed(1).replace('.', ',') + ' %';
+    },
+
+    /** Formátuje ISO timestamp na krátký český řetězec: "22. 5. 14:37". */
+    formatOdpisyTime(iso) {
+      if (!iso) return '—';
+      const d = new Date(iso);
+      if (isNaN(d.getTime())) return '—';
+      return d.toLocaleString('cs-CZ', { day: 'numeric', month: 'numeric', hour: '2-digit', minute: '2-digit' });
     },
 
     escape(value) {

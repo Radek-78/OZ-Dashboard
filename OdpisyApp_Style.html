@@ -164,6 +164,19 @@
   .odpisy-toolbar-stat-chip.has-tooltip { cursor: help; }
   .odpisy-toolbar-stat-chip.has-tooltip:hover { background: rgba(255,255,255,.2); }
 
+  /* Chip "aktualizováno" — jemnější styl s ikonou zaškrtnutí */
+  .odpisy-toolbar-stat-chip.odpisy-update-chip {
+    background: rgba(100,210,130,.18);
+    border-color: rgba(100,210,130,.35);
+    gap: 5px;
+  }
+  .odpisy-toolbar-stat-chip.odpisy-update-chip svg {
+    flex-shrink: 0;
+    color: #7de8a0;
+    width: 13px;
+    height: 13px;
+  }
+
   .odpisy-toolbar-user {
     font-size: 11px;
     color: rgba(255,255,255,.7);
@@ -686,6 +699,51 @@
     color: #1a7f3c;
     border: 1px solid #b6e8c4;
   }
+
+  /* ── Trigger sekce v nastavení ──────────────────────────────────────────── */
+  .odpisy-modal-divider {
+    height: 1px;
+    background: #e0e8f4;
+    margin: 16px 0 14px;
+  }
+
+  .odpisy-trigger-section {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .odpisy-trigger-info strong {
+    display: block;
+    font-size: 13px;
+    color: #1a2a4a;
+    margin-bottom: 4px;
+  }
+
+  .odpisy-trigger-info p {
+    font-size: 12px;
+    color: #6b7a94;
+    line-height: 1.5;
+    margin: 0;
+  }
+
+  .odpisy-btn-secondary {
+    background: #f0f4fb;
+    border: 1px solid #c8d6ed;
+    border-radius: 6px;
+    color: #2a4a8a;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 13px;
+    font-weight: 600;
+    padding: 7px 14px;
+    align-self: flex-start;
+    transition: background .15s, border-color .15s;
+  }
+  .odpisy-btn-secondary:hover { background: #dde8f7; border-color: #a8c0e0; }
+  .odpisy-btn-secondary:disabled { opacity: .55; cursor: default; }
 
   .odpisy-modal-foot {
     display: flex;

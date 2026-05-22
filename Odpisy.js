@@ -10,9 +10,12 @@
  * za poslední 2 dokončené ISO kalendářní týdny.
  */
 
-const ODPISY_SOURCE_FOLDER_ID_PROP = 'ODPISY_SOURCE_FOLDER_ID';
-const ODPISY_CACHE_BUSTER_PROP = 'ODPISY_CACHE_BUSTER';
-const ODPISY_CACHE_TTL_SECONDS = 300;
+const ODPISY_SOURCE_FOLDER_ID_PROP  = 'ODPISY_SOURCE_FOLDER_ID';
+const ODPISY_CACHE_BUSTER_PROP      = 'ODPISY_CACHE_BUSTER';
+const ODPISY_CACHE_TTL_SECONDS      = 300;
+const ODPISY_KNOWN_MTIMES_PROP      = 'ODPISY_KNOWN_MTIMES';   // JSON {telex,stores,articles} v ms
+const ODPISY_LAST_BUILD_TS_PROP     = 'ODPISY_LAST_BUILD_TS';  // ISO timestamp posledního buildu
+const ODPISY_CHECK_INTERVAL_MIN     = 30;                      // interval auto-kontroly v minutách
 
 // ---------------------------------------------------------------------------
 // Veřejné endpointy
@@ -25,7 +28,46 @@ const ODPISY_CACHE_TTL_SECONDS = 300;
  */
 function getOdpisyData() {
   const context = requirePermission_('dashboard.view');
-  return buildOdpisyData_(context);
+  const result  = buildOdpisyData_(context);
+  result.lastBuildTs = PropertiesService.getScriptProperties().getProperty(ODPISY_LAST_BUILD_TS_PROP) || '';
+  return result;
+}
+
+/**
+ * Nastaví (nebo přenastaví) time-driven trigger pro automatickou kontrolu souborů.
+ * Spouštět jednou — z nastavení aplikace nebo z GAS editoru jako vlastník skriptu.
+ * Trigger běží každých ODPISY_CHECK_INTERVAL_MIN minut jako účet vlastníka skriptu.
+ * @returns {{ ok: boolean, message: string }}
+ */
+function setupOdpisyTrigger() {
+  requirePermission_('branches.sync');
+  try {
+    // Odstraníme stávající triggery pro tuto funkci, aby nevznikly duplicity
+    ScriptApp.getProjectTriggers().forEach(function(t) {
+      if (t.getHandlerFunction() === 'triggerOdpisyCheck') ScriptApp.deleteTrigger(t);
+    });
+    ScriptApp.newTrigger('triggerOdpisyCheck')
+      .timeBased()
+      .everyMinutes(ODPISY_CHECK_INTERVAL_MIN)
+      .create();
+    Logger.log('[ODPISY_TRIGGER_SETUP] Trigger nastaven každých %s minut', ODPISY_CHECK_INTERVAL_MIN);
+    return { ok: true, message: 'Trigger nastaven — kontrola každých ' + ODPISY_CHECK_INTERVAL_MIN + ' minut.' };
+  } catch (e) {
+    Logger.log('[ODPISY_TRIGGER_SETUP_ERROR] %s', e && e.message ? e.message : e);
+    return { ok: false, message: 'Chyba při nastavení triggeru: ' + (e && e.message ? e.message : String(e)) };
+  }
+}
+
+/**
+ * Handler time-driven triggeru — kontroluje změny souborů a spouští refresh.
+ * Název funkce NESMÍ být změněn — musí odpovídat registraci triggeru.
+ */
+function triggerOdpisyCheck() {
+  try {
+    checkOdpisyFilesAndRefresh_();
+  } catch (e) {
+    Logger.log('[ODPISY_TRIGGER_ERROR] %s', e && e.message ? e.message : e);
+  }
 }
 
 /**
@@ -43,6 +85,99 @@ function saveOdpisySourceFolder(payload) {
   bumpOdpisyCacheBuster_();
   Logger.log('[ODPISY_FOLDER_SET] by=%s folder=%s', context.user.email, folder.getId());
   return buildOdpisyData_(context);
+}
+
+// ---------------------------------------------------------------------------
+// Automatická kontrola souborů (trigger)
+// ---------------------------------------------------------------------------
+
+/**
+ * Zkontroluje, zda se od poslední kontroly změnily všechny tři zdrojové soubory.
+ * Pokud ano, spustí přegenerování dat, aktualizuje cache a timestamp dlaždice.
+ *
+ * Logika:
+ *   1. Načte aktuální mtime všech tří souborů z Drive.
+ *   2. Porovná s naposledy uloženými mtimes (Script Properties).
+ *   3. Pokud se změnily VŠECHNY tři → refresh (nová data = nový týden).
+ *   4. Uloží aktuální mtimes pro příští kontrolu.
+ */
+function checkOdpisyFilesAndRefresh_() {
+  const props    = PropertiesService.getScriptProperties();
+  const folderId = props.getProperty(ODPISY_SOURCE_FOLDER_ID_PROP) || '';
+  if (!folderId) {
+    Logger.log('[ODPISY_CHECK] Přeskočeno — zdrojová složka není nastavena');
+    return;
+  }
+
+  const files = findOdpisyFiles_(folderId);
+  if (!files.telex || !files.stores || !files.articles) {
+    Logger.log('[ODPISY_CHECK] Přeskočeno — jeden nebo více souborů nenalezeno');
+    return;
+  }
+
+  const currentMtimes = {
+    telex:    files.telex.updatedAt,
+    stores:   files.stores.updatedAt,
+    articles: files.articles.updatedAt,
+  };
+
+  const storedJson = props.getProperty(ODPISY_KNOWN_MTIMES_PROP);
+  if (!storedJson) {
+    // První spuštění — uložíme referenční časy, refresh nespouštíme
+    props.setProperty(ODPISY_KNOWN_MTIMES_PROP, JSON.stringify(currentMtimes));
+    Logger.log('[ODPISY_CHECK] První spuštění — referenční mtimes uloženy, refresh odložen');
+    return;
+  }
+
+  const storedMtimes    = JSON.parse(storedJson);
+  const telexChanged    = currentMtimes.telex    !== storedMtimes.telex;
+  const storesChanged   = currentMtimes.stores   !== storedMtimes.stores;
+  const articlesChanged = currentMtimes.articles !== storedMtimes.articles;
+
+  Logger.log('[ODPISY_CHECK] telex=%s stores=%s articles=%s',
+    telexChanged    ? 'CHANGED' : 'same',
+    storesChanged   ? 'CHANGED' : 'same',
+    articlesChanged ? 'CHANGED' : 'same'
+  );
+
+  // Vždy uložíme aktuální stav, abychom stopovat průběžné nahrávání
+  props.setProperty(ODPISY_KNOWN_MTIMES_PROP, JSON.stringify(currentMtimes));
+
+  if (!telexChanged || !storesChanged || !articlesChanged) {
+    Logger.log('[ODPISY_CHECK] Čekám — ještě ne všechny tři soubory aktualizovány');
+    return;
+  }
+
+  // Všechny tři soubory jsou nové → force-rebuild
+  Logger.log('[ODPISY_CHECK] Všechny soubory změněny — spouštím přegenerování dat');
+  bumpOdpisyCacheBuster_();
+
+  const database = ensureDatabase_();
+  const fakeContext = {
+    database: database,
+    user:     { email: 'system@trigger' },
+    auth:     { hasAccess: true, permissions: [], subApps: {} },
+  };
+  buildOdpisyData_(fakeContext);
+  Logger.log('[ODPISY_CHECK] Automatická aktualizace dokončena');
+}
+
+/**
+ * Uloží aktuální mtime všech tří souborů do Script Properties.
+ * Voláno po každém úspěšném manuálním i automatickém buildu.
+ * @param {{ telex, stores, articles }} files - výsledek findOdpisyFiles_
+ */
+function storeOdpisyMtimes_(files) {
+  try {
+    const mtimes = {
+      telex:    files.telex    ? files.telex.updatedAt    : 0,
+      stores:   files.stores   ? files.stores.updatedAt   : 0,
+      articles: files.articles ? files.articles.updatedAt : 0,
+    };
+    PropertiesService.getScriptProperties().setProperty(ODPISY_KNOWN_MTIMES_PROP, JSON.stringify(mtimes));
+  } catch (e) {
+    Logger.log('[ODPISY_MTIME_STORE_ERROR] %s', e && e.message ? e.message : e);
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -211,8 +346,12 @@ function buildOdpisyData_(context) {
       error:        null,
     };
     putOdpisyCachedResult_(cacheKey, result);
-    // Zapíšeme čas čerstvého načtení do dlaždice na dashboardu
-    updateSubAppLastUpdatedByUrl_(context.database.spreadsheet, '?page=odpisy', new Date());
+
+    // Uložíme mtimes a timestamp pro trigger i pro zobrazení v toolbaru
+    storeOdpisyMtimes_(files);
+    const buildTs = new Date();
+    try { PropertiesService.getScriptProperties().setProperty(ODPISY_LAST_BUILD_TS_PROP, buildTs.toISOString()); } catch (e) { /* nevadí */ }
+    updateSubAppLastUpdatedByUrl_(context.database.spreadsheet, '?page=odpisy', buildTs);
     return result;
   } catch (e) {
     Logger.log('[ODPISY_ERROR] %s', e && e.message ? e.message : e);
