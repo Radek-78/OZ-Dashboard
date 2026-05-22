@@ -255,7 +255,7 @@ function findOdpisyFiles_(folderId) {
       } else {
         result.telex = item;
       }
-      Logger.log('[ODPISY_FILE_ID] name=%s kind=%s', file.getName(), kind);
+      Logger.log('[ODPISY_FILE_ID] name=%s kind=%s mime=%s', file.getName(), kind, file.getMimeType());
     } catch (e) {
       Logger.log('[ODPISY_FILE_SKIP] file=%s error=%s', file.getName(), e && e.message ? e.message : e);
     }
@@ -273,20 +273,31 @@ function findOdpisyFiles_(folderId) {
 function classifyOdpisySourceFile_(sheet, fileName) {
   const name = normalizeOdpisyHeader_(fileName);
   if (name.indexOf('telex') >= 0) return 'telex';
+  if (name.indexOf('celkov') >= 0 || name.indexOf('pofilial') >= 0 || name.indexOf('poprodejn') >= 0) return 'stores';
+  if (name.indexOf('poartikl') >= 0 || name.indexOf('artiklov') >= 0) return 'articles';
 
-  const lastRow = Math.min(sheet.getLastRow(), 15);
-  const lastCol = Math.min(sheet.getLastColumn(), 60);
+  const lastRow = Math.min(sheet.getLastRow(), 30);
+  const lastCol = Math.min(sheet.getLastColumn(), 120);
   const preview = (lastRow > 0 && lastCol > 0)
     ? sheet.getRange(1, 1, lastRow, lastCol).getValues()
     : [];
+  const a1 = preview.length && preview[0].length ? normalizeOdpisyHeader_(preview[0][0]) : '';
   const flattened = preview.map(function(row) {
     return row.map(normalizeOdpisyHeader_).join('|');
   }).join('|');
 
-  if (name.indexOf('celkov') >= 0 || flattened.indexOf('prodejna') >= 0) return 'stores';
-  if (name.indexOf('artikl') >= 0 && flattened.indexOf('kt') >= 0) return 'articles';
+  // Původní exporty mají typ souboru často přímo v A1.
+  if (a1.indexOf('celkov') >= 0) return 'stores';
+  if (a1.indexOf('artikl') >= 0) return 'articles';
+
   if (flattened.indexOf('akcnicena') >= 0 || flattened.indexOf('akcicena') >= 0) return 'telex';
-  if (flattened.indexOf('artikl') >= 0 && flattened.indexOf('kt') >= 0) return 'articles';
+  if (flattened.indexOf('artikl') >= 0 && (
+      flattened.indexOf('kt') >= 0 ||
+      flattened.indexOf('odpis') >= 0 ||
+      flattened.indexOf('hodnota') >= 0 ||
+      flattened.indexOf('mnozstvi') >= 0
+  )) return 'articles';
+  if (flattened.indexOf('prodejna') >= 0 || flattened.indexOf('filial') >= 0) return 'stores';
   if (name.indexOf('artikl') >= 0) return 'articles';
   return 'telex';
 }
