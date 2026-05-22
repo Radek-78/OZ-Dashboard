@@ -3,7 +3,7 @@
   appSubtitle: '',
   logoFileId: '18mu_Lq1F_FqqSZcolMjLwG0aaQDPMdyD',
   logoUrl: 'https://drive.google.com/thumbnail?id=18mu_Lq1F_FqqSZcolMjLwG0aaQDPMdyD&sz=w320',
-  version: 'v0.14.3',
+  version: 'v0.14.4',
   theme: {
     blue: '#0050aa',
     darkBlue: '#002466',
@@ -16,6 +16,15 @@
 };
 
 const APP_CHANGELOG = [
+  {
+    version: 'v0.14.4',
+    date: '2026-05-22',
+    changes: [
+      'Optimalizovano nacitani odpisu a cteni pouze potrebnych sloupcu artikloveho souboru',
+      'Opravena detekce akcniho priznaku W WW v Telexu',
+      'Pridana diagnostika rozpoznani zdrojovych souboru odpisu',
+    ],
+  },
   {
     version: 'v0.14.3',
     date: '2026-05-22',
