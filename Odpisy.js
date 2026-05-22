@@ -471,7 +471,7 @@ function readOdpisyAkcniDataFromValues_(data, sourceName) {
       if (plu && !pluSet.has(plu)) {
         pluSet.add(plu);
         var name = nameCol >= 0 ? String(data[row][nameCol] || '').trim() : '';
-        articles.push({ plu: plu, name: name });
+        articles.push({ plu: plu, name: name, flag: flag });
       }
     }
   }

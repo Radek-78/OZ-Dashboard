@@ -2,6 +2,7 @@
   const OdpisyApp = {
     state:    null,
     activeLc: '',
+    _tooltipTimer: null,  // delayed-hide timer for popover
 
     init() {
       document.querySelector('#odpisyRefreshBtn').addEventListener('click', () => this.loadData());
@@ -12,6 +13,13 @@
       document.querySelector('#odpisySettingsModal').addEventListener('click', (e) => {
         if (e.target === e.currentTarget) this.closeSettings();
       });
+
+      // Popover stays open while cursor is inside it
+      const popover = document.querySelector('#odpisyPopover');
+      if (popover) {
+        popover.addEventListener('mouseenter', () => this._cancelTooltipHide());
+        popover.addEventListener('mouseleave', () => this._scheduleTooltipHide());
+      }
 
       this.loadData();
     },
@@ -199,13 +207,25 @@
       if (articles.length) {
         const chip = document.querySelector('#odpisyAkcniChip');
         if (chip) {
-          chip.addEventListener('mouseenter', (e) => this.showAkcniTooltip(e.currentTarget, articles, state));
-          chip.addEventListener('mouseleave', () => this.hideTooltip());
+          chip.addEventListener('mouseenter', (e) => {
+            this._cancelTooltipHide();
+            this.showAkcniTooltip(e.currentTarget, articles, state);
+          });
+          chip.addEventListener('mouseleave', () => this._scheduleTooltipHide());
         }
       }
     },
 
-    // ── Popover / tooltip ───────────────────────────────────────────────────
+    // ── Tooltip / popover ───────────────────────────────────────────────────
+
+    _cancelTooltipHide() {
+      if (this._tooltipTimer) { clearTimeout(this._tooltipTimer); this._tooltipTimer = null; }
+    },
+
+    _scheduleTooltipHide() {
+      this._cancelTooltipHide();
+      this._tooltipTimer = setTimeout(() => this.hideTooltip(), 160);
+    },
 
     showAkcniTooltip(anchor, articles, state) {
       const popover = document.querySelector('#odpisyPopover');
@@ -216,12 +236,15 @@
         this.escape(w.label) + ': ' + this.formatPct(this.pct(state.globalAkcni, state.globalCelkem, w.label))
       );
 
-      const rows = articles.map((a) =>
-        `<div class="odpisy-popover-item">
-           <span class="odpisy-popover-plu">${this.escape(a.plu)}</span>
-           <span>${this.escape(a.name || '—')}</span>
-         </div>`
-      ).join('');
+      const rows = articles.map((a) => {
+        const flagCls = (a.flag || '').toLowerCase() === 'ww' ? 'flag-ww' : 'flag-w';
+        const flagTxt = this.escape(a.flag || 'W');
+        return `<div class="odpisy-popover-item">
+          <span class="odpisy-popover-plu">${this.escape(a.plu)}</span>
+          <span>${this.escape(a.name || '—')}</span>
+          <span class="odpisy-popover-flag ${flagCls}">${flagTxt}</span>
+        </div>`;
+      }).join('');
 
       const noteHtml = pctLines.length
         ? `<div class="odpisy-popover-note">
@@ -238,13 +261,17 @@
         ${noteHtml}
       `;
 
+      // Position below the anchor, clamp to viewport
       popover.hidden = false;
       const rect = anchor.getBoundingClientRect();
-      const popW = popover.offsetWidth;
+      const pw   = popover.offsetWidth;
+      const ph   = popover.offsetHeight;
       let left   = rect.left;
-      if (left + popW > window.innerWidth - 8) left = window.innerWidth - popW - 8;
-      popover.style.top  = (rect.bottom + 6) + 'px';
+      let top    = rect.bottom + 6;
+      if (left + pw > window.innerWidth - 8)  left = window.innerWidth - pw - 8;
+      if (top  + ph > window.innerHeight - 8) top  = rect.top - ph - 6;
       popover.style.left = Math.max(8, left) + 'px';
+      popover.style.top  = Math.max(8, top)  + 'px';
     },
 
     hideTooltip() {
@@ -398,7 +425,8 @@
       const lcTabs = document.querySelector('#odpisyLcTabsBar');
       const stats  = document.querySelector('#odpisyToolbarStats');
       if (lcTabs) lcTabs.innerHTML = '';
-      if (stats)  stats.innerHTML = '';
+      if (stats)  stats.innerHTML  = '';
+      this.hideTooltip();
 
       const stateBox = document.querySelector('#odpisyStateBox');
       const frame    = document.querySelector('#odpisyTableFrame');
@@ -415,7 +443,8 @@
       const lcTabs = document.querySelector('#odpisyLcTabsBar');
       const stats  = document.querySelector('#odpisyToolbarStats');
       if (lcTabs) lcTabs.innerHTML = '';
-      if (stats)  stats.innerHTML = '';
+      if (stats)  stats.innerHTML  = '';
+      this.hideTooltip();
 
       const stateBox = document.querySelector('#odpisyStateBox');
       const frame    = document.querySelector('#odpisyTableFrame');
@@ -436,7 +465,8 @@
       const lcTabs = document.querySelector('#odpisyLcTabsBar');
       const stats  = document.querySelector('#odpisyToolbarStats');
       if (lcTabs) lcTabs.innerHTML = '';
-      if (stats)  stats.innerHTML = '';
+      if (stats)  stats.innerHTML  = '';
+      this.hideTooltip();
 
       const stateBox = document.querySelector('#odpisyStateBox');
       const frame    = document.querySelector('#odpisyTableFrame');

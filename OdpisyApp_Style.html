@@ -359,25 +359,32 @@
     line-height: 1.3;
   }
 
-  /* Two-row sticky thead:
-     Row 1 sticks at top:0 with explicit height so row 2 knows its offset. */
-  .odpisy-app-table thead tr:first-child th {
+  /* ── Sticky thead — whole element sticks; both rows travel together ───── */
+  .odpisy-app-table thead {
     position: sticky;
     top: 0;
-    z-index: 3;
+    z-index: 4;
+    /* shadow masks the collapsed border gap that appears on scroll */
+    box-shadow: 0 2px 0 #0d2a5e;
+  }
+
+  .odpisy-app-table thead tr:first-child th {
     background: var(--lidl-dark-blue);
     font-size: 11px;
     letter-spacing: .01em;
-    height: 29px;
-    box-sizing: border-box;
+    /* visible vertical dividers on the dark background */
+    border-color: rgba(255,255,255,.22);
   }
 
-  .odpisy-app-table thead tr:nth-child(2) th {
+  /* ── Sticky tfoot — whole element sticks at bottom ────────────────────── */
+  .odpisy-app-table tfoot {
     position: sticky;
-    top: 29px;
-    z-index: 2;
+    bottom: 0;
+    z-index: 3;
+    box-shadow: 0 -2px 0 #0d2a5e;
   }
 
+  /* ── Body cells ─────────────────────────────────────────────────────────── */
   .odpisy-app-table td {
     border-right: 1px solid #d0d8e6;
     border-bottom: 1px solid #e2e8f2;
@@ -392,10 +399,13 @@
 
   /* RM group banding — alternating tints */
   .odpisy-app-table tbody tr.is-rm-band td { background: #eaf1fb; }
-  .odpisy-app-table tbody tr:hover td      { background: #fffbe6 !important; }
 
+  /* Row hover — yellow, but never overrides the red pct-above-avg cells */
+  .odpisy-app-table tbody tr:hover td:not(.pct-above-avg) { background: #fffbe6 !important; }
+
+  /* Numeric cells — centered (tabular-nums keeps digit columns aligned) */
   .odpisy-app-table td.num {
-    text-align: right;
+    text-align: center;
     font-variant-numeric: tabular-nums;
     font-size: 11px;
   }
@@ -418,7 +428,7 @@
     font-weight: 800 !important;
   }
 
-  /* Tfoot — Průměr za LC, sticky at bottom */
+  /* Tfoot cells */
   .odpisy-app-table tfoot td {
     background: var(--lidl-blue);
     color: #fff;
@@ -426,13 +436,10 @@
     padding: 6px 7px;
     font-size: 11.5px;
     font-weight: 700;
-    position: sticky;
-    bottom: 0;
-    z-index: 2;
   }
 
   .odpisy-app-table tfoot td.num {
-    text-align: right;
+    text-align: center;
     font-size: 11px;
     font-weight: 800;
     font-variant-numeric: tabular-nums;
@@ -451,9 +458,9 @@
     border: 1.5px solid #c0cade;
     border-radius: 10px;
     box-shadow: 0 12px 40px rgba(0,20,60,.18);
-    min-width: 260px;
-    max-width: 400px;
-    pointer-events: none;
+    min-width: 300px;
+    max-width: 440px;
+    /* pointer-events enabled so user can scroll inside the tooltip */
   }
 
   .odpisy-popover-head {
@@ -471,20 +478,22 @@
   }
 
   .odpisy-popover-body {
-    padding: 6px 0;
-    max-height: 280px;
+    padding: 4px 0;
+    max-height: 260px;
     overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: #b0bccf #f4f8ff;
   }
 
   .odpisy-popover-item {
     display: grid;
-    grid-template-columns: 86px 1fr;
+    grid-template-columns: 80px 1fr 28px;
     gap: 6px;
     padding: 4px 14px;
     font-size: 11.5px;
     color: #1a2d4a;
     border-bottom: 1px solid #f0f4fa;
-    align-items: baseline;
+    align-items: center;
   }
 
   .odpisy-popover-item:last-child { border-bottom: none; }
@@ -495,6 +504,21 @@
     font-variant-numeric: tabular-nums;
     font-size: 11px;
   }
+
+  .odpisy-popover-flag {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    height: 18px;
+    padding: 0 5px;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: .03em;
+  }
+
+  .odpisy-popover-flag.flag-w  { background: rgba(14,90,200,.12); color: var(--lidl-blue); }
+  .odpisy-popover-flag.flag-ww { background: rgba(218,0,28,.12);  color: var(--lidl-red);  }
 
   .odpisy-popover-note {
     padding: 7px 14px 9px;
