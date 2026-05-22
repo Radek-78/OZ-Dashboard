@@ -225,7 +225,7 @@
       form.innerHTML = `
         <input type="text" id="odpisyFolderInput" placeholder="ID nebo URL složky odpisů" value="${this.escape(state.folderId || '')}">
         <button type="button" id="odpisyFolderSave">Uložit složku</button>
-        <button type="button" id="odpisyDebugLoad" class="odpisy-debug-button">Debug Telex</button>
+        <button type="button" id="odpisyDebugLoad" class="odpisy-debug-button">Debug odpisů</button>
       `;
       host.appendChild(form);
       form.querySelector('#odpisyFolderSave').addEventListener('click', () => this.saveFolder());
@@ -241,7 +241,7 @@
         panel.className = 'odpisy-debug-panel';
         target.appendChild(panel);
       }
-      panel.innerHTML = '<strong>Načítám diagnostiku Telexu...</strong>';
+      panel.innerHTML = '<strong>Načítám diagnostiku odpisů...</strong>';
       this.callServer('getOdpisyDebugData')
         .then((data) => {
           panel.innerHTML = this.renderDebugData(data || {});
@@ -265,34 +265,61 @@
         </tr>
       `).join('');
 
-      if (data.error || !data.telex) {
+      if (data.error || !data.articles) {
         return `
-          <h2>Debug Telex</h2>
-          <p class="odpisy-debug-error">${this.escape(data.error || 'Telex diagnostika není dostupná.')}</p>
+          <h2>Debug odpisů</h2>
+          <p class="odpisy-debug-error">${this.escape(data.error || 'Diagnostika odpisů není dostupná.')}</p>
           ${this.renderDebugFilesTable(files)}
         `;
       }
 
-      const telex = data.telex;
-      const actionColumn = telex.actionColumn
-        ? `${telex.actionColumn.col}: ${this.escape(telex.actionColumn.rawHeader || '')} → ${this.escape(telex.actionColumn.normalizedHeader || '')}`
+      const articles = data.articles;
+      const pluColumn = articles.pluColumn
+        ? `${articles.pluColumn.col}: ${this.escape(articles.pluColumn.rawHeader || '')} → ${this.escape(articles.pluColumn.normalizedHeader || '')}`
         : 'nenalezen';
-      const pluColumn = telex.pluColumn
-        ? `${telex.pluColumn.col}: ${this.escape(telex.pluColumn.rawHeader || '')} → ${this.escape(telex.pluColumn.normalizedHeader || '')}`
+      const storeColumn = articles.storeColumn
+        ? `${articles.storeColumn.col}: ${this.escape(articles.storeColumn.rawHeader || '')} → ${this.escape(articles.storeColumn.normalizedHeader || '')}`
         : 'nenalezen';
 
-      const scores = (telex.columnScores || []).map((col) => `
+      const ktColumns = (articles.ktColumns || []).map((col) => `
+        <tr>
+          <td>${this.escape(col.label || '')}</td>
+          <td class="num">${this.escape(col.col || '-')}</td>
+          <td>${this.escape(col.rawHeader || '')}</td>
+          <td>${this.escape(col.normalizedHeader || '')}</td>
+          <td>${col.found ? 'ano' : 'ne'}</td>
+        </tr>
+      `).join('');
+
+      const scores = (articles.columnScores || []).slice(0, 40).map((col) => `
         <tr>
           <td class="num">${this.escape(col.col)}</td>
           <td>${this.escape(col.rawHeader || '')}</td>
           <td>${this.escape(col.normalizedHeader || '')}</td>
-          <td class="num">${this.escape(col.actionFlagCount || 0)}</td>
+          <td class="num">${this.escape(col.actionPluHits || 0)}</td>
+          <td class="num">${this.escape(col.storeLikeCount || 0)}</td>
+          <td class="num">${this.escape(col.numericCount || 0)}</td>
           <td class="num">${this.escape(col.nonEmptyCount || 0)}</td>
           <td>${this.escape((col.samples || []).join(' | '))}</td>
         </tr>
       `).join('');
 
-      const preview = (telex.previewRows || []).map((row, rowIndex) => `
+      const samples = (articles.matchedSamples || []).map((item) => {
+        const amounts = Object.keys(item.amounts || {}).map((key) => `${key}: ${this.formatMoney(item.amounts[key] || 0)}`).join(' | ');
+        return `
+          <tr>
+            <td class="num">${this.escape(item.row || '')}</td>
+            <td>${this.escape(item.plu || '')}</td>
+            <td>${this.escape(item.store || '')}</td>
+            <td>${this.escape(amounts || '-')}</td>
+          </tr>`;
+      }).join('');
+
+      const totals = Object.keys(articles.globalTotals || {}).map((key) => `
+        <span>${this.escape(key)} <strong>${this.formatMoney(articles.globalTotals[key] || 0)}</strong></span>
+      `).join('');
+
+      const preview = (articles.previewRows || []).map((row, rowIndex) => `
         <tr>
           <th>${rowIndex + 1}</th>
           ${row.map((cell) => `<td>${this.escape(cell)}</td>`).join('')}
@@ -300,26 +327,45 @@
       `).join('');
 
       return `
-        <h2>Debug Telex</h2>
+        <h2>Debug odpisů po artiklech</h2>
         <div class="odpisy-debug-grid">
-          <span>Soubor <strong>${this.escape(telex.sourceName || '')}</strong></span>
-          <span>Rozměr <strong>${this.escape(telex.rows || 0)} × ${this.escape(telex.columns || 0)}</strong></span>
-          <span>Řádek hlavičky <strong>${this.escape(telex.headerRow || 'nenalezen')}</strong></span>
-          <span>Sloupec W/WW <strong>${actionColumn}</strong></span>
+          <span>Soubor <strong>${this.escape(articles.sourceName || '')}</strong></span>
+          <span>Rozměr <strong>${this.escape(articles.rows || 0)} × ${this.escape(articles.columns || 0)}</strong></span>
+          <span>Řádek hlavičky <strong>${this.escape(articles.headerRow || 'nenalezen')}</strong></span>
           <span>Sloupec PLU <strong>${pluColumn}</strong></span>
-          <span>Akční PLU <strong>${this.escape(telex.akcniPluCount || 0)}</strong></span>
+          <span>Sloupec prodejny <strong>${storeColumn}</strong></span>
+          <span>Akční PLU z Telexu <strong>${this.escape(articles.actionPluCount || 0)}</strong></span>
+          <span>Spárované řádky <strong>${this.escape(articles.matchedRows || 0)}</strong></span>
+          <span>Spárované řádky s prodejnou <strong>${this.escape(articles.matchedRowsWithStore || 0)}</strong></span>
+          <span>Nenulové spárované řádky <strong>${this.escape(articles.nonZeroMatchedRows || 0)}</strong></span>
+          <span>Filiálky s akčním odpisem <strong>${this.escape(articles.storesWithActionWaste || 0)}</strong></span>
+          ${totals}
         </div>
-        <p class="odpisy-debug-note">Hledané hlavičky: ${this.escape((telex.searchedHeaderKeywords || []).join(', '))}</p>
-        <p class="odpisy-debug-note">Ukázky akčních PLU: ${this.escape((telex.akcniPluSamples || []).join(', ') || '-')}</p>
+        <p class="odpisy-debug-note">Hledané hlavičky: ${this.escape((articles.searchedHeaderKeywords || []).join(', '))}</p>
+        <p class="odpisy-debug-note">Akční PLU z Telexu nenalezená v poartiklovém souboru: ${this.escape((articles.actionPluNotFoundSamples || []).join(', ') || '-')}</p>
         ${this.renderDebugFilesTable(files)}
-        <h3>Skóre sloupců podle hodnot W/WW</h3>
+        <h3>KT sloupce</h3>
         <div class="odpisy-debug-scroll">
           <table class="odpisy-debug-table">
-            <thead><tr><th>Sl.</th><th>Hlavička</th><th>Normalizace</th><th>W/WW</th><th>Neprázdné</th><th>Ukázky</th></tr></thead>
-            <tbody>${scores || '<tr><td colspan="6">Žádné kandidátní sloupce.</td></tr>'}</tbody>
+            <thead><tr><th>KT</th><th>Sl.</th><th>Hlavička</th><th>Normalizace</th><th>Nalezeno</th></tr></thead>
+            <tbody>${ktColumns || '<tr><td colspan="5">Žádné KT sloupce.</td></tr>'}</tbody>
           </table>
         </div>
-        <h3>Náhled prvních řádků Telexu</h3>
+        <h3>Skóre sloupců poartiklového souboru</h3>
+        <div class="odpisy-debug-scroll">
+          <table class="odpisy-debug-table">
+            <thead><tr><th>Sl.</th><th>Hlavička</th><th>Normalizace</th><th>Akční PLU zásahy</th><th>Jako prodejna</th><th>Číselné</th><th>Neprázdné</th><th>Ukázky</th></tr></thead>
+            <tbody>${scores || '<tr><td colspan="8">Žádné kandidátní sloupce.</td></tr>'}</tbody>
+          </table>
+        </div>
+        <h3>Ukázky spárovaných akčních řádků</h3>
+        <div class="odpisy-debug-scroll">
+          <table class="odpisy-debug-table">
+            <thead><tr><th>Řádek</th><th>PLU</th><th>Prodejna</th><th>Částky</th></tr></thead>
+            <tbody>${samples || '<tr><td colspan="4">Žádné spárované řádky.</td></tr>'}</tbody>
+          </table>
+        </div>
+        <h3>Náhled prvních řádků poartiklového souboru</h3>
         <div class="odpisy-debug-scroll">
           <table class="odpisy-debug-preview"><tbody>${preview}</tbody></table>
         </div>

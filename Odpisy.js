@@ -29,7 +29,7 @@ function getOdpisyData() {
 }
 
 /**
- * Vrátí diagnostiku načtení Telex souboru pro ladění akčních artiklů.
+ * Vrátí diagnostiku výpočtu akčních odpisů z poartiklového souboru.
  * Přístup: branches.sync (správce zdrojové složky).
  * @returns {Object}
  */
@@ -38,7 +38,7 @@ function getOdpisyDebugData() {
   const props = PropertiesService.getScriptProperties();
   const folderId = props.getProperty(ODPISY_SOURCE_FOLDER_ID_PROP) || '';
   if (!folderId) {
-    return { configured: false, folderId: '', files: [], telex: null, error: 'Zdrojová složka odpisů není nastavena.' };
+    return { configured: false, folderId: '', files: [], articles: null, error: 'Zdrojová složka odpisů není nastavena.' };
   }
 
   try {
@@ -49,20 +49,32 @@ function getOdpisyDebugData() {
         configured: true,
         folderId: folderId,
         files: filesDebug,
-        telex: null,
-        error: 'Ve složce nebyl rozpoznán Telex soubor.',
+        articles: null,
+        error: 'Ve složce nebyl rozpoznán Telex soubor, bez něj nelze sestavit seznam akčních PLU.',
+      };
+    }
+    if (!files.articles) {
+      return {
+        configured: true,
+        folderId: folderId,
+        files: filesDebug,
+        articles: null,
+        error: 'Ve složce nebyl rozpoznán soubor odpisů po artiklech.',
       };
     }
 
-    const sheet = files.telex.spreadsheet.getSheets()[0];
-    const data = readOdpisySheetValues_(sheet);
-    const displayRows = readOdpisySheetDisplayPreview_(sheet, 18, 40);
-    const debug = buildOdpisyTelexDebug_(data, displayRows, files.telex.name);
+    const weeks = getOdpisyKtInfo_();
+    const telexData = readOdpisySheetValues_(files.telex.spreadsheet.getSheets()[0]);
+    const akcniPluSet = readOdpisyAkcniPluFromValues_(telexData, files.telex.name);
+    const articlesSheet = files.articles.spreadsheet.getSheets()[0];
+    const articlesData = readOdpisySheetValues_(articlesSheet);
+    const articlesPreview = readOdpisySheetDisplayPreview_(articlesSheet, 20, 30);
+    const debug = buildOdpisyArticlesDebug_(articlesData, articlesPreview, files.articles.name, weeks, akcniPluSet);
     return {
       configured: true,
       folderId: folderId,
       files: filesDebug,
-      telex: debug,
+      articles: debug,
       error: null,
       generatedAt: new Date().toISOString(),
     };
@@ -72,7 +84,7 @@ function getOdpisyDebugData() {
       configured: true,
       folderId: folderId,
       files: [],
-      telex: null,
+      articles: null,
       error: e && e.message ? e.message : String(e),
     };
   }
@@ -628,6 +640,169 @@ function buildOdpisyTelexDebug_(data, displayRows, sourceName) {
   result.akcniPluCount = akcniPlu.size;
   result.akcniPluSamples = Array.from(akcniPlu).slice(0, 30);
   return result;
+}
+
+/**
+ * Sestaví diagnostiku výpočtu akčních odpisů z poartiklového souboru.
+ * @param {Array[]} data
+ * @param {string[][]} displayRows
+ * @param {string} sourceName
+ * @param {{ year: number, kt: number, label: string }[]} weeks
+ * @param {Set<string>} akcniPluSet
+ * @returns {Object}
+ */
+function buildOdpisyArticlesDebug_(data, displayRows, sourceName, weeks, akcniPluSet) {
+  const result = {
+    sourceName: sourceName || '',
+    rows: data.length,
+    columns: data[0] ? data[0].length : 0,
+    searchedHeaderKeywords: ['artikl', 'artiklcislo', 'cisloartiklu', 'article', 'articleid', 'plu', 'matnr'],
+    headerRow: null,
+    pluColumn: null,
+    storeColumn: null,
+    ktColumns: [],
+    actionPluCount: akcniPluSet ? akcniPluSet.size : 0,
+    matchedRows: 0,
+    matchedRowsWithStore: 0,
+    nonZeroMatchedRows: 0,
+    storesWithActionWaste: 0,
+    globalTotals: buildOdpisyEmptyWeekMap_(weeks),
+    matchedSamples: [],
+    actionPluNotFoundSamples: [],
+    columnScores: [],
+    previewRows: displayRows || [],
+  };
+
+  const headerRow = findOdpisyHeaderRowByKeywords_(data, result.searchedHeaderKeywords);
+  result.headerRow = headerRow >= 0 ? headerRow + 1 : null;
+  if (headerRow < 0) return result;
+
+  const rawHeaders = data[headerRow] || [];
+  const headers = rawHeaders.map(normalizeOdpisyHeader_);
+  const pluCol = findOdpisyPluCol_(headers);
+  const storeCol = findOdpisyStoreCol_(headers);
+  result.pluColumn = pluCol >= 0 ? {
+    col: pluCol + 1,
+    rawHeader: rawHeaders[pluCol],
+    normalizedHeader: headers[pluCol],
+  } : null;
+  result.storeColumn = storeCol >= 0 ? {
+    col: storeCol + 1,
+    rawHeader: rawHeaders[storeCol],
+    normalizedHeader: headers[storeCol],
+  } : null;
+
+  const ktCols = buildOdpisyKtColMap_(rawHeaders, weeks);
+  result.ktColumns = weeks.map(function(w) {
+    const col = ktCols[w.label];
+    return {
+      label: w.label,
+      col: col === undefined ? null : col + 1,
+      rawHeader: col === undefined ? '' : rawHeaders[col],
+      normalizedHeader: col === undefined ? '' : headers[col],
+      found: col !== undefined,
+    };
+  });
+
+  result.columnScores = buildOdpisyArticlesColumnScores_(data, headerRow, rawHeaders, headers, akcniPluSet);
+  if (pluCol < 0 || storeCol < 0) return result;
+
+  const foundActionPlu = {};
+  const byStore = {};
+  for (var row = headerRow + 1; row < data.length; row++) {
+    var plu = normalizeOdpisyPlu_(data[row][pluCol]);
+    if (!plu || !akcniPluSet || !akcniPluSet.has(plu)) continue;
+    foundActionPlu[plu] = true;
+    result.matchedRows++;
+
+    var storeNum = normalizeOdpisyStoreNum_(data[row][storeCol]);
+    if (storeNum) {
+      result.matchedRowsWithStore++;
+      if (!byStore[storeNum]) byStore[storeNum] = true;
+    }
+
+    var rowAmounts = {};
+    var hasNonZero = false;
+    weeks.forEach(function(w) {
+      var col = ktCols[w.label];
+      var value = col === undefined ? 0 : parseOdpisyValue_(data[row][col]);
+      rowAmounts[w.label] = value;
+      result.globalTotals[w.label] += value;
+      if (value !== 0) hasNonZero = true;
+    });
+    if (hasNonZero) result.nonZeroMatchedRows++;
+
+    if (result.matchedSamples.length < 25) {
+      result.matchedSamples.push({
+        row: row + 1,
+        plu: plu,
+        store: storeNum || '',
+        amounts: rowAmounts,
+      });
+    }
+  }
+
+  result.storesWithActionWaste = Object.keys(byStore).length;
+  if (akcniPluSet) {
+    Array.from(akcniPluSet).some(function(plu) {
+      if (!foundActionPlu[plu]) result.actionPluNotFoundSamples.push(plu);
+      return result.actionPluNotFoundSamples.length >= 25;
+    });
+  }
+  return result;
+}
+
+/**
+ * Vrátí diagnostiku kandidátních sloupců v poartiklovém souboru.
+ * @param {Array[]} data
+ * @param {number} headerRow
+ * @param {Array} rawHeaders
+ * @param {string[]} headers
+ * @param {Set<string>} akcniPluSet
+ * @returns {Object[]}
+ */
+function buildOdpisyArticlesColumnScores_(data, headerRow, rawHeaders, headers, akcniPluSet) {
+  const maxRows = Math.min(data.length, headerRow + 501);
+  const scores = [];
+  for (var col = 0; col < headers.length; col++) {
+    var nonEmpty = 0;
+    var numeric = 0;
+    var actionPluHits = 0;
+    var storeLike = 0;
+    var samples = [];
+    for (var row = headerRow + 1; row < maxRows; row++) {
+      var value = data[row][col];
+      if (value === '' || value === null || value === undefined) continue;
+      nonEmpty++;
+      if (samples.length < 8) samples.push(String(value));
+      var normalizedNumber = normalizeOdpisyPlu_(value);
+      if (normalizedNumber) {
+        numeric++;
+        if (akcniPluSet && akcniPluSet.has(normalizedNumber)) actionPluHits++;
+        var storeNum = normalizeOdpisyStoreNum_(value);
+        if (storeNum && String(storeNum).length <= 4) storeLike++;
+      }
+    }
+    scores.push({
+      col: col + 1,
+      rawHeader: rawHeaders[col] || '',
+      normalizedHeader: headers[col] || '',
+      nonEmptyCount: nonEmpty,
+      numericCount: numeric,
+      actionPluHits: actionPluHits,
+      storeLikeCount: storeLike,
+      samples: samples,
+    });
+  }
+  return scores
+    .filter(function(item) {
+      return item.nonEmptyCount > 0 || item.rawHeader || item.normalizedHeader;
+    })
+    .sort(function(a, b) {
+      if (b.actionPluHits !== a.actionPluHits) return b.actionPluHits - a.actionPluHits;
+      if (b.storeLikeCount !== a.storeLikeCount) return b.storeLikeCount - a.storeLikeCount;
+      return a.col - b.col;
+    });
 }
 
 /**
