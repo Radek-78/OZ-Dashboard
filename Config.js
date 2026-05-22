@@ -3,7 +3,7 @@
   appSubtitle: '',
   logoFileId: '18mu_Lq1F_FqqSZcolMjLwG0aaQDPMdyD',
   logoUrl: 'https://drive.google.com/thumbnail?id=18mu_Lq1F_FqqSZcolMjLwG0aaQDPMdyD&sz=w320',
-  version: 'v0.14.13',
+  version: 'v0.15.0',
   theme: {
     blue: '#0050aa',
     darkBlue: '#002466',
@@ -16,6 +16,16 @@
 };
 
 const APP_CHANGELOG = [
+  {
+    version: 'v0.15.0',
+    date: '2026-05-22',
+    changes: [
+      'Přidána lišta s ovládacími prvky a tlačítkem Nastavení',
+      'Průměr za LC zobrazuje skutečný průměr na filiálku',
+      'Optimalizováno čtení poartiklových odpisů — jediné API volání místo N',
+      'Odstraněn debug kód a mrtvé funkce',
+    ],
+  },
   {
     version: 'v0.14.13',
     date: '2026-05-22',
