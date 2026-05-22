@@ -3,7 +3,7 @@
   appSubtitle: '',
   logoFileId: '18mu_Lq1F_FqqSZcolMjLwG0aaQDPMdyD',
   logoUrl: 'https://drive.google.com/thumbnail?id=18mu_Lq1F_FqqSZcolMjLwG0aaQDPMdyD&sz=w320',
-  version: 'v0.14.6',
+  version: 'v0.14.7',
   theme: {
     blue: '#0050aa',
     darkBlue: '#002466',
@@ -16,6 +16,15 @@
 };
 
 const APP_CHANGELOG = [
+  {
+    version: 'v0.14.7',
+    date: '2026-05-22',
+    changes: [
+      'Zrychlen start hlavniho dashboardu bez DB pristupu pri HTML renderu',
+      'Administrativni nastaveni se nacita az pri otevreni Nastaveni',
+      'Zapis posledni navstevy uzivatele omezen na jednou za 6 hodin',
+    ],
+  },
   {
     version: 'v0.14.6',
     date: '2026-05-22',
