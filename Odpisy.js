@@ -211,6 +211,8 @@ function buildOdpisyData_(context) {
       error:        null,
     };
     putOdpisyCachedResult_(cacheKey, result);
+    // Zapíšeme čas čerstvého načtení do dlaždice na dashboardu
+    updateSubAppLastUpdatedByUrl_(context.database.spreadsheet, '?page=odpisy', new Date());
     return result;
   } catch (e) {
     Logger.log('[ODPISY_ERROR] %s', e && e.message ? e.message : e);

@@ -204,9 +204,7 @@ function listDashboardSubApps_(spreadsheet, auth) {
         statusKey:   item.status,
         icon:        item.icon,
         description: item.description,
-        updated:     item.lastUpdatedAt
-                       ? 'Aktualizováno: ' + item.lastUpdatedAt
-                       : 'Aktualizace zatím není uvedena',
+        updated:     formatSubAppUpdatedLabel_(item.lastUpdatedAt),
         targetUrl:   resolveInternalSubAppUrl_(item.name, item.targetUrl),
         enabled:     enabled,
         accent:      item.status === 'ACTIVE' ? 'blue' : (item.status === 'PREPARING' ? 'red' : 'muted'),
@@ -359,5 +357,61 @@ function ensureInternalSubAppUrls_(spreadsheet) {
     if (!expectedUrl || currentUrl === expectedUrl) continue;
     sheet.getRange(row + 1, urlIdx + 1).setValue(expectedUrl);
     Logger.log('[SUBAPP_URL_MIGRATED] name=%s url=%s', name, expectedUrl);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Automatická aktualizace timestampu dlaždice
+// ---------------------------------------------------------------------------
+
+/**
+ * Zapíše aktuální čas do sloupce lastUpdatedAt pro dlaždici identifikovanou
+ * hodnotou targetUrl. Volají interní subaplikace po každém úspěšném čerstvém
+ * načtení dat (cache miss).
+ *
+ * @param {Spreadsheet} spreadsheet
+ * @param {string}      targetUrl   - interní URL, např. '?page=odpisy'
+ * @param {Date}        [timestamp] - čas zápisu; výchozí new Date()
+ */
+function updateSubAppLastUpdatedByUrl_(spreadsheet, targetUrl, timestamp) {
+  try {
+    const sheet = spreadsheet.getSheetByName('SUBAPPS');
+    if (!sheet || sheet.getLastRow() < 2) return;
+    const values  = sheet.getDataRange().getValues();
+    const headers = values[0];
+    const urlIdx         = headers.indexOf('targetUrl');
+    const lastUpdatedIdx = headers.indexOf('lastUpdatedAt');
+    if (urlIdx < 0 || lastUpdatedIdx < 0) return;
+    const url = String(targetUrl || '').trim();
+    const ts  = (timestamp instanceof Date) ? timestamp : new Date();
+    for (var row = 1; row < values.length; row++) {
+      if (String(values[row][urlIdx] || '').trim() === url) {
+        sheet.getRange(row + 1, lastUpdatedIdx + 1).setValue(ts);
+        Logger.log('[SUBAPP_TS_UPDATE] url=%s ts=%s', url, ts.toISOString());
+        return;
+      }
+    }
+    Logger.log('[SUBAPP_TS_SKIP] url=%s (not found in SUBAPPS)', url);
+  } catch (e) {
+    Logger.log('[SUBAPP_TS_ERROR] %s', e && e.message ? e.message : e);
+  }
+}
+
+/**
+ * Formátuje ISO timestamp uložený v lastUpdatedAt do zobrazitelného popisku
+ * pro dlaždici dashboardu.
+ *
+ * @param {string} isoStr
+ * @returns {string}
+ */
+function formatSubAppUpdatedLabel_(isoStr) {
+  if (!isoStr) return 'Data zatím nebyla načtena';
+  try {
+    var d = new Date(isoStr);
+    if (isNaN(d.getTime())) return 'Aktualizováno: ' + isoStr;
+    var formatted = Utilities.formatDate(d, Session.getScriptTimeZone(), 'dd. M. yyyy HH:mm');
+    return 'Aktualizováno: ' + formatted;
+  } catch (e) {
+    return 'Aktualizováno: ' + isoStr;
   }
 }
