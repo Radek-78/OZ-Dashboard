@@ -292,11 +292,6 @@
       const popover = document.querySelector('#odpisyPopover');
       if (!popover) return;
 
-      const weeks    = state.weeks || [];
-      const pctLines = weeks.map((w) =>
-        this.escape(w.label) + ': ' + this.formatPct(this.pct(state.globalAkcni, state.globalCelkem, w.label))
-      );
-
       const rows = articles.map((a) => {
         const flagCls = (a.flag || '').toLowerCase() === 'ww' ? 'flag-ww' : 'flag-w';
         const flagTxt = this.escape(a.flag || 'W');
@@ -307,20 +302,12 @@
         </div>`;
       }).join('');
 
-      const noteHtml = pctLines.length
-        ? `<div class="odpisy-popover-note">
-             Globální akční podíl za všechny filiálky — ${pctLines.join(' &nbsp;/&nbsp; ')}<br>
-             Výpočet: |akční odpisy všech filiálek| ÷ |celkové odpisy všech filiálek| × 100
-           </div>`
-        : '';
-
       popover.innerHTML = `
         <div class="odpisy-tooltip-panel">
           <div class="odpisy-popover-head">
             <h4>Akční artikly — ${this.escape(articles.length)} PLU</h4>
           </div>
           <div class="odpisy-popover-body">${rows}</div>
-          ${noteHtml}
         </div>
       `;
 
@@ -331,12 +318,25 @@
       const popover = document.querySelector('#odpisyPopover');
       if (!popover) return;
       const weeks = state.weeks || [];
-      const rows = weeks.map((w) => `
-        <div class="odpisy-status-tooltip-row">
-          <span>${this.escape(w.label)}</span>
-          <strong>${this.escape(this.formatPct(this.pct(state.globalAkcni, state.globalCelkem, w.label)))}</strong>
+      const rows = weeks.map((w) => {
+        const akcni = Number(state.globalAkcni && state.globalAkcni[w.label] || 0);
+        const celkem = Number(state.globalCelkem && state.globalCelkem[w.label] || 0);
+        const pct = this.ratio(akcni, celkem);
+        return `
+        <div class="odpisy-pct-detail">
+          <div class="odpisy-pct-detail-head">
+            <span>${this.escape(w.label)}</span>
+            <strong>${this.escape(this.formatPct(pct))}</strong>
+          </div>
+          <div class="odpisy-pct-detail-grid">
+            <span>Akční odpisy všech filiálek</span><strong>${this.escape(this.formatMoney(akcni))}</strong>
+            <span>Celkové odpisy všech filiálek</span><strong>${this.escape(this.formatMoney(celkem))}</strong>
+          </div>
+          <div class="odpisy-pct-formula">
+            |${this.escape(this.formatMoney(akcni))}| ÷ |${this.escape(this.formatMoney(celkem))}| × 100 = ${this.escape(this.formatPct(pct))}
+          </div>
         </div>
-      `).join('');
+      `; }).join('');
 
       popover.innerHTML = `
         <div class="odpisy-tooltip-panel">
@@ -347,8 +347,7 @@
             ${rows || '<div class="odpisy-status-tooltip-row"><span>Data</span><strong>—</strong></div>'}
           </div>
           <div class="odpisy-popover-note">
-            Výpočet za všechny filiálky bez členění podle LC:<br>
-            |akční odpisy všech filiálek| ÷ |celkové odpisy všech filiálek| × 100
+            Výpočet je globální za všechny filiálky bez členění podle LC.
           </div>
         </div>
       `;

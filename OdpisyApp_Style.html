@@ -141,10 +141,10 @@
   .odpisy-toolbar-stat-chip {
     display: inline-flex;
     align-items: center;
-    gap: 7px;
+    gap: 8px;
     height: 34px;
-    min-width: 76px;
-    padding: 0 9px;
+    min-width: 82px;
+    padding: 0 10px;
     border-radius: 6px;
     background: rgba(255,255,255,.12);
     border: 1px solid rgba(255,255,255,.18);
@@ -181,7 +181,7 @@
   }
 
   .odpisy-stat-copy span {
-    font-size: 7.5px;
+    font-size: 8.5px;
     font-weight: 850;
     letter-spacing: .04em;
     text-transform: uppercase;
@@ -192,7 +192,7 @@
   .odpisy-stat-copy strong {
     color: #fff;
     font-weight: 900;
-    font-size: 10px;
+    font-size: 11.5px;
   }
 
   .odpisy-toolbar-stat-chip.odpisy-update-chip {
@@ -651,6 +651,63 @@
   .odpisy-status-tooltip-row.is-next span,
   .odpisy-status-tooltip-row.is-next strong {
     color: var(--lidl-yellow);
+  }
+
+  .odpisy-pct-detail {
+    padding: 9px 2px 10px;
+    border-bottom: 1px solid rgba(255,255,255,.09);
+  }
+
+  .odpisy-pct-detail:first-child { padding-top: 0; }
+  .odpisy-pct-detail:last-child { border-bottom: none; padding-bottom: 0; }
+
+  .odpisy-pct-detail-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 14px;
+    margin-bottom: 7px;
+  }
+
+  .odpisy-pct-detail-head span {
+    color: #fff;
+    font-size: 11.5px;
+    font-weight: 850;
+  }
+
+  .odpisy-pct-detail-head strong {
+    color: var(--lidl-yellow);
+    font-size: 13px;
+    font-weight: 900;
+  }
+
+  .odpisy-pct-detail-grid {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 4px 16px;
+    font-size: 10.5px;
+  }
+
+  .odpisy-pct-detail-grid span {
+    color: #9eabba;
+    font-weight: 700;
+  }
+
+  .odpisy-pct-detail-grid strong {
+    color: #fff;
+    font-weight: 850;
+    white-space: nowrap;
+  }
+
+  .odpisy-pct-formula {
+    margin-top: 7px;
+    padding: 6px 8px;
+    border-radius: 5px;
+    background: rgba(255,255,255,.05);
+    color: #c9d3e2;
+    font-size: 10px;
+    font-weight: 700;
+    white-space: nowrap;
   }
 
   /* ── Settings modal ────────────────────────────────────────────────────── */
