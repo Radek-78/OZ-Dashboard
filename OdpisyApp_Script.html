@@ -284,6 +284,7 @@
     showAkcniTooltip(anchor, articles, state) {
       const popover = document.querySelector('#odpisyPopover');
       if (!popover) return;
+      popover.classList.remove('is-status');
 
       const weeks    = state.weeks || [];
       const pctLines = weeks.map((w) =>
@@ -331,6 +332,7 @@
     showUpdateStatusTooltip(anchor, status) {
       const popover = document.querySelector('#odpisyPopover');
       if (!popover) return;
+      popover.classList.add('is-status');
       const lastBuild = status && status.lastBuildTs;
       const lastCheck = status && status.lastCheckTs;
       const nextCheck = status && status.nextCheckTs;
@@ -371,7 +373,10 @@
 
     hideTooltip() {
       const popover = document.querySelector('#odpisyPopover');
-      if (popover) popover.hidden = true;
+      if (popover) {
+        popover.hidden = true;
+        popover.classList.remove('is-status');
+      }
     },
 
     // ── Active LC ───────────────────────────────────────────────────────────
