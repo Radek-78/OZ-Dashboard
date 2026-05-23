@@ -367,6 +367,50 @@
     scrollbar-color: #b0bccf #f0f4fa;
   }
 
+  .odpisy-table-filter {
+    position: sticky;
+    top: 0;
+    z-index: 5;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 30px;
+    padding: 4px 10px;
+    background: #eaf1fb;
+    border-bottom: 1px solid #c7d3e5;
+    color: #183762;
+    font-size: 11px;
+    font-weight: 800;
+  }
+
+  .odpisy-table-filter span {
+    color: #607694;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    font-size: 9px;
+  }
+
+  .odpisy-table-filter strong {
+    font-size: 11.5px;
+  }
+
+  .odpisy-rm-filter-clear {
+    height: 22px;
+    border: 1px solid #b4c4d9;
+    border-radius: 4px;
+    background: #fff;
+    color: var(--lidl-blue);
+    font-size: 10.5px;
+    font-weight: 800;
+    padding: 0 8px;
+    cursor: pointer;
+  }
+
+  .odpisy-rm-filter-clear:hover {
+    border-color: var(--lidl-blue);
+    background: #f5f9ff;
+  }
+
   /* ── Data table ────────────────────────────────────────────────────────── */
   .odpisy-app-table {
     width: 100%;
@@ -409,6 +453,10 @@
     top: 0;
     z-index: 4;
     /* no box-shadow needed — separate borders don't bleed */
+  }
+
+  .odpisy-app-table.has-rm-filter thead {
+    top: 39px;
   }
 
   /* Outer top edge of the entire table */
@@ -475,6 +523,28 @@
   }
 
   .odpisy-app-table td.center { text-align: center; }
+
+  .odpisy-rm-filter-btn {
+    display: inline-flex;
+    max-width: 100%;
+    border: none;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    padding: 0;
+    cursor: pointer;
+    text-align: left;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .odpisy-rm-filter-btn:hover,
+  .odpisy-rm-filter-btn.is-active {
+    color: var(--lidl-blue);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
 
   /* % columns — centered in both header and data cells */
   .odpisy-app-table th.pct-col { text-align: center; }

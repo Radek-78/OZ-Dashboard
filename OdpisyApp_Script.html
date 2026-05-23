@@ -2,6 +2,7 @@
   const OdpisyApp = {
     state:    null,
     activeLc: '',
+    activeRmFilter: '',
     _tooltipTimer: null,  // delayed-hide timer for popover
 
     init() {
@@ -196,6 +197,7 @@
       el.querySelectorAll('.odpisy-lc-tab').forEach((btn) => {
         btn.addEventListener('click', () => {
           this.activeLc = btn.dataset.lc || '';
+          this.activeRmFilter = '';
           this.renderActiveLc();
           this.renderToolbarTabs();
         });
@@ -427,21 +429,44 @@
 
       this.renderToolbarStats(lc, state);
       frame.innerHTML = this.renderTable(lc, state.weeks || []);
+      this.bindTableFilters();
+    },
+
+    bindTableFilters() {
+      document.querySelectorAll('.odpisy-rm-filter-btn').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const rm = btn.dataset.rm || '';
+          this.activeRmFilter = this.activeRmFilter === rm ? '' : rm;
+          this.renderActiveLc();
+        });
+      });
+      document.querySelectorAll('.odpisy-rm-filter-clear').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          this.activeRmFilter = '';
+          this.renderActiveLc();
+        });
+      });
     },
 
     // ── Table ────────────────────────────────────────────────────────────────
 
     renderTable(lc, weeks) {
+      const activeRm = this.activeRmFilter || '';
+      const allStores = lc.stores || [];
+      const visibleStores = activeRm
+        ? allStores.filter((store) => (store.rm || '') === activeRm)
+        : allStores;
+
       // Pre-compute per-KT % averages for above-average highlighting
       const pctAvg = {};
       weeks.forEach((w) => {
-        const vals = (lc.stores || []).map((s) =>
+        const vals = visibleStores.map((s) =>
           this.ratio(s.akcni && s.akcni[w.label] || 0, s[w.label] || 0)
         );
         pctAvg[w.label] = vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : 0;
       });
 
-      const totalPctVals = (lc.stores || []).map((s) => {
+      const totalPctVals = visibleStores.map((s) => {
         const rt = weeks.reduce((sum, w) => sum + Number(s[w.label] || 0), 0);
         const ra = weeks.reduce((sum, w) => sum + Number(s.akcni && s.akcni[w.label] || 0), 0);
         return this.ratio(ra, rt);
@@ -469,7 +494,7 @@
       // Data rows — stores pre-sorted by RM on server
       let lastRm = null;
       let band   = false;
-      const rows = (lc.stores || []).map((store) => {
+      const rows = visibleStores.map((store) => {
         const rm = store.rm || '';
         if (rm !== lastRm) { lastRm = rm; band = !band; }
 
@@ -492,7 +517,11 @@
           <tr class="${band ? 'is-rm-band' : ''}">
             <td class="center">${this.escape(store.storeNumber || '')}</td>
             <td title="${this.escape(store.storeName || '')}">${this.escape(store.storeName || '')}</td>
-            <td title="${this.escape(store.rm || '')}">${this.escape(store.rm || '')}</td>
+            <td title="${this.escape(store.rm || '')}">
+              <button class="odpisy-rm-filter-btn${activeRm === rm ? ' is-active' : ''}" type="button" data-rm="${this.escape(rm)}">
+                ${this.escape(store.rm || '')}
+              </button>
+            </td>
             ${weekCells}
             <td class="num">${this.formatMoney(rowTotal)}</td>
             <td class="num">${this.formatMoney(rowAkcniTotal)}</td>
@@ -500,21 +529,38 @@
           </tr>`;
       }).join('');
 
-      // Footer — Průměr za LC (server provides avgTotals & avgAkcniTotals = sum / storeCount)
+      // Footer — průměr počítaný z aktuálně zobrazených řádků.
+      const visibleCount = visibleStores.length || 1;
+      const avgTotals = {};
+      const avgAkcniTotals = {};
+      weeks.forEach((w) => {
+        const total = visibleStores.reduce((sum, store) => sum + Number(store[w.label] || 0), 0);
+        const akcni = visibleStores.reduce((sum, store) => sum + Number(store.akcni && store.akcni[w.label] || 0), 0);
+        avgTotals[w.label] = total / visibleCount;
+        avgAkcniTotals[w.label] = akcni / visibleCount;
+      });
       const avgWeekCells = weeks.map((w) => {
-        const avg      = lc.avgTotals      && lc.avgTotals[w.label]      || 0;
-        const avgAkcni = lc.avgAkcniTotals && lc.avgAkcniTotals[w.label] || 0;
+        const avg      = avgTotals[w.label] || 0;
+        const avgAkcni = avgAkcniTotals[w.label] || 0;
         return `
           <td class="num">${this.formatMoney(avg)}</td>
           <td class="num">${this.formatMoney(avgAkcni)}</td>
           <td class="pct-col">${this.formatPct(this.ratio(avgAkcni, avg))}</td>
         `;
       }).join('');
-      const avgTotal      = weeks.reduce((sum, w) => sum + Number(lc.avgTotals      && lc.avgTotals[w.label]      || 0), 0);
-      const avgAkcniTotal = weeks.reduce((sum, w) => sum + Number(lc.avgAkcniTotals && lc.avgAkcniTotals[w.label] || 0), 0);
+      const avgTotal      = weeks.reduce((sum, w) => sum + Number(avgTotals[w.label] || 0), 0);
+      const avgAkcniTotal = weeks.reduce((sum, w) => sum + Number(avgAkcniTotals[w.label] || 0), 0);
+      const filterBar = activeRm
+        ? `<div class="odpisy-table-filter">
+             <span>RM filtr</span>
+             <strong>${this.escape(activeRm)}</strong>
+             <button class="odpisy-rm-filter-clear" type="button">Zobrazit vše</button>
+           </div>`
+        : '';
 
       return `
-        <table class="odpisy-app-table" aria-label="Odpisy ${this.escape(lc.abbreviation || '')}">
+        ${filterBar}
+        <table class="odpisy-app-table${activeRm ? ' has-rm-filter' : ''}" aria-label="Odpisy ${this.escape(lc.abbreviation || '')}">
           ${colGroups}
           <thead>
             <tr>
@@ -538,7 +584,7 @@
           <tfoot>
             <tr>
               <td>∅</td>
-              <td colspan="2">Průměr za LC</td>
+              <td colspan="2">${activeRm ? 'Průměr za RM' : 'Průměr za LC'}</td>
               ${avgWeekCells}
               <td class="num">${this.formatMoney(avgTotal)}</td>
               <td class="num">${this.formatMoney(avgAkcniTotal)}</td>
