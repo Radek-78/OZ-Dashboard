@@ -215,37 +215,35 @@
       const articles   = state.akcniArticles || [];
       const countEsc   = this.escape(state.akcniCount || 0);
       const storeCount = this.escape((lc.stores || []).length);
+      const icons = {
+        stores: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-6 9 6"/><path d="M5 10v10h14V10"/><path d="M9 20v-6h6v6"/></svg>',
+        articles: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L3 13V3h10l7.59 7.59a2 2 0 0 1 0 2.82z"/><circle cx="7.5" cy="7.5" r="1.5"/></svg>',
+        pct: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="5" x2="5" y2="19"/><circle cx="7" cy="7" r="2"/><circle cx="17" cy="17" r="2"/></svg>',
+        update: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"/><path d="M12 7v5l3 2"/></svg>',
+      };
+      const statChip = (id, icon, label, value, extraClass) => `
+        <span class="odpisy-toolbar-stat-chip ${extraClass || ''}"${id ? ` id="${id}"` : ''}>
+          <span class="odpisy-stat-icon" aria-hidden="true">${icon}</span>
+          <span class="odpisy-stat-copy">
+            <span>${this.escape(label)}</span>
+            <strong>${this.escape(value)}</strong>
+          </span>
+        </span>`;
 
       const artiklyChip = articles.length
-        ? `<span class="odpisy-toolbar-stat-chip has-tooltip" id="odpisyAkcniChip">
-             <strong>${countEsc}</strong>&nbsp;akčních artiklů
-           </span>`
-        : `<span class="odpisy-toolbar-stat-chip">
-             <strong>${countEsc}</strong>&nbsp;akčních artiklů
-           </span>`;
+        ? statChip('odpisyAkcniChip', icons.articles, 'Akční artikly', `${countEsc} PLU`, 'has-tooltip')
+        : statChip('', icons.articles, 'Akční artikly', `${countEsc} PLU`, '');
 
       const updateStatus = state.updateStatus || {};
       const lastBuild = updateStatus.lastBuildTs || state.lastBuildTs || '';
       const updateChip = (lastBuild || updateStatus.lastCheckTs || updateStatus.nextCheckTs)
-        ? `<span class="odpisy-toolbar-stat-chip odpisy-update-chip has-tooltip" id="odpisyUpdateStatusChip">
-             <span class="odpisy-update-icon" aria-hidden="true">
-               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"/><path d="M12 7v5l3 2"/></svg>
-             </span>
-             <span class="odpisy-update-copy">
-               <span>Aktualizace</span>
-               <strong>${this.escape(this.formatOdpisyDateTime(lastBuild || updateStatus.lastCheckTs || updateStatus.nextCheckTs))}</strong>
-             </span>
-           </span>`
+        ? statChip('odpisyUpdateStatusChip', icons.update, 'Aktualizace', this.formatOdpisyDateTime(lastBuild || updateStatus.lastCheckTs || updateStatus.nextCheckTs), 'odpisy-update-chip has-tooltip')
         : '';
 
       el.innerHTML = `
-        <span class="odpisy-toolbar-stat-chip">
-          <strong>${storeCount}</strong>&nbsp;filiálek
-        </span>
+        ${statChip('', icons.stores, 'Filiálky', storeCount, '')}
         ${artiklyChip}
-        <span class="odpisy-toolbar-stat-chip">
-          <strong>${this.escape(pctTexts || '0,0 %')}</strong>&nbsp;globální akční podíl
-        </span>
+        ${statChip('odpisyGlobalPctChip', icons.pct, 'Globální podíl', pctTexts || '0,0 %', 'has-tooltip')}
         ${updateChip}
       `;
 
@@ -258,6 +256,15 @@
           });
           chip.addEventListener('mouseleave', () => this._scheduleTooltipHide());
         }
+      }
+
+      const pctChip = document.querySelector('#odpisyGlobalPctChip');
+      if (pctChip) {
+        pctChip.addEventListener('mouseenter', (e) => {
+          this._cancelTooltipHide();
+          this.showGlobalPctTooltip(e.currentTarget, state);
+        });
+        pctChip.addEventListener('mouseleave', () => this._scheduleTooltipHide());
       }
 
       const statusChip = document.querySelector('#odpisyUpdateStatusChip');
@@ -284,7 +291,6 @@
     showAkcniTooltip(anchor, articles, state) {
       const popover = document.querySelector('#odpisyPopover');
       if (!popover) return;
-      popover.classList.remove('is-status');
 
       const weeks    = state.weeks || [];
       const pctLines = weeks.map((w) =>
@@ -309,48 +315,73 @@
         : '';
 
       popover.innerHTML = `
-        <div class="odpisy-popover-head">
-          <h4>Akční artikly — ${this.escape(articles.length)} PLU</h4>
+        <div class="odpisy-tooltip-panel">
+          <div class="odpisy-popover-head">
+            <h4>Akční artikly — ${this.escape(articles.length)} PLU</h4>
+          </div>
+          <div class="odpisy-popover-body">${rows}</div>
+          ${noteHtml}
         </div>
-        <div class="odpisy-popover-body">${rows}</div>
-        ${noteHtml}
       `;
 
-      // Position below the anchor, clamp to viewport
-      popover.hidden = false;
-      const rect = anchor.getBoundingClientRect();
-      const pw   = popover.offsetWidth;
-      const ph   = popover.offsetHeight;
-      let left   = rect.left;
-      let top    = rect.bottom + 6;
-      if (left + pw > window.innerWidth - 8)  left = window.innerWidth - pw - 8;
-      if (top  + ph > window.innerHeight - 8) top  = rect.top - ph - 6;
-      popover.style.left = Math.max(8, left) + 'px';
-      popover.style.top  = Math.max(8, top)  + 'px';
+      this.positionPopover(anchor, popover);
+    },
+
+    showGlobalPctTooltip(anchor, state) {
+      const popover = document.querySelector('#odpisyPopover');
+      if (!popover) return;
+      const weeks = state.weeks || [];
+      const rows = weeks.map((w) => `
+        <div class="odpisy-status-tooltip-row">
+          <span>${this.escape(w.label)}</span>
+          <strong>${this.escape(this.formatPct(this.pct(state.globalAkcni, state.globalCelkem, w.label)))}</strong>
+        </div>
+      `).join('');
+
+      popover.innerHTML = `
+        <div class="odpisy-tooltip-panel">
+          <div class="odpisy-popover-head">
+            <h4>Globální akční podíl</h4>
+          </div>
+          <div class="odpisy-status-tooltip-body">
+            ${rows || '<div class="odpisy-status-tooltip-row"><span>Data</span><strong>—</strong></div>'}
+          </div>
+          <div class="odpisy-popover-note">
+            Výpočet za všechny filiálky bez členění podle LC:<br>
+            |akční odpisy všech filiálek| ÷ |celkové odpisy všech filiálek| × 100
+          </div>
+        </div>
+      `;
+
+      this.positionPopover(anchor, popover);
     },
 
     showUpdateStatusTooltip(anchor, status) {
       const popover = document.querySelector('#odpisyPopover');
       if (!popover) return;
-      popover.classList.add('is-status');
       const lastBuild = status && status.lastBuildTs;
       const lastCheck = status && status.lastCheckTs;
       const nextCheck = status && status.nextCheckTs;
       const nextText = nextCheck ? this.formatNextCheck(nextCheck) : '—';
 
       popover.innerHTML = `
-        <div class="odpisy-status-tooltip">
-          <div class="odpisy-status-tooltip-row">
-            <span>Poslední aktualizace:</span>
-            <strong>${this.escape(this.formatOdpisyDateTime(lastBuild))}</strong>
+        <div class="odpisy-tooltip-panel">
+          <div class="odpisy-popover-head">
+            <h4>Aktualizace</h4>
           </div>
-          <div class="odpisy-status-tooltip-row">
-            <span>Poslední kontrola:</span>
-            <strong>${this.escape(this.formatOdpisyDateTime(lastCheck))}</strong>
-          </div>
-          <div class="odpisy-status-tooltip-row is-next">
-            <span>Příští kontrola:</span>
-            <strong>${this.escape(nextText)}</strong>
+          <div class="odpisy-status-tooltip-body">
+            <div class="odpisy-status-tooltip-row">
+              <span>Poslední aktualizace:</span>
+              <strong>${this.escape(this.formatOdpisyDateTime(lastBuild))}</strong>
+            </div>
+            <div class="odpisy-status-tooltip-row">
+              <span>Poslední kontrola:</span>
+              <strong>${this.escape(this.formatOdpisyDateTime(lastCheck))}</strong>
+            </div>
+            <div class="odpisy-status-tooltip-row is-next">
+              <span>Příští kontrola:</span>
+              <strong>${this.escape(nextText)}</strong>
+            </div>
           </div>
         </div>
       `;
@@ -375,7 +406,6 @@
       const popover = document.querySelector('#odpisyPopover');
       if (popover) {
         popover.hidden = true;
-        popover.classList.remove('is-status');
       }
     },
 

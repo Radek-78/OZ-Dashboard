@@ -141,72 +141,68 @@
   .odpisy-toolbar-stat-chip {
     display: inline-flex;
     align-items: center;
-    gap: 3px;
-    height: 26px;
+    gap: 7px;
+    height: 34px;
+    min-width: 76px;
     padding: 0 9px;
-    border-radius: 13px;
+    border-radius: 6px;
     background: rgba(255,255,255,.12);
     border: 1px solid rgba(255,255,255,.18);
     color: rgba(255,255,255,.82);
-    font-size: 11px;
-    font-weight: 600;
+    font-size: 10px;
+    font-weight: 700;
     white-space: nowrap;
     cursor: default;
     transition: background .15s;
   }
 
-  .odpisy-toolbar-stat-chip strong {
-    color: #fff;
-    font-weight: 800;
-    font-size: 11.5px;
-  }
-
   .odpisy-toolbar-stat-chip.has-tooltip { cursor: help; }
   .odpisy-toolbar-stat-chip.has-tooltip:hover { background: rgba(255,255,255,.2); }
 
-  .odpisy-toolbar-stat-chip.odpisy-update-chip {
-    height: 26px;
-    padding: 0 10px 0 8px;
-    border-radius: 13px;
-    background: rgba(100,210,130,.18);
-    border-color: rgba(100,210,130,.35);
-    color: rgba(255,255,255,.88);
-    gap: 6px;
-  }
-
-  .odpisy-update-icon {
-    width: 15px;
-    height: 15px;
+  .odpisy-stat-icon {
+    width: 17px;
+    height: 17px;
     display: grid;
     place-items: center;
-    color: #7de8a0;
+    color: rgba(255,255,255,.80);
     flex-shrink: 0;
   }
 
-  .odpisy-update-icon svg {
-    width: 14px;
-    height: 14px;
+  .odpisy-stat-icon svg {
+    width: 16px;
+    height: 16px;
   }
 
-  .odpisy-update-copy {
+  .odpisy-stat-copy {
     display: grid;
-    gap: 0;
+    gap: 1px;
     line-height: 1;
     text-align: left;
   }
 
-  .odpisy-update-copy span {
+  .odpisy-stat-copy span {
     font-size: 7.5px;
     font-weight: 850;
     letter-spacing: .04em;
     text-transform: uppercase;
-    color: rgba(255,255,255,.66);
+    color: rgba(255,255,255,.62);
   }
 
-  .odpisy-toolbar-stat-chip.odpisy-update-chip .odpisy-update-copy strong {
+  .odpisy-toolbar-stat-chip strong,
+  .odpisy-stat-copy strong {
     color: #fff;
-    font-size: 9.5px;
     font-weight: 900;
+    font-size: 10px;
+  }
+
+  .odpisy-toolbar-stat-chip.odpisy-update-chip {
+    background: rgba(100,210,130,.18);
+    border-color: rgba(100,210,130,.35);
+    color: rgba(255,255,255,.88);
+  }
+
+  .odpisy-toolbar-stat-chip.odpisy-update-chip .odpisy-stat-icon {
+    color: #7de8a0;
   }
 
   .odpisy-toolbar-user {
@@ -527,35 +523,47 @@
   .odpisy-popover {
     position: fixed;
     z-index: 9000;
-    background: #fff;
-    border: 1.5px solid #c0cade;
-    border-radius: 10px;
-    box-shadow: 0 12px 40px rgba(0,20,60,.18);
-    min-width: 300px;
-    max-width: 440px;
-    /* pointer-events enabled so user can scroll inside the tooltip */
-  }
-
-  .odpisy-popover.is-status {
     background: transparent;
     border: none;
+    border-radius: 8px;
     box-shadow: none;
-    min-width: 0;
-    max-width: none;
+    min-width: 300px;
+    max-width: 460px;
+  }
+
+  .odpisy-tooltip-panel {
+    background: #1f2a3d;
+    border-radius: 8px;
+    box-shadow: 0 14px 36px rgba(0,20,60,.28);
+    color: #d7deea;
+    overflow: hidden;
+    position: relative;
+  }
+
+  .odpisy-tooltip-panel::before {
+    content: "";
+    position: absolute;
+    top: -7px;
+    left: 22px;
+    width: 14px;
+    height: 14px;
+    background: #1f2a3d;
+    transform: rotate(45deg);
   }
 
   .odpisy-popover-head {
     padding: 10px 14px 8px;
-    border-bottom: 1px solid #e8eef8;
-    background: #f4f8ff;
-    border-radius: 10px 10px 0 0;
+    border-bottom: 1px solid rgba(255,255,255,.09);
+    background: #1f2a3d;
+    position: relative;
+    z-index: 1;
   }
 
   .odpisy-popover-head h4 {
     margin: 0;
     font-size: 11.5px;
     font-weight: 800;
-    color: #0d2040;
+    color: #fff;
   }
 
   .odpisy-popover-body {
@@ -563,7 +571,7 @@
     max-height: 260px;
     overflow-y: auto;
     scrollbar-width: thin;
-    scrollbar-color: #b0bccf #f4f8ff;
+    scrollbar-color: #6f7f95 #1f2a3d;
   }
 
   .odpisy-popover-item {
@@ -572,8 +580,8 @@
     gap: 6px;
     padding: 4px 14px;
     font-size: 11.5px;
-    color: #1a2d4a;
-    border-bottom: 1px solid #f0f4fa;
+    color: #d7deea;
+    border-bottom: 1px solid rgba(255,255,255,.07);
     align-items: center;
   }
 
@@ -581,7 +589,7 @@
 
   .odpisy-popover-plu {
     font-weight: 800;
-    color: var(--lidl-blue);
+    color: #8dbdff;
     font-variant-numeric: tabular-nums;
     font-size: 11px;
   }
@@ -598,38 +606,20 @@
     letter-spacing: .03em;
   }
 
-  .odpisy-popover-flag.flag-w  { background: rgba(14,90,200,.12); color: var(--lidl-blue); }
-  .odpisy-popover-flag.flag-ww { background: rgba(218,0,28,.12);  color: var(--lidl-red);  }
+  .odpisy-popover-flag.flag-w  { background: rgba(141,189,255,.16); color: #8dbdff; }
+  .odpisy-popover-flag.flag-ww { background: rgba(255,93,112,.16);  color: #ff7788;  }
 
   .odpisy-popover-note {
     padding: 7px 14px 9px;
     font-size: 10.5px;
-    color: #6a7e9a;
-    border-top: 1px solid #e8eef8;
-    background: #f9fbff;
-    border-radius: 0 0 10px 10px;
+    color: #9eabba;
+    border-top: 1px solid rgba(255,255,255,.09);
+    background: rgba(255,255,255,.03);
     line-height: 1.55;
   }
 
-  .odpisy-status-tooltip {
-    width: 270px;
-    background: #1f2a3d;
-    border-radius: 8px;
+  .odpisy-status-tooltip-body {
     padding: 9px 12px;
-    box-shadow: 0 14px 36px rgba(0,20,60,.28);
-    color: #d7deea;
-    position: relative;
-  }
-
-  .odpisy-status-tooltip::before {
-    content: "";
-    position: absolute;
-    top: -7px;
-    left: 22px;
-    width: 14px;
-    height: 14px;
-    background: #1f2a3d;
-    transform: rotate(45deg);
   }
 
   .odpisy-status-tooltip-row {
