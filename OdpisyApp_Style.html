@@ -164,17 +164,53 @@
   .odpisy-toolbar-stat-chip.has-tooltip { cursor: help; }
   .odpisy-toolbar-stat-chip.has-tooltip:hover { background: rgba(255,255,255,.2); }
 
-  /* Chip "aktualizováno" — jemnější styl s ikonou zaškrtnutí */
   .odpisy-toolbar-stat-chip.odpisy-update-chip {
-    background: rgba(100,210,130,.18);
-    border-color: rgba(100,210,130,.35);
-    gap: 5px;
+    height: 34px;
+    padding: 0 10px 0 8px;
+    border-radius: 17px;
+    background: rgba(255,255,255,.88);
+    border-color: rgba(255,255,255,.55);
+    color: #173055;
+    gap: 8px;
+    box-shadow: 0 3px 10px rgba(0,20,60,.14);
   }
-  .odpisy-toolbar-stat-chip.odpisy-update-chip svg {
+
+  .odpisy-update-icon {
+    width: 23px;
+    height: 23px;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    background: #eaf3ff;
+    color: var(--lidl-blue);
+    border: 1px solid rgba(14,90,200,.20);
     flex-shrink: 0;
-    color: #7de8a0;
+  }
+
+  .odpisy-update-icon svg {
     width: 13px;
     height: 13px;
+  }
+
+  .odpisy-update-copy {
+    display: grid;
+    gap: 1px;
+    line-height: 1.05;
+    text-align: left;
+  }
+
+  .odpisy-update-copy span {
+    font-size: 8.5px;
+    font-weight: 850;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    color: #697d99;
+  }
+
+  .odpisy-toolbar-stat-chip.odpisy-update-chip .odpisy-update-copy strong {
+    color: #173055;
+    font-size: 10.5px;
+    font-weight: 900;
   }
 
   .odpisy-toolbar-user {

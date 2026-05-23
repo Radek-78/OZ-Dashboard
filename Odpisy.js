@@ -192,6 +192,21 @@ function storeOdpisyMtimes_(files) {
 }
 
 /**
+ * Vrátí čas poslední změny zdrojových souborů.
+ * @param {{ telex, stores, articles }} files
+ * @returns {Date|null}
+ */
+function getOdpisySourceUpdatedDate_(files) {
+  const timestamps = [
+    files && files.telex && files.telex.updatedAt,
+    files && files.stores && files.stores.updatedAt,
+    files && files.articles && files.articles.updatedAt,
+  ].filter(function(value) { return value && !isNaN(value); });
+  if (!timestamps.length) return null;
+  return new Date(Math.max.apply(null, timestamps));
+}
+
+/**
  * Uloží stav časů automatické kontroly do Script Properties.
  * @param {Date|null} lastCheck
  * @param {Date|null} nextCheck
@@ -387,11 +402,11 @@ function buildOdpisyData_(context) {
     };
     putOdpisyCachedResult_(cacheKey, result);
 
-    // Uložíme mtimes a timestamp pro trigger i pro zobrazení v toolbaru
+    // Uložíme mtimes a stabilní timestamp zdrojových dat pro toolbar i dlaždici.
     storeOdpisyMtimes_(files);
-    const buildTs = new Date();
-    try { PropertiesService.getScriptProperties().setProperty(ODPISY_LAST_BUILD_TS_PROP, buildTs.toISOString()); } catch (e) { /* nevadí */ }
-    updateSubAppLastUpdatedByUrl_(context.database.spreadsheet, '?page=odpisy', buildTs);
+    const sourceUpdatedTs = getOdpisySourceUpdatedDate_(files) || new Date();
+    try { PropertiesService.getScriptProperties().setProperty(ODPISY_LAST_BUILD_TS_PROP, sourceUpdatedTs.toISOString()); } catch (e) { /* nevadí */ }
+    updateSubAppLastUpdatedByUrl_(context.database.spreadsheet, '?page=odpisy', sourceUpdatedTs);
     return result;
   } catch (e) {
     Logger.log('[ODPISY_ERROR] %s', e && e.message ? e.message : e);

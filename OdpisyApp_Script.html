@@ -228,8 +228,13 @@
       const lastBuild = updateStatus.lastBuildTs || state.lastBuildTs || '';
       const updateChip = (lastBuild || updateStatus.lastCheckTs || updateStatus.nextCheckTs)
         ? `<span class="odpisy-toolbar-stat-chip odpisy-update-chip has-tooltip" id="odpisyUpdateStatusChip">
-             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
-             <strong>${this.escape(this.formatOdpisyTime(lastBuild || updateStatus.lastCheckTs || updateStatus.nextCheckTs))}</strong>
+             <span class="odpisy-update-icon" aria-hidden="true">
+               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"/><path d="M12 7v5l3 2"/></svg>
+             </span>
+             <span class="odpisy-update-copy">
+               <span>Aktualizace</span>
+               <strong>${this.escape(this.formatOdpisyDateTime(lastBuild || updateStatus.lastCheckTs || updateStatus.nextCheckTs))}</strong>
+             </span>
            </span>`
         : '';
 
