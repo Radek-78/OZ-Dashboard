@@ -440,12 +440,6 @@
           this.renderActiveLc();
         });
       });
-      document.querySelectorAll('.odpisy-rm-filter-clear').forEach((btn) => {
-        btn.addEventListener('click', () => {
-          this.activeRmFilter = '';
-          this.renderActiveLc();
-        });
-      });
     },
 
     // ── Table ────────────────────────────────────────────────────────────────
@@ -550,16 +544,7 @@
       }).join('');
       const avgTotal      = weeks.reduce((sum, w) => sum + Number(avgTotals[w.label] || 0), 0);
       const avgAkcniTotal = weeks.reduce((sum, w) => sum + Number(avgAkcniTotals[w.label] || 0), 0);
-      const filterBar = activeRm
-        ? `<div class="odpisy-table-filter">
-             <span>RM filtr</span>
-             <strong>${this.escape(activeRm)}</strong>
-             <button class="odpisy-rm-filter-clear" type="button">Zobrazit vše</button>
-           </div>`
-        : '';
-
       return `
-        ${filterBar}
         <table class="odpisy-app-table${activeRm ? ' has-rm-filter' : ''}" aria-label="Odpisy ${this.escape(lc.abbreviation || '')}">
           ${colGroups}
           <thead>
