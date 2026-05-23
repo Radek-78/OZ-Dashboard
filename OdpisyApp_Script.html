@@ -244,7 +244,7 @@
         </span>
         ${artiklyChip}
         <span class="odpisy-toolbar-stat-chip">
-          <strong>${this.escape(pctTexts || '0,0 %')}</strong>&nbsp;akční podíl
+          <strong>${this.escape(pctTexts || '0,0 %')}</strong>&nbsp;globální akční podíl
         </span>
         ${updateChip}
       `;
@@ -302,8 +302,8 @@
 
       const noteHtml = pctLines.length
         ? `<div class="odpisy-popover-note">
-             Akční podíl — ${pctLines.join(' &nbsp;/&nbsp; ')}<br>
-             Výpočet: |akční odpisy| ÷ |celkové odpisy| × 100
+             Globální akční podíl za všechny filiálky — ${pctLines.join(' &nbsp;/&nbsp; ')}<br>
+             Výpočet: |akční odpisy všech filiálek| ÷ |celkové odpisy všech filiálek| × 100
            </div>`
         : '';
 
