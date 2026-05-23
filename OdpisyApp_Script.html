@@ -94,6 +94,11 @@
             status.className  = res && res.ok ? 'odpisy-modal-status is-ok' : 'odpisy-modal-status is-error';
             status.textContent = res && res.message ? res.message : 'Hotovo.';
           }
+          if (res && res.updateStatus && this.state) {
+            this.state.updateStatus = res.updateStatus;
+            const lc = (this.state.lcs || []).find((item) => item.abbreviation === this.activeLc);
+            if (lc) this.renderToolbarStats(lc, this.state);
+          }
           if (btn) btn.disabled = false;
         })
         .catch((err) => {
@@ -219,11 +224,12 @@
              <strong>${countEsc}</strong>&nbsp;akčních artiklů
            </span>`;
 
-      const lastBuild = state.lastBuildTs || '';
-      const updateChip = lastBuild
-        ? `<span class="odpisy-toolbar-stat-chip odpisy-update-chip" title="Poslední zpracování zdrojových souborů">
+      const updateStatus = state.updateStatus || {};
+      const lastBuild = updateStatus.lastBuildTs || state.lastBuildTs || '';
+      const updateChip = (lastBuild || updateStatus.lastCheckTs || updateStatus.nextCheckTs)
+        ? `<span class="odpisy-toolbar-stat-chip odpisy-update-chip has-tooltip" id="odpisyUpdateStatusChip">
              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
-             <strong>${this.escape(this.formatOdpisyTime(lastBuild))}</strong>
+             <strong>${this.escape(this.formatOdpisyTime(lastBuild || updateStatus.lastCheckTs || updateStatus.nextCheckTs))}</strong>
            </span>`
         : '';
 
@@ -247,6 +253,15 @@
           });
           chip.addEventListener('mouseleave', () => this._scheduleTooltipHide());
         }
+      }
+
+      const statusChip = document.querySelector('#odpisyUpdateStatusChip');
+      if (statusChip) {
+        statusChip.addEventListener('mouseenter', (e) => {
+          this._cancelTooltipHide();
+          this.showUpdateStatusTooltip(e.currentTarget, updateStatus);
+        });
+        statusChip.addEventListener('mouseleave', () => this._scheduleTooltipHide());
       }
     },
 
@@ -296,6 +311,47 @@
       `;
 
       // Position below the anchor, clamp to viewport
+      popover.hidden = false;
+      const rect = anchor.getBoundingClientRect();
+      const pw   = popover.offsetWidth;
+      const ph   = popover.offsetHeight;
+      let left   = rect.left;
+      let top    = rect.bottom + 6;
+      if (left + pw > window.innerWidth - 8)  left = window.innerWidth - pw - 8;
+      if (top  + ph > window.innerHeight - 8) top  = rect.top - ph - 6;
+      popover.style.left = Math.max(8, left) + 'px';
+      popover.style.top  = Math.max(8, top)  + 'px';
+    },
+
+    showUpdateStatusTooltip(anchor, status) {
+      const popover = document.querySelector('#odpisyPopover');
+      if (!popover) return;
+      const lastBuild = status && status.lastBuildTs;
+      const lastCheck = status && status.lastCheckTs;
+      const nextCheck = status && status.nextCheckTs;
+      const nextText = nextCheck ? this.formatNextCheck(nextCheck) : '—';
+
+      popover.innerHTML = `
+        <div class="odpisy-status-tooltip">
+          <div class="odpisy-status-tooltip-row">
+            <span>Poslední aktualizace:</span>
+            <strong>${this.escape(this.formatOdpisyDateTime(lastBuild))}</strong>
+          </div>
+          <div class="odpisy-status-tooltip-row">
+            <span>Poslední kontrola:</span>
+            <strong>${this.escape(this.formatOdpisyDateTime(lastCheck))}</strong>
+          </div>
+          <div class="odpisy-status-tooltip-row is-next">
+            <span>Příští kontrola:</span>
+            <strong>${this.escape(nextText)}</strong>
+          </div>
+        </div>
+      `;
+
+      this.positionPopover(anchor, popover);
+    },
+
+    positionPopover(anchor, popover) {
       popover.hidden = false;
       const rect = anchor.getBoundingClientRect();
       const pw   = popover.offsetWidth;
@@ -558,6 +614,28 @@
       const d = new Date(iso);
       if (isNaN(d.getTime())) return '—';
       return d.toLocaleString('cs-CZ', { day: 'numeric', month: 'numeric', hour: '2-digit', minute: '2-digit' });
+    },
+
+    /** Formátuje ISO timestamp na plný český řetězec: "22.5.2026 17:12". */
+    formatOdpisyDateTime(iso) {
+      if (!iso) return '—';
+      const d = new Date(iso);
+      if (isNaN(d.getTime())) return '—';
+      return d.toLocaleString('cs-CZ', {
+        day: 'numeric',
+        month: 'numeric',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      }).replace(/\s+/g, ' ');
+    },
+
+    formatNextCheck(iso) {
+      if (!iso) return '—';
+      const d = new Date(iso);
+      if (isNaN(d.getTime())) return '—';
+      const diffMin = Math.max(0, Math.ceil((d.getTime() - Date.now()) / 60000));
+      return `cca ${diffMin} min (${this.formatOdpisyDateTime(iso)})`;
     },
 
     escape(value) {

@@ -15,6 +15,8 @@ const ODPISY_CACHE_BUSTER_PROP      = 'ODPISY_CACHE_BUSTER';
 const ODPISY_CACHE_TTL_SECONDS      = 300;
 const ODPISY_KNOWN_MTIMES_PROP      = 'ODPISY_KNOWN_MTIMES';   // JSON {telex,stores,articles} v ms
 const ODPISY_LAST_BUILD_TS_PROP     = 'ODPISY_LAST_BUILD_TS';  // ISO timestamp posledního buildu
+const ODPISY_LAST_CHECK_TS_PROP     = 'ODPISY_LAST_CHECK_TS';  // ISO timestamp poslední kontroly zdrojových souborů
+const ODPISY_NEXT_CHECK_TS_PROP     = 'ODPISY_NEXT_CHECK_TS';  // ISO timestamp odhadované příští kontroly
 const ODPISY_CHECK_INTERVAL_MIN     = 30;                      // interval auto-kontroly v minutách
 
 // ---------------------------------------------------------------------------
@@ -29,7 +31,9 @@ const ODPISY_CHECK_INTERVAL_MIN     = 30;                      // interval auto-
 function getOdpisyData() {
   const context = requirePermission_('dashboard.view');
   const result  = buildOdpisyData_(context);
-  result.lastBuildTs = PropertiesService.getScriptProperties().getProperty(ODPISY_LAST_BUILD_TS_PROP) || '';
+  const updateStatus = getOdpisyUpdateStatus_();
+  result.updateStatus = updateStatus;
+  result.lastBuildTs = updateStatus.lastBuildTs || '';
   return result;
 }
 
@@ -50,8 +54,13 @@ function setupOdpisyTrigger() {
       .timeBased()
       .everyMinutes(ODPISY_CHECK_INTERVAL_MIN)
       .create();
+    storeOdpisyCheckStatus_(null, new Date(Date.now() + ODPISY_CHECK_INTERVAL_MIN * 60000));
     Logger.log('[ODPISY_TRIGGER_SETUP] Trigger nastaven každých %s minut', ODPISY_CHECK_INTERVAL_MIN);
-    return { ok: true, message: 'Trigger nastaven — kontrola každých ' + ODPISY_CHECK_INTERVAL_MIN + ' minut.' };
+    return {
+      ok: true,
+      message: 'Trigger nastaven — kontrola každých ' + ODPISY_CHECK_INTERVAL_MIN + ' minut.',
+      updateStatus: getOdpisyUpdateStatus_(),
+    };
   } catch (e) {
     Logger.log('[ODPISY_TRIGGER_SETUP_ERROR] %s', e && e.message ? e.message : e);
     return { ok: false, message: 'Chyba při nastavení triggeru: ' + (e && e.message ? e.message : String(e)) };
@@ -103,6 +112,8 @@ function saveOdpisySourceFolder(payload) {
  */
 function checkOdpisyFilesAndRefresh_() {
   const props    = PropertiesService.getScriptProperties();
+  const checkTs  = new Date();
+  storeOdpisyCheckStatus_(checkTs, new Date(checkTs.getTime() + ODPISY_CHECK_INTERVAL_MIN * 60000));
   const folderId = props.getProperty(ODPISY_SOURCE_FOLDER_ID_PROP) || '';
   if (!folderId) {
     Logger.log('[ODPISY_CHECK] Přeskočeno — zdrojová složka není nastavena');
@@ -178,6 +189,35 @@ function storeOdpisyMtimes_(files) {
   } catch (e) {
     Logger.log('[ODPISY_MTIME_STORE_ERROR] %s', e && e.message ? e.message : e);
   }
+}
+
+/**
+ * Uloží stav časů automatické kontroly do Script Properties.
+ * @param {Date|null} lastCheck
+ * @param {Date|null} nextCheck
+ */
+function storeOdpisyCheckStatus_(lastCheck, nextCheck) {
+  try {
+    const props = PropertiesService.getScriptProperties();
+    if (lastCheck) props.setProperty(ODPISY_LAST_CHECK_TS_PROP, lastCheck.toISOString());
+    if (nextCheck) props.setProperty(ODPISY_NEXT_CHECK_TS_PROP, nextCheck.toISOString());
+  } catch (e) {
+    Logger.log('[ODPISY_CHECK_STATUS_STORE_ERROR] %s', e && e.message ? e.message : e);
+  }
+}
+
+/**
+ * Vrátí uložený stav aktualizací a kontrol pro toolbar.
+ * @returns {{ lastBuildTs: string, lastCheckTs: string, nextCheckTs: string, intervalMinutes: number }}
+ */
+function getOdpisyUpdateStatus_() {
+  const props = PropertiesService.getScriptProperties();
+  return {
+    lastBuildTs: props.getProperty(ODPISY_LAST_BUILD_TS_PROP) || '',
+    lastCheckTs: props.getProperty(ODPISY_LAST_CHECK_TS_PROP) || '',
+    nextCheckTs: props.getProperty(ODPISY_NEXT_CHECK_TS_PROP) || '',
+    intervalMinutes: ODPISY_CHECK_INTERVAL_MIN,
+  };
 }
 
 // ---------------------------------------------------------------------------
