@@ -581,6 +581,7 @@
 
   .status-icon {
     place-items: center;
+    place-content: center;
     border-radius: 50%;
     display: inline-grid;
     flex-shrink: 0;
@@ -1775,6 +1776,7 @@
 
 .dashboard-card-icon {
   place-items: center;
+  place-content: center;
   background: #eaf2ff;
   border: 1px solid #d7e6fb;
   border-radius: 10px;
@@ -3521,8 +3523,11 @@
     margin-left: auto;
   }
 
-  .branch-check-wrap {
-    margin-right: 8px;
+  .branch-num-cell {
+    align-items: center;
+    display: flex;
+    gap: 8px;
+    white-space: nowrap;
   }
 
   .branch-check,

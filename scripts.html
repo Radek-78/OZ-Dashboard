@@ -889,7 +889,7 @@ const App = {
     if (empty) empty.hidden = true;
     rows.innerHTML = branches.map((branch) => `
       <tr class="${branch.active ? '' : 'is-inactive'}">
-        <td>${canSync ? `<label class="branch-check-wrap"><input type="checkbox" class="branch-check" data-id="${this.escape(branch.id)}"${this.branchesSelected[branch.id] ? ' checked' : ''}></label>` : ''}<strong>${this.escape(branch.storeNumber || '-')}</strong></td>
+        <td><div class="branch-num-cell">${canSync ? `<input type="checkbox" class="branch-check" data-id="${this.escape(branch.id)}"${this.branchesSelected[branch.id] ? ' checked' : ''}>` : ''}<strong>${this.escape(branch.storeNumber || '-')}</strong></div></td>
         <td>${this.escape(branch.storeName || '-')}</td>
         <td><span class="role-chip is-blue">${this.escape(branch.lc || '-')}</span></td>
         <td>${this.escape(branch.storePhone || '-')}</td>
