@@ -76,6 +76,7 @@ const App = {
   /** Stavové objekty pro jednotlivé sekce nastavení */
   branchesState:    { branches: [], lcs: [], stats: {}, sync: {}, canSync: false },
   branchesSubtab:   'fili',
+  branchesSelected: {},
   branchesFilter:   { query: '', sort: { col: null, dir: 'asc' }, colFilters: {}, quick: { lc: '', vt: '', rm: '' } },
   _branchColMenuCurrentCol: null,
   _branchColMenuCloseHandler: null,
@@ -208,6 +209,22 @@ const App = {
     if (saveBranchesSource) saveBranchesSource.addEventListener('click', () => this.saveBranchesSourceFolder());
     const syncBranches = document.querySelector('[data-action="sync-branches"]');
     if (syncBranches) syncBranches.addEventListener('click', () => this.syncBranches());
+
+    // Filiálky — hromadná aktivace/deaktivace
+    const branchActivate   = document.querySelector('[data-action="branches-activate"]');
+    if (branchActivate)   branchActivate.addEventListener('click', () => this.bulkSetBranchesActive(true));
+    const branchDeactivate = document.querySelector('[data-action="branches-deactivate"]');
+    if (branchDeactivate) branchDeactivate.addEventListener('click', () => this.bulkSetBranchesActive(false));
+    const branchSelectAll  = document.querySelector('#branchesSelectAll');
+    if (branchSelectAll) branchSelectAll.addEventListener('change', () => {
+      const checked = branchSelectAll.checked;
+      document.querySelectorAll('.branch-check').forEach((cb) => {
+        cb.checked = checked;
+        if (checked) this.branchesSelected[cb.dataset.id] = true;
+        else delete this.branchesSelected[cb.dataset.id];
+      });
+      this.updateBranchesBulkBar();
+    });
 
     // LC a filiálky — přepínání podzáložek (Filiálky / Logistická centra)
     document.querySelectorAll('.lc-tab').forEach((btn) => {
@@ -855,11 +872,13 @@ const App = {
     if (!rows) return;
 
     const branches = this.getFilteredBranches();
+    const canSync  = this.branchesState.canSync === true;
     if (counter) counter.textContent = String(branches.length);
     if (noun)    noun.textContent = 'filiálek v hlavní databázi';
     this.renderBranchesStats();
     this.renderBranchesQuickFilters();
     this.renderBranchesHeaders();
+    this.updateBranchesBulkBar();
 
     if (!branches.length) {
       rows.innerHTML = '';
@@ -869,8 +888,8 @@ const App = {
 
     if (empty) empty.hidden = true;
     rows.innerHTML = branches.map((branch) => `
-      <tr>
-        <td><strong>${this.escape(branch.storeNumber || '-')}</strong></td>
+      <tr class="${branch.active ? '' : 'is-inactive'}">
+        <td>${canSync ? `<label class="branch-check-wrap"><input type="checkbox" class="branch-check" data-id="${this.escape(branch.id)}"${this.branchesSelected[branch.id] ? ' checked' : ''}></label>` : ''}<strong>${this.escape(branch.storeNumber || '-')}</strong></td>
         <td>${this.escape(branch.storeName || '-')}</td>
         <td><span class="role-chip is-blue">${this.escape(branch.lc || '-')}</span></td>
         <td>${this.escape(branch.storePhone || '-')}</td>
@@ -886,6 +905,40 @@ const App = {
         <td>${this.escape(this.formatBranchHours(branch.sundayOpen, branch.sundayClose))}</td>
       </tr>
     `).join('');
+
+    if (canSync) {
+      rows.querySelectorAll('.branch-check').forEach((cb) => {
+        cb.addEventListener('change', () => {
+          if (cb.checked) this.branchesSelected[cb.dataset.id] = true;
+          else delete this.branchesSelected[cb.dataset.id];
+          this.updateBranchesBulkBar();
+        });
+      });
+    }
+  },
+
+  /** Aktualizuje lištu hromadných akcí (počet označených, viditelnost pro adminy). */
+  updateBranchesBulkBar() {
+    const bar = document.querySelector('#branchesBulkBar');
+    if (bar) bar.hidden = this.branchesState.canSync !== true;
+    const count = Object.keys(this.branchesSelected || {}).length;
+    this.setText('#branchesSelectedCount', String(count));
+    const selectAll = document.querySelector('#branchesSelectAll');
+    if (selectAll) selectAll.checked = false;
+  },
+
+  /** Hromadně nastaví aktivní/neaktivní u označených filiálek. */
+  bulkSetBranchesActive(active) {
+    const ids = Object.keys(this.branchesSelected || {});
+    if (!ids.length) { this.toast('Nejprve označte filiálky.', 'error'); return; }
+    this.callServer('setBranchesActive', { ids, active })
+      .then((data) => {
+        this.branchesSelected = {};
+        this.applyBranchesState(data);
+        this.renderBranchesPage();
+        this.toast(active ? 'Filiálky byly aktivovány.' : 'Filiálky byly deaktivovány.');
+      })
+      .catch((err) => this.toast(err.message || 'Změnu se nepodařilo uložit.', 'error'));
   },
 
   /** Vykreslí stránku „Sync LC a fili" (admin) — pouze nastavení synchronizace. */

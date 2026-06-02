@@ -120,6 +120,14 @@
 
             <div id="branchesTabFili" class="lc-tab-panel is-active">
               <div class="branches-quick-filters" id="branchesQuickFilters"></div>
+              <div class="branches-bulk-bar" id="branchesBulkBar" hidden>
+                <label class="branches-bulk-all"><input type="checkbox" id="branchesSelectAll"> Vybrat zobrazené</label>
+                <span class="branches-bulk-count"><strong id="branchesSelectedCount">0</strong> označeno</span>
+                <div class="branches-bulk-actions">
+                  <button type="button" class="button button-secondary" data-action="branches-activate"><svg viewBox="0 0 24 24"><use href="#i-check"></use></svg>Aktivovat</button>
+                  <button type="button" class="button button-danger" data-action="branches-deactivate">Deaktivovat</button>
+                </div>
+              </div>
               <div class="table-shell branches-table-shell">
                 <table class="users-table branches-table" aria-label="Přehled filiálek">
                   <thead>

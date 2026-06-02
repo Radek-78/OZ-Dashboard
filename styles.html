@@ -3492,6 +3492,53 @@
     scrollbar-width: thin;
   }
 
+  /* Hromadné akce filiálek */
+  .branches-bulk-bar {
+    align-items: center;
+    background: #f1f6fd;
+    border-bottom: 1px solid var(--line);
+    display: flex;
+    gap: 16px;
+    padding: 8px 16px;
+  }
+
+  .branches-bulk-all {
+    align-items: center;
+    color: var(--muted);
+    display: flex;
+    font-size: 12px;
+    font-weight: 600;
+    gap: 6px;
+  }
+
+  .branches-bulk-count {
+    color: var(--muted);
+    font-size: 12px;
+  }
+
+  .branches-bulk-actions {
+    display: flex;
+    gap: 8px;
+    margin-left: auto;
+  }
+
+  .branch-check-wrap {
+    margin-right: 8px;
+  }
+
+  .branches-table tr.is-inactive {
+    background: #f7f9fc;
+    color: #9aa6b7;
+  }
+
+  .branches-table tr.is-inactive strong {
+    color: #9aa6b7;
+  }
+
+  .branches-table tr.is-inactive .role-chip {
+    opacity: .55;
+  }
+
   .branches-quick-filters::-webkit-scrollbar { height: 4px; }
   .branches-quick-filters::-webkit-scrollbar-thumb {
     border-radius: 999px;

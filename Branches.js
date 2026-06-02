@@ -64,6 +64,46 @@ function syncBranchesFromLatestSource() {
 }
 
 /**
+ * Hromadne nastavi priznak aktivni/neaktivni u vybranych filialek.
+ * Neaktivni filialky se ve frontendu beznym uzivatelum vubec nenactou.
+ * @param {{ ids: string[], active: boolean }} payload
+ * @returns {Object}
+ */
+function setBranchesActive(payload) {
+  const context = requirePermission_('branches.sync');
+  const ids = (payload && payload.ids) || [];
+  const active = !!(payload && payload.active);
+  if (!ids.length) return buildBranchesData_(context);
+
+  const lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    const sheet = context.database.spreadsheet.getSheetByName('FILIALKY');
+    const values = sheet.getDataRange().getValues();
+    if (values.length < 2) return buildBranchesData_(context);
+    const headers = values[0].map(String);
+    const idIdx = headers.indexOf('id');
+    const activeIdx = headers.indexOf('active');
+    if (idIdx === -1 || activeIdx === -1) throw new Error('List FILIALKY nemá sloupec id nebo active.');
+
+    const idSet = {};
+    ids.forEach(function(id) { idSet[String(id)] = true; });
+
+    const activeColumn = [];
+    for (let r = 0; r < values.length; r++) {
+      if (r === 0) { activeColumn.push([values[0][activeIdx]]); continue; }
+      activeColumn.push([idSet[String(values[r][idIdx])] ? active : values[r][activeIdx]]);
+    }
+    sheet.getRange(1, activeIdx + 1, values.length, 1).setValues(activeColumn);
+  } finally {
+    lock.releaseLock();
+  }
+
+  Logger.log('[BRANCH_ACTIVE_SET] by=%s count=%s active=%s', context.user.email, ids.length, active);
+  return buildBranchesData_(context);
+}
+
+/**
  * Spoustec pro casovy trigger. Nevyuziva Session, protoze trigger bezi bez aktivniho web uzivatele.
  */
 function syncBranchesFromLatestSourceTrigger() {
@@ -114,11 +154,13 @@ function buildBranchesData_(context) {
   const rows = getObjects_(spreadsheet.getSheetByName('FILIALKY')).map(mapBranchRow_);
   const activeRows = rows.filter(function(row) { return row.active; });
   const lcs = listLocations_(spreadsheet).filter(function(loc) { return loc.type === 'LC'; });
+  const canSync = hasPermission_(context.auth, 'branches.sync');
 
   return {
     auth: context.auth,
-    canSync: hasPermission_(context.auth, 'branches.sync'),
-    branches: activeRows,
+    canSync: canSync,
+    // Admin (sprava) vidi i neaktivni filialky kvuli reaktivaci; ostatni jen aktivni.
+    branches: canSync ? rows : activeRows,
     lcs: lcs,
     stats: {
       total: activeRows.length,
@@ -295,10 +337,26 @@ function normalizeBranchRow_(raw, sourceFile, sourceRow, sourceUpdatedAt) {
 function writeBranches_(spreadsheet, branches) {
   const sheet = spreadsheet.getSheetByName('FILIALKY');
   const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].map(String);
+
+  // Zachovej ruční deaktivace (podle čísla prodejny) i po přepisu ze zdroje.
+  const inactiveStoreNumbers = {};
+  if (sheet.getLastRow() > 1) {
+    getObjects_(sheet).forEach(function(row) {
+      if (!isTruthy_(row.active)) {
+        const sn = String(row.storeNumber || '').trim();
+        if (sn) inactiveStoreNumbers[sn] = true;
+      }
+    });
+  }
+
   if (sheet.getLastRow() > 1) {
     sheet.getRange(2, 1, sheet.getLastRow() - 1, sheet.getLastColumn()).clearContent();
   }
   if (!branches.length) return;
+
+  branches.forEach(function(branch) {
+    if (inactiveStoreNumbers[String(branch.storeNumber || '').trim()]) branch.active = false;
+  });
 
   const rows = branches.map(function(branch) {
     return headers.map(function(header) {
