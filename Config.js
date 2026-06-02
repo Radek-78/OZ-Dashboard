@@ -3,7 +3,7 @@
   appSubtitle: '',
   logoFileId: '18mu_Lq1F_FqqSZcolMjLwG0aaQDPMdyD',
   logoUrl: 'https://drive.google.com/thumbnail?id=18mu_Lq1F_FqqSZcolMjLwG0aaQDPMdyD&sz=w320',
-  version: 'v0.19.0',
+  version: 'v0.20.0',
   theme: {
     blue: '#0050aa',
     darkBlue: '#002466',
@@ -16,6 +16,16 @@
 };
 
 const APP_CHANGELOG = [
+  {
+    version: 'v0.20.0',
+    date: '2026-06-02',
+    changes: [
+      'Informacni karty na dashboardu nahrazeny relevantnimi udaji (filialky, logisticka centra, posledni synchronizace, posledni prihlaseni)',
+      'Informacni karty jsou nove klikaci a vedou na prislusnou stranku',
+      'Karta posledni synchronizace barevne signalizuje stari dat',
+      'Ikony karet sjednoceny do zaobleneho ctverce',
+    ],
+  },
   {
     version: 'v0.19.0',
     date: '2026-06-02',
