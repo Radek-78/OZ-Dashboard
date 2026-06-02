@@ -139,19 +139,7 @@ const App = {
 
     // Navigace
     document.querySelectorAll('.nav-link').forEach((button) => {
-      button.addEventListener('click', () => {
-        const section = button.dataset.section || 'home';
-        this.setActiveNav(section);
-        if (section === 'branches')   { this.showView('branches');   this.loadBranches(); return; }
-        if (section === 'lcBranches') { this.showView('lcBranches'); this.loadBranches(); return; }
-        if (section === 'users')       { this.showView('users');       this.ensureSettingsData(); return; }
-        if (section === 'locations')   { this.showView('locations');   this.ensureSettingsData(); return; }
-        if (section === 'departments') { this.showView('departments'); this.ensureSettingsData(); return; }
-        if (section === 'subapps')     { this.showView('subapps');     this.ensureSettingsData(); return; }
-        if (section === 'roles')       { this.showView('roles');       this.loadRoles();         return; }
-        this.showView('home');
-        this.loadHome();
-      });
+      button.addEventListener('click', () => this.navigateTo(button.dataset.section || 'home'));
     });
 
     // Uživatelé — formulář
@@ -554,23 +542,89 @@ const App = {
     });
   },
 
+  /** Přepne na danou sekci a načte její data (sdíleno navigací i klikacími kartami). */
+  navigateTo(section) {
+    section = section || 'home';
+    this.setActiveNav(section);
+    if (section === 'branches')    { this.showView('branches');    this.loadBranches();      return; }
+    if (section === 'lcBranches')  { this.showView('lcBranches');  this.loadBranches();      return; }
+    if (section === 'users')       { this.showView('users');       this.ensureSettingsData(); return; }
+    if (section === 'locations')   { this.showView('locations');   this.ensureSettingsData(); return; }
+    if (section === 'departments') { this.showView('departments'); this.ensureSettingsData(); return; }
+    if (section === 'subapps')     { this.showView('subapps');     this.ensureSettingsData(); return; }
+    if (section === 'roles')       { this.showView('roles');       this.loadRoles();          return; }
+    this.showView('home');
+    this.loadHome();
+  },
+
   // =========================================================================
   // SEKCE: Domovská stránka
   // =========================================================================
 
   renderStats(stats) {
     const grid = document.querySelector('#statusGrid');
-    grid.innerHTML = stats.map((item) => `
-      <div class="status-card" data-tone="${this.escape(item.tone || 'neutral')}">
+    grid.innerHTML = stats.map((item) => {
+      const display   = this.formatStatValue(item);
+      const accent    = display.accent || item.accent || 'blue';
+      const clickable = !!item.view;
+      return `
+      <div class="status-card${clickable ? ' status-card--clickable' : ''}" data-accent="${this.escape(accent)}"${clickable ? ` data-view="${this.escape(item.view)}" role="button" tabindex="0"` : ''}>
         <span class="status-icon">
-          <svg><use href="#${this.iconSymbol(item.icon)}"></use></svg>
+          <svg><use href="#${this.escape(item.icon || 'i-info')}"></use></svg>
         </span>
         <div>
           <span>${this.escape(item.label)}</span>
-          <strong>${this.escape(item.value)}</strong>
+          <strong>${this.escape(display.text)}</strong>
         </div>
-      </div>
-    `).join('');
+        ${clickable ? '<span class="status-arrow"><svg><use href="#i-chevron-right"></use></svg></span>' : ''}
+      </div>`;
+    }).join('');
+
+    grid.querySelectorAll('.status-card--clickable').forEach((card) => {
+      const go = () => this.navigateTo(card.dataset.view);
+      card.addEventListener('click', go);
+      card.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(); }
+      });
+    });
+  },
+
+  /** Zformátuje hodnotu karty podle jejího typu (číslo / synchronizace / datum). */
+  formatStatValue(item) {
+    if (item.type === 'sync') {
+      if (!item.value) return { text: 'Nikdy', accent: 'red' };
+      return { text: this.formatRelativeDateTime(item.value), accent: this.syncAccent(item.value) };
+    }
+    if (item.type === 'datetime') {
+      return { text: item.value ? this.formatRelativeDateTime(item.value) : 'Poprvé' };
+    }
+    return { text: item.value };
+  },
+
+  /** Vrátí barvu karty synchronizace podle stáří dat (zelená/žlutá/červená). */
+  syncAccent(value) {
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return 'red';
+    const days = (Date.now() - date.getTime()) / 86400000;
+    if (days >= 7) return 'red';
+    if (days >= 2) return 'amber';
+    return 'green';
+  },
+
+  /** Relativní čas v češtině (dnes / včera / před N dny / datum). */
+  formatRelativeDateTime(value) {
+    const date = new Date(value);
+    if (!value || Number.isNaN(date.getTime())) return '—';
+    const now        = new Date();
+    const startToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    const dayMs      = 86400000;
+    const t          = date.getTime();
+    const time       = date.toLocaleTimeString('cs-CZ', { hour: '2-digit', minute: '2-digit' });
+    if (t >= startToday)          return 'dnes ' + time;
+    if (t >= startToday - dayMs)  return 'včera ' + time;
+    const days = Math.floor((startToday - t) / dayMs) + 1;
+    if (days < 7) return 'před ' + days + ' dny';
+    return date.toLocaleDateString('cs-CZ', { day: 'numeric', month: 'numeric', year: 'numeric' });
   },
 
   renderModules(modules) {

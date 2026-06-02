@@ -1650,11 +1650,53 @@
   padding: 14px 16px;
 }
 
-/* Barevné odlišení ikon jednotlivých karet */
-.dashboard-hero .status-card:nth-child(1) .status-icon { background: #dcfce7; color: #15803d; }
-.dashboard-hero .status-card:nth-child(2) .status-icon { background: #eff6ff; color: #1d4ed8; }
-.dashboard-hero .status-card:nth-child(3) .status-icon { background: #fff7ed; color: #c2410c; }
-.dashboard-hero .status-card:nth-child(4) .status-icon { background: #f5f3ff; color: #6d28d9; }
+/* Ikona jako zaoblený čtverec (sjednoceno s Planung) */
+.dashboard-hero .status-icon {
+  border-radius: 10px;
+  height: 36px;
+  width: 36px;
+}
+
+/* Barevné odlišení ikon podle významu karty */
+.dashboard-hero .status-card[data-accent="blue"]   .status-icon { background: #eff6ff; color: #1d4ed8; }
+.dashboard-hero .status-card[data-accent="purple"] .status-icon { background: #f5f3ff; color: #6d28d9; }
+.dashboard-hero .status-card[data-accent="green"]  .status-icon { background: #dcfce7; color: #15803d; }
+.dashboard-hero .status-card[data-accent="orange"] .status-icon { background: #fff7ed; color: #c2410c; }
+.dashboard-hero .status-card[data-accent="amber"]  .status-icon { background: #fef3c7; color: #b45309; }
+.dashboard-hero .status-card[data-accent="red"]    .status-icon { background: #fee2e2; color: #b91c1c; }
+
+/* Klikací karty */
+.dashboard-hero .status-card--clickable {
+  cursor: pointer;
+  transition: box-shadow .16s ease, transform .16s ease, border-color .16s ease;
+}
+
+.dashboard-hero .status-card--clickable:hover {
+  border-color: var(--line);
+  box-shadow: 0 6px 20px rgba(0, 75, 190, .12);
+  transform: translateY(-1px);
+}
+
+.dashboard-hero .status-card--clickable:focus-visible {
+  outline: 2px solid var(--lidl-blue);
+  outline-offset: 2px;
+}
+
+.dashboard-hero .status-arrow {
+  align-items: center;
+  color: var(--line);
+  display: inline-flex;
+  margin-left: auto;
+}
+
+.dashboard-hero .status-card--clickable:hover .status-arrow {
+  color: var(--lidl-blue);
+}
+
+.dashboard-hero .status-arrow svg {
+  height: 16px;
+  width: 16px;
+}
 
 .dashboard-clock {
   color: var(--lidl-dark-blue);

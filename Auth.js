@@ -49,6 +49,7 @@ function getCurrentUserContext_() {
       id:           user.id,
       firstName:    user.firstName,
       lastName:     user.lastName,
+      lastVisitAt:  user.lastVisitAt,
       locationType: user.locationType,
       locationName: user.locationName,
       department:   user.department,

@@ -153,7 +153,7 @@ function getInitData() {
     homeData = {
       auth:    context.auth,
       project: { name: APP_CONFIG.appName, state: 'Přehled modulů' },
-      stats:   buildDashboardStats_(context.user, context.auth, loadedAt),
+      stats:   buildDashboardStats_(context),
       modules: listDashboardSubApps_(context.database.spreadsheet, context.auth),
       team:    [],
     };
@@ -215,7 +215,7 @@ function getHomeData() {
   return {
     auth:    context.auth,
     project: { name: APP_CONFIG.appName, state: 'Přehled modulů' },
-    stats:   buildDashboardStats_(context.user, context.auth, loadedAt),
+    stats:   buildDashboardStats_(context),
     modules: listDashboardSubApps_(context.database.spreadsheet, context.auth),
     team:    [],
   };
@@ -254,17 +254,44 @@ function getHealthData() {
 // ---------------------------------------------------------------------------
 
 /**
- * Sestaví statistické karty pro domovský dashboard.
- * @param {Object} user
- * @param {Object} auth
- * @param {Date} loadedAt
+ * Sestaví informační karty pro domovský dashboard.
+ * Karty nesou provozně relevantní údaje (počty, stáří dat) a volitelně
+ * proklik na příslušnou stránku (pole `view`).
+ * @param {Object} context - kontext z getCurrentUserContext_()
  * @returns {Object[]}
  */
-function buildDashboardStats_(user, auth, loadedAt) {
+function buildDashboardStats_(context) {
+  const spreadsheet = context.database.spreadsheet;
+  const auth = context.auth;
+  const canViewBranches = hasPermission_(auth, 'branches.view');
+
+  let branchCount = 0;
+  try {
+    const sheet = spreadsheet.getSheetByName('FILIALKY');
+    if (sheet) {
+      branchCount = getObjects_(sheet).filter(function(row) { return isTruthy_(row.active); }).length;
+    }
+  } catch (e) {
+    Logger.log('[STATS_BRANCHES_FAIL] %s', e && e.message ? e.message : e);
+  }
+
+  let lcCount = 0;
+  try {
+    lcCount = listLocations_(spreadsheet).filter(function(loc) { return loc.type === 'LC'; }).length;
+  } catch (e) {
+    Logger.log('[STATS_LC_FAIL] %s', e && e.message ? e.message : e);
+  }
+
+  const lastSyncAt  = PropertiesService.getScriptProperties().getProperty(BRANCH_LAST_SYNC_AT_PROP) || '';
+  const lastVisitAt = context.user && context.user.lastVisitAt ? formatDateValue_(context.user.lastVisitAt) : '';
+
   return [
-    { label: 'Stav systému',         value: 'Připraveno',   tone: 'success', icon: 'check' },
-    { label: 'Načteno',              value: Utilities.formatDate(loadedAt, Session.getScriptTimeZone(), 'd.M.yyyy HH:mm'), tone: 'info', icon: 'calendar' },
-    { label: 'Přihlášený uživatel',  value: user.email,     tone: 'neutral', icon: 'user' },
-    { label: 'Role přístupu',        value: auth.accessRole || '-', tone: 'neutral', icon: 'info' },
+    { label: 'Filiálky',               value: String(branchCount), icon: 'i-store',    accent: 'blue',
+      view: canViewBranches ? 'branches' : '' },
+    { label: 'Logistická centra',      value: String(lcCount),     icon: 'i-map-pin',  accent: 'purple',
+      view: canViewBranches ? 'lcBranches' : '' },
+    { label: 'Poslední synchronizace', value: lastSyncAt,          icon: 'i-download', accent: 'green', type: 'sync',
+      view: canViewBranches ? 'lcBranches' : '' },
+    { label: 'Poslední přihlášení',    value: lastVisitAt,         icon: 'i-user',     accent: 'orange', type: 'datetime' },
   ];
 }
