@@ -1612,17 +1612,49 @@
   }
 /* ── OZ Dashboard intro ───────────────────────────── */
 
-.dashboard-topbar {
-  align-items: center;
-  background: var(--white);
-  min-height: 112px;
-  padding: 24px 28px;
+.dashboard-hero {
+  background: linear-gradient(135deg, var(--white) 0%, #eef5ff 100%);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  box-shadow: var(--shadow);
+  display: grid;
+  gap: 18px;
+  padding: 22px 24px;
 }
 
-.dashboard-topbar h1 {
+.dashboard-hero-main {
+  align-items: center;
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+}
+
+.dashboard-hero-main h1 {
   font-size: 24px;
   margin-bottom: 4px;
 }
+
+/* 4 informační karty „plovoucí" na panelu */
+.dashboard-hero .status-strip {
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  gap: 12px;
+  overflow: visible;
+}
+
+.dashboard-hero .status-card {
+  background: var(--white);
+  border: 1px solid var(--line-soft);
+  border-radius: 10px;
+  padding: 14px 16px;
+}
+
+/* Barevné odlišení ikon jednotlivých karet */
+.dashboard-hero .status-card:nth-child(1) .status-icon { background: #dcfce7; color: #15803d; }
+.dashboard-hero .status-card:nth-child(2) .status-icon { background: #eff6ff; color: #1d4ed8; }
+.dashboard-hero .status-card:nth-child(3) .status-icon { background: #fff7ed; color: #c2410c; }
+.dashboard-hero .status-card:nth-child(4) .status-icon { background: #f5f3ff; color: #6d28d9; }
 
 .dashboard-clock {
   color: var(--lidl-dark-blue);
@@ -1878,7 +1910,7 @@
 }
 
 @media (max-width: 620px) {
-  .dashboard-topbar {
+  .dashboard-hero-main {
     align-items: start;
     display: grid;
   }

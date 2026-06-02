@@ -486,7 +486,7 @@ const App = {
 
     this.setText('#sidebarUser',  user);
     this.setText('#sidebarAvatar', this.getInitials(user));
-    this.setText('#welcomeName',  this.getDisplayName(user));
+    this.renderGreeting(user);
     this.setText('#sidebarRole',  role);
     this.setText('#version',      version);
     this.setText('#updatedAt',    this.formatDateTime(data.loadedAt || data.renderedAt || ''));
@@ -2900,6 +2900,68 @@ const App = {
     const source = clean.includes('@') ? clean.split('@')[0] : clean;
     const first  = source.split(/[.\s_-]+/).filter(Boolean)[0] || source;
     return first.charAt(0).toUpperCase() + first.slice(1);
+  },
+
+  /** Vrátí křestní jméno (prázdný řetězec, pokud žádné). */
+  getFirstName(value) {
+    const clean  = String(value || '').trim();
+    if (!clean) return '';
+    const source = clean.includes('@') ? clean.split('@')[0] : clean;
+    const first  = source.split(/[.\s_-]+/).filter(Boolean)[0] || '';
+    return first ? first.charAt(0).toUpperCase() + first.slice(1) : '';
+  },
+
+  /** Vrátí pozdrav podle denní doby. */
+  getTimeGreeting() {
+    const hour = new Date().getHours();
+    if (hour >= 5  && hour < 10) return 'Dobré ráno';
+    if (hour >= 10 && hour < 17) return 'Dobrý den';
+    if (hour >= 17 && hour < 21) return 'Hezký večer';
+    return 'Klidnou noc';
+  },
+
+  /** Vrátí 5. pád (vokativ) českého křestního jména. */
+  getVokativ(name) {
+    if (!name) return '';
+    const n = name.trim();
+    const l = n.toLowerCase();
+
+    // 1. Speciální případy a nepravidelnosti
+    if (l === 'petr')  return 'Petře';
+    if (l === 'pavel') return 'Pavle';
+    if (l === 'karel') return 'Karle';
+    if (l === 'honz' || l === 'honza') return 'Honzo';
+    if (l === 'jura')  return 'Juro';
+    if (l === 'jiří')  return 'Jiří';
+
+    // 2. Koncovka -ek (Radek, Marek, Zdeněk) -> -ku
+    if (l.endsWith('ek')) return n.slice(0, -2) + 'ku';
+
+    // 3. Koncovka -a (Jana, Nikola, Petra) -> -o
+    if (l.endsWith('a')) return n.slice(0, -1) + 'o';
+
+    // 4. Měkké souhlásky a specifické koncovky -> -i
+    if (/[šžčřcj]$/.test(l)) return n + 'i';
+    if (l.endsWith('iel')) return n + 'i';
+    if (l.endsWith('el') && l.length > 3) return n + 'i';
+
+    // 5. Tvrdé souhlásky -> -e (resp. -u po -ch)
+    if (/[ndmtpvbfghkzs]$/.test(l)) {
+      if (l.endsWith('ch')) return n + 'u';
+      return n + 'e';
+    }
+
+    // 6. Koncovka -r (pokud není Petr) -> -e
+    if (l.endsWith('r')) return n + 'e';
+
+    return n;
+  },
+
+  /** Sestaví a zobrazí uvítací pozdrav (denní doba + 5. pád jména). */
+  renderGreeting(value) {
+    const vokativ = this.getVokativ(this.getFirstName(value));
+    const base    = this.getTimeGreeting();
+    this.setText('#welcomeGreeting', vokativ ? `${base}, ${vokativ}` : base);
   },
 
   /** Vrátí e-mail z různých formátů (string nebo objekt). */
