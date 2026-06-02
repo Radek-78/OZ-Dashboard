@@ -3,7 +3,7 @@
   appSubtitle: '',
   logoFileId: '18mu_Lq1F_FqqSZcolMjLwG0aaQDPMdyD',
   logoUrl: 'https://drive.google.com/thumbnail?id=18mu_Lq1F_FqqSZcolMjLwG0aaQDPMdyD&sz=w320',
-  version: 'v0.18.8',
+  version: 'v0.19.0',
   theme: {
     blue: '#0050aa',
     darkBlue: '#002466',
@@ -16,6 +16,16 @@
 };
 
 const APP_CHANGELOG = [
+  {
+    version: 'v0.19.0',
+    date: '2026-06-02',
+    changes: [
+      'Horni lista s pozdravem a informacni karty sjednoceny do jednoho panelu',
+      'Pridan pozdrav podle denni doby (rano/den/vecer/noc)',
+      'Osloveni uzivatele nove sklonovano do 5. padu',
+      'Informacni karty na dashboardu barevne odliseny',
+    ],
+  },
   {
     version: 'v0.18.8',
     date: '2026-05-23',
