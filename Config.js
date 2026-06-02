@@ -3,7 +3,7 @@
   appSubtitle: '',
   logoFileId: '18mu_Lq1F_FqqSZcolMjLwG0aaQDPMdyD',
   logoUrl: 'https://drive.google.com/thumbnail?id=18mu_Lq1F_FqqSZcolMjLwG0aaQDPMdyD&sz=w320',
-  version: 'v0.20.4',
+  version: 'v0.21.0',
   theme: {
     blue: '#0050aa',
     darkBlue: '#002466',
@@ -16,6 +16,16 @@
 };
 
 const APP_CHANGELOG = [
+  {
+    version: 'v0.21.0',
+    date: '2026-06-02',
+    changes: [
+      'Stranka Filialky prejmenovana na LC a filialky s podzalozkami Filialky a Logisticka centra',
+      'Prehled logistickych center presunut do stranky LC a filialky',
+      'Polozka nastaveni prejmenovana na Sync LC a fili a obsahuje jen synchronizaci',
+      'Karty na dashboardu vedou na konkretni podzalozku, karta posledni synchronizace je informativni',
+    ],
+  },
   {
     version: 'v0.20.4',
     date: '2026-06-02',
