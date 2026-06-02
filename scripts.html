@@ -389,9 +389,9 @@ const App = {
         if (data.homeData) {
           this.applyAuth(data.homeData.auth || { hasAccess: true });
           if (data.homeData.auth && data.homeData.auth.hasAccess) {
-            this.renderStats(data.homeData.stats || []);
-            this.renderModules(data.homeData.modules || []);
-            this.renderTeam(data.homeData.team || []);
+            this.safeRender('renderStats',   () => this.renderStats(data.homeData.stats || []));
+            this.safeRender('renderModules', () => this.renderModules(data.homeData.modules || []));
+            this.safeRender('renderTeam',    () => this.renderTeam(data.homeData.team || []));
           } else {
             this.hideLoader();
           }
@@ -420,11 +420,21 @@ const App = {
       .then((data) => {
         this.applyAuth(data.auth || { hasAccess: true });
         if (data.auth && !data.auth.hasAccess) { this.hideLoader(); return; }
-        this.renderStats(data.stats || []);
-        this.renderModules(data.modules || []);
-        this.renderTeam(data.team || []);
+        this.safeRender('renderStats',   () => this.renderStats(data.stats || []));
+        this.safeRender('renderModules', () => this.renderModules(data.modules || []));
+        this.safeRender('renderTeam',    () => this.renderTeam(data.team || []));
       })
       .catch((err) => this.toast(err.message, 'error'));
+  },
+
+  /** Spustí render funkci tak, aby její případné selhání nezablokovalo ostatní. */
+  safeRender(label, fn) {
+    try {
+      fn();
+    } catch (e) {
+      console.error('[RENDER_FAIL] ' + label, e);
+      this.toast('Část dashboardu se nepodařilo zobrazit (' + label + ').', 'error');
+    }
   },
 
   /** Načte administrativní číselníky až při otevření Nastavení. */

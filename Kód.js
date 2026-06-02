@@ -261,13 +261,13 @@ function getHealthData() {
  * @returns {Object[]}
  */
 function buildDashboardStats_(context) {
-  const spreadsheet = context.database.spreadsheet;
-  const auth = context.auth;
+  const auth = (context && context.auth) || {};
+  const spreadsheet = context && context.database ? context.database.spreadsheet : null;
   const canViewBranches = hasPermission_(auth, 'branches.view');
 
   let branchCount = 0;
   try {
-    const sheet = spreadsheet.getSheetByName('FILIALKY');
+    const sheet = spreadsheet ? spreadsheet.getSheetByName('FILIALKY') : null;
     if (sheet) {
       branchCount = getObjects_(sheet).filter(function(row) { return isTruthy_(row.active); }).length;
     }
@@ -277,13 +277,26 @@ function buildDashboardStats_(context) {
 
   let lcCount = 0;
   try {
-    lcCount = listLocations_(spreadsheet).filter(function(loc) { return loc.type === 'LC'; }).length;
+    if (spreadsheet) {
+      lcCount = listLocations_(spreadsheet).filter(function(loc) { return loc.type === 'LC'; }).length;
+    }
   } catch (e) {
     Logger.log('[STATS_LC_FAIL] %s', e && e.message ? e.message : e);
   }
 
-  const lastSyncAt  = PropertiesService.getScriptProperties().getProperty(BRANCH_LAST_SYNC_AT_PROP) || '';
-  const lastVisitAt = context.user && context.user.lastVisitAt ? formatDateValue_(context.user.lastVisitAt) : '';
+  let lastSyncAt = '';
+  try {
+    lastSyncAt = PropertiesService.getScriptProperties().getProperty('ACTION_WRITEOFFS_BRANCH_LAST_SYNC_AT') || '';
+  } catch (e) {
+    Logger.log('[STATS_SYNC_FAIL] %s', e && e.message ? e.message : e);
+  }
+
+  let lastVisitAt = '';
+  try {
+    lastVisitAt = context && context.user && context.user.lastVisitAt ? formatDateValue_(context.user.lastVisitAt) : '';
+  } catch (e) {
+    Logger.log('[STATS_VISIT_FAIL] %s', e && e.message ? e.message : e);
+  }
 
   return [
     { label: 'Filiálky',               value: String(branchCount), icon: 'i-store',    accent: 'blue',
