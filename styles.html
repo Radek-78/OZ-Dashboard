@@ -580,18 +580,18 @@
   }
 
   .status-icon {
-    align-items: center;
+    place-items: center;
     border-radius: 50%;
-    display: inline-flex;
+    display: inline-grid;
     flex-shrink: 0;
     height: 40px;
-    justify-content: center;
     width: 40px;
     background: #e6f0fb;
     color: var(--lidl-blue);
   }
 
   .status-icon svg {
+    display: block;
     height: 18px;
     width: 18px;
   }
@@ -1774,14 +1774,13 @@
 }
 
 .dashboard-card-icon {
-  align-items: center;
+  place-items: center;
   background: #eaf2ff;
   border: 1px solid #d7e6fb;
   border-radius: 10px;
   color: var(--lidl-blue);
-  display: inline-flex;
+  display: inline-grid;
   height: 54px;
-  justify-content: center;
   margin-bottom: 18px;
   width: 54px;
 }
@@ -2546,7 +2545,7 @@
   }
   .button-danger {
     color: #fff;
-    background: linear-gradient(135deg, var(--red), #b80710);
+    background: linear-gradient(135deg, var(--lidl-red), #b80710);
     box-shadow: 0 12px 24px rgba(230,10,20,.18), inset 0 0 0 1px rgba(255,255,255,.18);
   }
   .loader {
@@ -3524,6 +3523,22 @@
 
   .branch-check-wrap {
     margin-right: 8px;
+  }
+
+  .branch-check,
+  .branches-bulk-all input[type="checkbox"] {
+    -webkit-appearance: auto;
+    appearance: auto;
+    width: 15px;
+    height: 15px;
+    min-height: 0;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    vertical-align: middle;
+    cursor: pointer;
+    accent-color: var(--lidl-blue);
   }
 
   .branches-table tr.is-inactive {
