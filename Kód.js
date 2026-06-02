@@ -300,11 +300,10 @@ function buildDashboardStats_(context) {
 
   return [
     { label: 'Filiálky',               value: String(branchCount), icon: 'i-store',    accent: 'blue',
-      view: canViewBranches ? 'branches' : '' },
+      view: canViewBranches ? 'branches' : '', subtab: 'fili' },
     { label: 'Logistická centra',      value: String(lcCount),     icon: 'i-map-pin',  accent: 'purple',
-      view: canViewBranches ? 'lcBranches' : '' },
-    { label: 'Poslední synchronizace', value: lastSyncAt,          icon: 'i-download', accent: 'green', type: 'sync',
-      view: canViewBranches ? 'lcBranches' : '' },
+      view: canViewBranches ? 'branches' : '', subtab: 'lc' },
+    { label: 'Poslední synchronizace', value: lastSyncAt,          icon: 'i-download', accent: 'green', type: 'sync' },
     { label: 'Poslední přihlášení',    value: lastVisitAt,         icon: 'i-user',     accent: 'orange', type: 'datetime' },
   ];
 }
