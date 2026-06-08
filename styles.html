@@ -2317,6 +2317,10 @@
     content: ' ↕';
     color: #bbb;
     font-size: 11px;
+    position: absolute;
+    right: 6px;
+    top: 50%;
+    transform: translateY(-50%);
   }
 
   .users-table th.sortable.is-sorted::after {
@@ -3569,6 +3573,7 @@
     display: inline-flex;
     gap: 8px;
     white-space: nowrap;
+    vertical-align: middle;
   }
   .branch-num-th input[hidden] { display: none; }
 
