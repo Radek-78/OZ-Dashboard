@@ -17,6 +17,12 @@
  */
 function getCurrentUserContext_() {
   const database = ensureDatabase_();
+  try {
+    ensureInternalSubAppUrls_(database.spreadsheet);
+  } catch (e) {
+    Logger.log('[SUBAPP_URL_ENSURE_FAIL] %s', e && e.message ? e.message : e);
+  }
+
   const email = getSignedInUser_();
   const user = findUserByEmail_(database.spreadsheet, email);
 

@@ -18,6 +18,9 @@ var INTERNAL_SUBAPP_URLS = [
   { nameContains: 'dostupnostpeciva', url: '?page=pecivo' },
 ];
 
+/** Kanonický klíč nastavení pro Google Drive složku se zdrojovými daty. */
+var SUBAPP_SETTING_SOURCE_FOLDER_ID = 'sourceFolderId';
+
 // ---------------------------------------------------------------------------
 // Veřejné API endpointy
 // ---------------------------------------------------------------------------
@@ -415,4 +418,139 @@ function formatSubAppUpdatedLabel_(isoStr) {
   } catch (e) {
     return 'Aktualizováno: ' + isoStr;
   }
+}
+
+// ---------------------------------------------------------------------------
+// Konfigurace subaplikací
+// ---------------------------------------------------------------------------
+
+/**
+ * Vrátí hodnotu nastavení subaplikace z listu SUBAPP_SETTINGS.
+ * Pokud hodnota ještě není v DB a existuje legacy Script Property, přenese ji.
+ *
+ * @param {Spreadsheet} spreadsheet
+ * @param {string} subAppKey
+ * @param {string} settingKey
+ * @param {string=} legacyPropertyKey
+ * @returns {string}
+ */
+function getSubAppSettingValue_(spreadsheet, subAppKey, settingKey, legacyPropertyKey) {
+  const key = normalizeSubAppKey_(subAppKey);
+  const setting = String(settingKey || '').trim();
+  if (!key || !setting) return '';
+
+  const sheet = spreadsheet.getSheetByName('SUBAPP_SETTINGS');
+  if (sheet && sheet.getLastRow() >= 2) {
+    const values = sheet.getDataRange().getValues();
+    const headers = values[0];
+    const keyIdx = headers.indexOf('subAppKey');
+    const settingIdx = headers.indexOf('settingKey');
+    const valueIdx = headers.indexOf('value');
+    if (keyIdx < 0 || settingIdx < 0 || valueIdx < 0) return '';
+    for (var row = 1; row < values.length; row++) {
+      const rowKey = normalizeSubAppKey_(values[row][keyIdx]);
+      const rowSetting = String(values[row][settingIdx] || '').trim();
+      if (rowKey === key && rowSetting === setting) return String(values[row][valueIdx] || '').trim();
+    }
+  }
+
+  if (legacyPropertyKey) {
+    const legacyValue = PropertiesService.getScriptProperties().getProperty(legacyPropertyKey) || '';
+    if (legacyValue) {
+      setSubAppSettingValue_(spreadsheet, key, setting, legacyValue, 'system:migration');
+      return legacyValue;
+    }
+  }
+
+  return '';
+}
+
+/**
+ * Uloží hodnotu nastavení subaplikace do listu SUBAPP_SETTINGS.
+ *
+ * @param {Spreadsheet} spreadsheet
+ * @param {string} subAppKey
+ * @param {string} settingKey
+ * @param {string} value
+ * @param {string=} updatedBy
+ */
+function setSubAppSettingValue_(spreadsheet, subAppKey, settingKey, value, updatedBy) {
+  const key = normalizeSubAppKey_(subAppKey);
+  const setting = String(settingKey || '').trim();
+  if (!key || !setting) throw new Error('Chybí klíč subaplikace nebo nastavení.');
+
+  const sheet = spreadsheet.getSheetByName('SUBAPP_SETTINGS');
+  if (!sheet) throw new Error('List SUBAPP_SETTINGS neexistuje. Spusťte migraci databáze.');
+
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    const values = sheet.getDataRange().getValues();
+    const headers = values[0];
+    const idIdx = headers.indexOf('id');
+    const keyIdx = headers.indexOf('subAppKey');
+    const settingIdx = headers.indexOf('settingKey');
+    if (keyIdx < 0 || settingIdx < 0) throw new Error('List SUBAPP_SETTINGS nemá správné sloupce.');
+    let targetRow = -1;
+
+    for (var row = 1; row < values.length; row++) {
+      const rowKey = normalizeSubAppKey_(values[row][keyIdx]);
+      const rowSetting = String(values[row][settingIdx] || '').trim();
+      if (rowKey === key && rowSetting === setting) {
+        targetRow = row + 1;
+        break;
+      }
+    }
+
+    const now = new Date();
+    const map = {
+      id: targetRow > 0 ? values[targetRow - 1][idIdx] : Utilities.getUuid(),
+      subAppKey: key,
+      settingKey: setting,
+      value: String(value || '').trim(),
+      updatedAt: now,
+      updatedBy: updatedBy || 'system',
+    };
+    const rowValues = headers.map(function(header) {
+      return map[header] !== undefined ? map[header] : '';
+    });
+
+    if (targetRow > 0) sheet.getRange(targetRow, 1, 1, headers.length).setValues([rowValues]);
+    else sheet.appendRow(rowValues);
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/**
+ * Vrátí ID zdrojové složky pro subaplikaci.
+ * @param {Spreadsheet} spreadsheet
+ * @param {string} subAppKey
+ * @param {string=} legacyPropertyKey
+ * @returns {string}
+ */
+function getSubAppSourceFolderId_(spreadsheet, subAppKey, legacyPropertyKey) {
+  return getSubAppSettingValue_(spreadsheet, subAppKey, SUBAPP_SETTING_SOURCE_FOLDER_ID, legacyPropertyKey);
+}
+
+/**
+ * Ověří a uloží ID Google Drive složky pro subaplikaci.
+ * @param {Object} context
+ * @param {string} subAppKey
+ * @param {{ folderId: string }} payload
+ * @returns {string} normalizované ID složky
+ */
+function saveSubAppSourceFolderId_(context, subAppKey, payload) {
+  const folderId = extractDriveId_(payload && payload.folderId);
+  if (!folderId) throw new Error('Vyplňte ID zdrojové složky.');
+
+  const folder = DriveApp.getFolderById(folderId);
+  setSubAppSettingValue_(
+    context.database.spreadsheet,
+    subAppKey,
+    SUBAPP_SETTING_SOURCE_FOLDER_ID,
+    folder.getId(),
+    context.user.email
+  );
+  return folder.getId();
 }

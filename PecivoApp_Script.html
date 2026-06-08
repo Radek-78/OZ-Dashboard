@@ -62,6 +62,7 @@
       const modal = document.querySelector('#pecivoSettingsModal');
       const input = document.querySelector('#pecivoFolderInput');
       const status = document.querySelector('#pecivoModalStatus');
+      const saveBtn = document.querySelector('#pecivoFolderSave');
       const state = this.state || {};
 
       if (input) input.value = state.folderId || '';
@@ -69,6 +70,16 @@
         status.hidden = true;
         status.className = 'pecivo-modal-status';
         status.textContent = '';
+      }
+
+      const canConfigure = state.canConfigure;
+      if (input) input.disabled = !canConfigure;
+      if (saveBtn) saveBtn.disabled = !canConfigure;
+
+      if (!canConfigure && status) {
+        status.hidden = false;
+        status.className = 'pecivo-modal-status is-error';
+        status.textContent = 'Nemáte oprávnění měnit nastavení zdrojové složky.';
       }
 
       modal.showModal();

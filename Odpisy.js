@@ -11,6 +11,7 @@
  */
 
 const ODPISY_SOURCE_FOLDER_ID_PROP  = 'ODPISY_SOURCE_FOLDER_ID';
+const ODPISY_SUBAPP_KEY             = 'ODPISY';
 const ODPISY_CACHE_BUSTER_PROP      = 'ODPISY_CACHE_BUSTER';
 const ODPISY_CACHE_TTL_SECONDS      = 300;
 const ODPISY_KNOWN_MTIMES_PROP      = 'ODPISY_KNOWN_MTIMES';   // JSON {telex,stores,articles} v ms
@@ -86,13 +87,9 @@ function triggerOdpisyCheck() {
  */
 function saveOdpisySourceFolder(payload) {
   const context = requirePermission_('branches.sync');
-  const folderId = extractDriveId_(payload && payload.folderId);
-  if (!folderId) throw new Error('Vyplňte ID zdrojové složky.');
-
-  const folder = DriveApp.getFolderById(folderId);
-  PropertiesService.getScriptProperties().setProperty(ODPISY_SOURCE_FOLDER_ID_PROP, folder.getId());
+  const folderId = saveSubAppSourceFolderId_(context, ODPISY_SUBAPP_KEY, payload);
   bumpOdpisyCacheBuster_();
-  Logger.log('[ODPISY_FOLDER_SET] by=%s folder=%s', context.user.email, folder.getId());
+  Logger.log('[ODPISY_FOLDER_SET] by=%s folder=%s', context.user.email, folderId);
   return buildOdpisyData_(context);
 }
 
@@ -114,7 +111,8 @@ function checkOdpisyFilesAndRefresh_() {
   const props    = PropertiesService.getScriptProperties();
   const checkTs  = new Date();
   storeOdpisyCheckStatus_(checkTs, new Date(checkTs.getTime() + ODPISY_CHECK_INTERVAL_MIN * 60000));
-  const folderId = props.getProperty(ODPISY_SOURCE_FOLDER_ID_PROP) || '';
+  const database = ensureDatabase_();
+  const folderId = getSubAppSourceFolderId_(database.spreadsheet, ODPISY_SUBAPP_KEY, ODPISY_SOURCE_FOLDER_ID_PROP);
   if (!folderId) {
     Logger.log('[ODPISY_CHECK] Přeskočeno — zdrojová složka není nastavena');
     return;
@@ -163,7 +161,6 @@ function checkOdpisyFilesAndRefresh_() {
   Logger.log('[ODPISY_CHECK] Všechny soubory změněny — spouštím přegenerování dat');
   bumpOdpisyCacheBuster_();
 
-  const database = ensureDatabase_();
   const fakeContext = {
     database: database,
     user:     { email: 'system@trigger' },
@@ -245,8 +242,7 @@ function getOdpisyUpdateStatus_() {
  * @returns {Object}
  */
 function buildOdpisyData_(context) {
-  const props = PropertiesService.getScriptProperties();
-  const folderId = props.getProperty(ODPISY_SOURCE_FOLDER_ID_PROP) || '';
+  const folderId = getSubAppSourceFolderId_(context.database.spreadsheet, ODPISY_SUBAPP_KEY, ODPISY_SOURCE_FOLDER_ID_PROP);
   const canConfigure = hasPermission_(context.auth, 'branches.sync');
   const startedAt = Date.now();
 

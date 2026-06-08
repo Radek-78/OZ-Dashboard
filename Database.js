@@ -6,7 +6,7 @@
  */
 
 /** Aktuální verze databázového schématu. Navyšte při přidání nových listů/sloupců. */
-const DATABASE_SCHEMA_VERSION = '6';
+const DATABASE_SCHEMA_VERSION = '7';
 
 /** TTL cache záznamu o databázi v sekundách (6 hodin). */
 const DATABASE_CACHE_TTL_SECONDS = 21600;
@@ -198,6 +198,10 @@ function setupDatabaseSheets_(spreadsheet) {
 
   ensureSheet_(spreadsheet, 'SUBAPP_PERMISSIONS', [
     'id', 'userId', 'email', 'subAppKey', 'accessLevel', 'active', 'updatedAt', 'updatedBy',
+  ]);
+
+  ensureSheet_(spreadsheet, 'SUBAPP_SETTINGS', [
+    'id', 'subAppKey', 'settingKey', 'value', 'updatedAt', 'updatedBy',
   ]);
 
   ensureSheet_(spreadsheet, 'SUBAPPS', [

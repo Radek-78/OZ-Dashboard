@@ -5,6 +5,7 @@
  */
 
 const PECIVO_SOURCE_FOLDER_ID_PROP = 'PECIVO_SOURCE_FOLDER_ID';
+const PECIVO_SUBAPP_KEY = 'PECIVO';
 
 /**
  * Vrátí kompletní data pro subapp Dostupnost pečiva.
@@ -15,14 +16,16 @@ function getPecivoInitData() {
   const context = requirePermission_('pecivo.view');
   
   // Zde bude načítání dat ze spreadsheetu/složek. Prozatím vrátíme základní strukturu.
-  const props = PropertiesService.getScriptProperties();
-  const folderId = props.getProperty(PECIVO_SOURCE_FOLDER_ID_PROP) || '';
+  const folderId = getSubAppSourceFolderId_(context.database.spreadsheet, PECIVO_SUBAPP_KEY, PECIVO_SOURCE_FOLDER_ID_PROP);
+  const canConfigure = hasPermission_(context.auth, 'pecivo.manage');
   
   // Aktualizujeme timestamp na dashboardu
   updateSubAppLastUpdatedByUrl_(context.database.spreadsheet, '?page=pecivo');
   
   return {
     success: true,
+    configured: !!folderId,
+    canConfigure: canConfigure,
     folderId: folderId,
     data: [],
     message: 'Backend subaplikace Dostupnost pečiva je připraven.'
@@ -37,13 +40,8 @@ function getPecivoInitData() {
  */
 function savePecivoSourceFolder(payload) {
   const context = requirePermission_('pecivo.manage');
-  const folderId = extractDriveId_(payload && payload.folderId);
-  if (!folderId) throw new Error('Vyplňte ID zdrojové složky.');
-
-  // Ověříme existenci složky
-  const folder = DriveApp.getFolderById(folderId);
-  PropertiesService.getScriptProperties().setProperty(PECIVO_SOURCE_FOLDER_ID_PROP, folder.getId());
+  const folderId = saveSubAppSourceFolderId_(context, PECIVO_SUBAPP_KEY, payload);
   
-  Logger.log('[PECIVO_FOLDER_SET] by=%s folder=%s', context.user.email, folder.getId());
+  Logger.log('[PECIVO_FOLDER_SET] by=%s folder=%s', context.user.email, folderId);
   return getPecivoInitData();
 }
