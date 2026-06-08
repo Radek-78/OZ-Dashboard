@@ -4710,4 +4710,32 @@
   .odpisy-stats-bar strong {
     color: var(--text);
   }
+
+  /* ── Sync History & Badges ────────────────────────── */
+  .diff-chip {
+    display: inline-flex;
+    align-items: center;
+    min-height: 20px;
+    padding: 0 8px;
+    border-radius: 999px;
+    font-size: 9px;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: .05em;
+  }
+  .diff-chip.is-added {
+    color: #007646;
+    background: rgba(0, 153, 92, 0.1);
+  }
+  .diff-chip.is-deleted {
+    color: #a61c1c;
+    background: rgba(200, 30, 30, 0.1);
+  }
+  .diff-chip.is-modified {
+    color: var(--blue);
+    background: rgba(0, 80, 170, 0.08);
+  }
+  .sync-history-panel .data-table {
+    margin-top: 0.5rem;
+  }
 </style>

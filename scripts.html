@@ -57,6 +57,7 @@ const App = {
   rolesModal:       null,
   changelogModal:   null,
   syncEditModal:    null,
+  syncHistoryDetailsModal: null,
 
   // ── Stav aplikace ─────────────────────────────────────────────────────────
   clockTimer:       null,
@@ -107,6 +108,7 @@ const App = {
     this.rolesModal      = document.querySelector('#rolesModal');
     this.changelogModal  = document.querySelector('#changelogModal');
     this.syncEditModal   = document.querySelector('#syncEditModal');
+    this.syncHistoryDetailsModal = document.querySelector('#syncHistoryDetailsModal');
     this.lcModal         = document.querySelector('#lcModal');
     this.iconCatalog     = window.LIDL_ICON_CATALOG || [];
     this.applyBootstrap(window.APP_BOOTSTRAP || {});
@@ -227,6 +229,9 @@ const App = {
     }
     document.querySelectorAll('[data-action="close-sync-edit"]').forEach((b) => {
       b.addEventListener('click', () => this.closeSyncEditModal());
+    });
+    document.querySelectorAll('[data-action="close-sync-details"]').forEach((b) => {
+      b.addEventListener('click', () => this.closeSyncHistoryDetails());
     });
 
     const syncBranches = document.querySelector('[data-action="sync-branches"]');
@@ -994,6 +999,7 @@ const App = {
     this.renderBranchesSyncInfo();
     this.renderBranchSettings();
     this.renderBranchesTrigger();
+    this.renderBranchesSyncHistory();
   },
 
   renderBranchesSyncInfo() {
@@ -1032,6 +1038,135 @@ const App = {
     document.querySelectorAll('[data-action="edit-sync-setting"]').forEach((btn) => {
       btn.hidden = !canSync;
     });
+  },
+
+  renderBranchesSyncHistory() {
+    const history = this.branchesState.syncHistory || [];
+    const tbody = document.querySelector('#branchesSyncHistoryBody');
+    if (!tbody) return;
+
+    if (history.length === 0) {
+      tbody.innerHTML = `
+        <tr>
+          <td colspan="7" class="table-empty" style="text-align: center; padding: 2rem; color: var(--muted);">
+            <strong>Žádná historie</strong>
+            <span style="display: block; font-size: 12px; margin-top: 4px;">Dosud neproběhla žádná synchronizace se sledováním změn.</span>
+          </td>
+        </tr>
+      `;
+      return;
+    }
+
+    tbody.innerHTML = history.map((run) => {
+      const fileNameTruncated = run.fileName.length > 30 
+        ? run.fileName.substring(0, 27) + '...' 
+        : run.fileName;
+      return `
+        <tr>
+          <td>${this.formatDateTime(run.syncedAt)}</td>
+          <td>${run.actor}</td>
+          <td title="${run.fileName}">${fileNameTruncated}</td>
+          <td style="text-align: center;"><strong style="color: #007646;">+${run.addedCount}</strong></td>
+          <td style="text-align: center;"><strong style="color: var(--blue);">~${run.updatedCount}</strong></td>
+          <td style="text-align: center;"><strong style="color: #a61c1c;">-${run.deletedCount}</strong></td>
+          <td>
+            <button class="button button-secondary button-small" type="button" data-action="view-sync-details" data-id="${run.id}">
+              Podrobnosti
+            </button>
+          </td>
+        </tr>
+      `;
+    }).join('');
+
+    tbody.querySelectorAll('[data-action="view-sync-details"]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const runId = btn.getAttribute('data-id');
+        this.openSyncHistoryDetails(runId);
+      });
+    });
+  },
+
+  openSyncHistoryDetails(runId) {
+    const run = (this.branchesState.syncHistory || []).find((r) => r.id === runId);
+    if (!run) return;
+
+    const titleEl = document.querySelector('#syncHistoryDetailsTitle');
+    if (titleEl) {
+      titleEl.textContent = `Změny ze dne ${this.formatDateTime(run.syncedAt)}`;
+    }
+
+    const tbody = document.querySelector('#syncHistoryDetailsBody');
+    if (tbody) {
+      tbody.innerHTML = `
+        <tr>
+          <td colspan="6" style="text-align: center; padding: 2rem;">
+            Načítám změny ze serveru...
+          </td>
+        </tr>
+      `;
+    }
+
+    if (this.syncHistoryDetailsModal) {
+      this.syncHistoryDetailsModal.showModal();
+    }
+
+    this.callServer('getSyncRunDetails', runId)
+      .then((changes) => {
+        if (!tbody) return;
+        if (!changes || changes.length === 0) {
+          tbody.innerHTML = `
+            <tr>
+              <td colspan="6" style="text-align: center; padding: 2rem; color: var(--muted);">
+                V tomto běhu nebyly zaznamenány žádné změny (všechny hodnoty byly shodné).
+              </td>
+            </tr>
+          `;
+          return;
+        }
+
+        tbody.innerHTML = changes.map((c) => {
+          let badgeClass = '';
+          let typeLabel = '';
+          if (c.changeType === 'ADDED') {
+            badgeClass = 'is-added';
+            typeLabel = 'Přidáno';
+          } else if (c.changeType === 'DELETED') {
+            badgeClass = 'is-deleted';
+            typeLabel = 'Smazáno';
+          } else {
+            badgeClass = 'is-modified';
+            typeLabel = 'Upraveno';
+          }
+
+          return `
+            <tr>
+              <td><strong>${c.storeNumber || ''}</strong></td>
+              <td>${c.storeName || ''}</td>
+              <td><span class="diff-chip ${badgeClass}">${typeLabel}</span></td>
+              <td>${c.fieldName || ''}</td>
+              <td style="color: var(--muted); text-decoration: line-through;">${c.oldValue || ''}</td>
+              <td style="color: var(--text); font-weight: 500;">${c.newValue || ''}</td>
+            </tr>
+          `;
+        }).join('');
+      })
+      .catch((err) => {
+        if (tbody) {
+          tbody.innerHTML = `
+            <tr>
+              <td colspan="6" style="text-align: center; padding: 2rem; color: var(--lidl-red);">
+                Chyba při načítání změn: ${err.message || 'Neznámá chyba'}
+              </td>
+            </tr>
+          `;
+        }
+      });
+  },
+
+  closeSyncHistoryDetails() {
+    if (this.syncHistoryDetailsModal) {
+      this.syncHistoryDetailsModal.close();
+    }
   },
 
   openSyncEditModal(settingKey) {

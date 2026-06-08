@@ -186,7 +186,7 @@ function syncBranchesFromLatestSourceInternal_(targetSpreadsheet, actor) {
     const sourceSheet = sourceSpreadsheet.getSheets()[0];
     const values = sourceSheet.getDataRange().getValues();
     const branches = parseBranchesFromValues_(values, sourceFile);
-    writeBranches_(targetSpreadsheet, branches);
+    writeBranchesWithAudit_(targetSpreadsheet, branches, sourceFile, actor);
 
     const now = new Date().toISOString();
     props.setProperty(BRANCH_LAST_SOURCE_FILE_ID_PROP, sourceFile.getId());
@@ -249,6 +249,28 @@ function buildBranchesData_(context) {
       subAppFolderId: props.getProperty(ACTION_WRITEOFFS_FOLDER_ID_PROP) || '',
       subAppSpreadsheetId: props.getProperty(ACTION_WRITEOFFS_SPREADSHEET_ID_PROP) || '',
     },
+    syncHistory: (function() {
+      const runsSheet = spreadsheet.getSheetByName('FILIALKY_SYNC_RUNS');
+      if (!runsSheet || runsSheet.getLastRow() < 2) return [];
+      return getObjects_(runsSheet)
+        .map(function(run) {
+          return {
+            id: run.id,
+            syncedAt: run.syncedAt,
+            actor: run.actor,
+            fileName: run.fileName,
+            fileId: run.fileId,
+            addedCount: Number(run.addedCount || 0),
+            updatedCount: Number(run.updatedCount || 0),
+            deletedCount: Number(run.deletedCount || 0),
+            noChangeCount: Number(run.noChangeCount || 0)
+          };
+        })
+        .sort(function(a, b) {
+          return new Date(b.syncedAt).getTime() - new Date(a.syncedAt).getTime();
+        })
+        .slice(0, 20);
+    })(),
   };
 }
 
@@ -484,40 +506,207 @@ function normalizeBranchRow_(raw, sourceFile, sourceRow, sourceUpdatedAt) {
 }
 
 /**
- * Prepise list FILIALKY aktualnimi daty.
+ * Přepíše list FILIALKY a zaznamená historii změn do FILIALKY_SYNC_RUNS a FILIALKY_SYNC_CHANGES.
  * @param {Spreadsheet} spreadsheet
- * @param {Object[]} branches
+ * @param {Object[]} newBranches
+ * @param {GoogleAppsScript.Drive.File} sourceFile
+ * @param {string} actor
  */
-function writeBranches_(spreadsheet, branches) {
-  const sheet = spreadsheet.getSheetByName('FILIALKY');
-  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].map(String);
-
-  // Zachovej ruční deaktivace (podle čísla prodejny) i po přepisu ze zdroje.
-  const inactiveStoreNumbers = {};
-  if (sheet.getLastRow() > 1) {
-    getObjects_(sheet).forEach(function(row) {
-      if (!isTruthy_(row.active)) {
-        const sn = String(row.storeNumber || '').trim();
-        if (sn) inactiveStoreNumbers[sn] = true;
+function writeBranchesWithAudit_(spreadsheet, newBranches, sourceFile, actor) {
+  const branchSheet = spreadsheet.getSheetByName('FILIALKY');
+  const runSheet = spreadsheet.getSheetByName('FILIALKY_SYNC_RUNS');
+  const changeSheet = spreadsheet.getSheetByName('FILIALKY_SYNC_CHANGES');
+  
+  const headers = branchSheet.getRange(1, 1, 1, branchSheet.getLastColumn()).getValues()[0].map(String);
+  
+  // 1. Načíst stávající data
+  const existingBranches = branchSheet.getLastRow() > 1 
+    ? getObjects_(branchSheet) 
+    : [];
+    
+  const oldMap = {};
+  existingBranches.forEach(function(b) {
+    const num = String(b.storeNumber || '').trim();
+    if (num) oldMap[num] = b;
+  });
+  
+  // Zachovat ruční deaktivace a přenést je do nových prodejen
+  newBranches.forEach(function(nb) {
+    const num = String(nb.storeNumber || '').trim();
+    if (num && oldMap[num] && oldMap[num].active === false) {
+      nb.active = false;
+    }
+  });
+  
+  const newMap = {};
+  newBranches.forEach(function(nb) {
+    const num = String(nb.storeNumber || '').trim();
+    if (num) newMap[num] = nb;
+  });
+  
+  // 2. Porovnání změn
+  const runId = Utilities.getUuid();
+  const timestamp = new Date();
+  const changeRows = [];
+  
+  let addedCount = 0;
+  let updatedCount = 0;
+  let deletedCount = 0;
+  let noChangeCount = 0;
+  
+  // Pole k porovnání
+  const fieldsToCompare = [
+    { key: 'storeName', label: 'Název prodejny' },
+    { key: 'lc', label: 'Logistické centrum (LC)' },
+    { key: 'storePhone', label: 'Telefon prodejny' },
+    { key: 'vt', label: 'Oblastní manažer (VT)' },
+    { key: 'rm', label: 'Regionální manažer (RM)' },
+    { key: 'rmPhone', label: 'Telefon RM' }
+  ];
+  
+  const days = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+  const dayLabels = {
+    monday: 'Po', tuesday: 'Út', wednesday: 'St', thursday: 'Čt',
+    friday: 'Pá', saturday: 'So', sunday: 'Ne'
+  };
+  days.forEach(function(day) {
+    fieldsToCompare.push({ key: day + 'Open', label: dayLabels[day] + ' - Otevření' });
+    fieldsToCompare.push({ key: day + 'Close', label: dayLabels[day] + ' - Zavření' });
+  });
+  
+  // Hledání ADDED a MODIFIED
+  newBranches.forEach(function(nb) {
+    const num = String(nb.storeNumber || '').trim();
+    const oldBranch = oldMap[num];
+    
+    if (!oldBranch) {
+      // Přidaná filiálka
+      addedCount++;
+      changeRows.push([
+        Utilities.getUuid(),
+        runId,
+        nb.storeNumber,
+        nb.storeName,
+        'ADDED',
+        '', // fieldName
+        '', // oldValue
+        '', // newValue
+        timestamp
+      ]);
+    } else {
+      // Existující - zkontrolujeme změny
+      let isModified = false;
+      fieldsToCompare.forEach(function(field) {
+        const oldVal = String(oldBranch[field.key] || '').trim();
+        const newVal = String(nb[field.key] !== undefined ? nb[field.key] : '').trim();
+        if (oldVal !== newVal) {
+          isModified = true;
+          changeRows.push([
+            Utilities.getUuid(),
+            runId,
+            nb.storeNumber,
+            nb.storeName,
+            'MODIFIED',
+            field.label,
+            oldVal,
+            newVal,
+            timestamp
+          ]);
+        }
+      });
+      
+      if (isModified) {
+        updatedCount++;
+      } else {
+        noChangeCount++;
       }
+    }
+  });
+  
+  // Hledání DELETED
+  existingBranches.forEach(function(ob) {
+    const num = String(ob.storeNumber || '').trim();
+    if (num && !newMap[num]) {
+      deletedCount++;
+      changeRows.push([
+        Utilities.getUuid(),
+        runId,
+        ob.storeNumber,
+        ob.storeName,
+        'DELETED',
+        '',
+        '',
+        '',
+        timestamp
+      ]);
+    }
+  });
+  
+  // 3. Zápis do databáze
+  // Zápis synchronizačního běhu
+  if (runSheet) {
+    const runRow = [
+      runId,
+      timestamp,
+      actor || 'system',
+      sourceFile.getName(),
+      sourceFile.getId(),
+      addedCount,
+      updatedCount,
+      deletedCount,
+      noChangeCount
+    ];
+    runSheet.appendRow(runRow);
+  }
+  
+  // Batch zápis změn
+  if (changeSheet && changeRows.length > 0) {
+    const lastRow = changeSheet.getLastRow();
+    changeSheet.getRange(lastRow + 1, 1, changeRows.length, 9).setValues(changeRows);
+  }
+  
+  // Přepsání listu FILIALKY novými daty
+  if (branchSheet.getLastRow() > 1) {
+    branchSheet.getRange(2, 1, branchSheet.getLastRow() - 1, branchSheet.getLastColumn()).clearContent();
+  }
+  
+  if (newBranches.length > 0) {
+    const rows = newBranches.map(function(branch) {
+      return headers.map(function(header) {
+        return branch[header] !== undefined ? branch[header] : '';
+      });
     });
+    branchSheet.getRange(2, 1, rows.length, headers.length).setValues(rows);
   }
+}
 
-  if (sheet.getLastRow() > 1) {
-    sheet.getRange(2, 1, sheet.getLastRow() - 1, sheet.getLastColumn()).clearContent();
-  }
-  if (!branches.length) return;
+/**
+ * Vrátí detailní historii změn pro konkrétní běh synchronizace.
+ * @param {string} runId
+ * @returns {Object[]}
+ */
+function getSyncRunDetails(runId) {
+  const context = requirePermission_('branches.sync');
+  const db = ensureDatabase_();
+  const sheet = db.spreadsheet.getSheetByName('FILIALKY_SYNC_CHANGES');
+  if (!sheet || sheet.getLastRow() < 2) return [];
 
-  branches.forEach(function(branch) {
-    if (inactiveStoreNumbers[String(branch.storeNumber || '').trim()]) branch.active = false;
+  const changes = getObjects_(sheet).filter(function(row) {
+    return String(row.runId).trim() === runId;
   });
 
-  const rows = branches.map(function(branch) {
-    return headers.map(function(header) {
-      return branch[header] !== undefined ? branch[header] : '';
-    });
+  return changes.map(function(change) {
+    return {
+      id: change.id,
+      storeNumber: change.storeNumber,
+      storeName: change.storeName,
+      changeType: change.changeType,
+      fieldName: change.fieldName,
+      oldValue: change.oldValue,
+      newValue: change.newValue,
+      timestamp: change.timestamp
+    };
   });
-  sheet.getRange(2, 1, rows.length, headers.length).setValues(rows);
 }
 
 /**

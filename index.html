@@ -271,6 +271,33 @@
                 </div>
                 <button type="button" class="button button-secondary" data-action="setup-branches-trigger"><svg><use href="#i-check"></use></svg>Zkontrolovat / vytvořit</button>
               </div>
+
+              <div class="sync-history-panel" id="branchesSyncHistoryPanel" style="margin-top: 2rem;">
+                <h4 style="margin-bottom: 1rem; color: var(--color-blue); font-weight: 600;">Historie synchronizací a změn</h4>
+                <div class="table-wrap">
+                  <table class="data-table" style="width: 100%;">
+                    <thead>
+                      <tr>
+                        <th>Čas synchronizace</th>
+                        <th>Provedl</th>
+                        <th>Zdrojový soubor</th>
+                        <th style="text-align: center; width: 80px;">Přidáno</th>
+                        <th style="text-align: center; width: 80px;">Upraveno</th>
+                        <th style="text-align: center; width: 80px;">Smazáno</th>
+                        <th style="text-align: center; width: 120px;">Akce</th>
+                      </tr>
+                    </thead>
+                    <tbody id="branchesSyncHistoryBody">
+                      <tr>
+                        <td colspan="7" class="table-empty" style="text-align: center; padding: 2rem; color: var(--muted);">
+                          <strong>Žádná historie</strong>
+                          <span style="display: block; font-size: 12px; margin-top: 4px;">Dosud neproběhla žádná synchronizace se sledováním změn.</span>
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
             </div>
           </section>
         </section>
@@ -736,6 +763,39 @@
           <button class="button button-primary" type="submit"><svg><use href="#i-check"></use></svg>Uložit</button>
         </footer>
       </form>
+    </dialog>
+
+    <dialog class="modal" id="syncHistoryDetailsModal" style="max-width: 800px; width: 90%;">
+      <header class="modal-header">
+        <span class="modal-icon"><svg><use href="#i-list"></use></svg></span>
+        <div class="modal-header-text">
+          <p class="kicker">Detail změn synchronizace</p>
+          <h2 id="syncHistoryDetailsTitle">Změny v prodejnách</h2>
+        </div>
+        <button class="modal-close" type="button" data-action="close-sync-details" aria-label="Zavřít"><svg><use href="#i-close"></use></svg></button>
+      </header>
+      <div class="modal-body" style="max-height: 60vh; overflow-y: auto;">
+        <div class="table-wrap">
+          <table class="data-table" style="width: 100%;">
+            <thead>
+              <tr>
+                <th style="width: 80px;">Prodejna</th>
+                <th>Název prodejny</th>
+                <th style="width: 100px;">Typ změny</th>
+                <th>Změněný údaj</th>
+                <th>Původní hodnota</th>
+                <th>Nová hodnota</th>
+              </tr>
+            </thead>
+            <tbody id="syncHistoryDetailsBody">
+              <!-- Dynamicky plněno -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <footer class="modal-actions">
+        <button class="button button-secondary" type="button" data-action="close-sync-details"><svg><use href="#i-close"></use></svg>Zavřít</button>
+      </footer>
     </dialog>
 
     <dialog class="modal changelog-modal" id="changelogModal">

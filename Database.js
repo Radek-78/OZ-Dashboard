@@ -223,6 +223,16 @@ function setupDatabaseSheets_(spreadsheet) {
     'sourceFileId', 'sourceFileName', 'sourceRow', 'sourceUpdatedAt',
     'syncedAt', 'rawHash', 'active',
   ]);
+
+  ensureSheet_(spreadsheet, 'FILIALKY_SYNC_RUNS', [
+    'id', 'syncedAt', 'actor', 'fileName', 'fileId',
+    'addedCount', 'updatedCount', 'deletedCount', 'noChangeCount',
+  ]);
+
+  ensureSheet_(spreadsheet, 'FILIALKY_SYNC_CHANGES', [
+    'id', 'runId', 'storeNumber', 'storeName', 'changeType',
+    'fieldName', 'oldValue', 'newValue', 'timestamp',
+  ]);
 }
 
 /**
