@@ -221,7 +221,7 @@ function buildBranchesData_(context) {
   const canSync = hasPermission_(context.auth, 'branches.sync');
   const canManageLocations = hasPermission_(context.auth, 'users.manage');
 
-  return {
+  const result = {
     auth: context.auth,
     canSync: canSync,
     canManageLocations: canManageLocations,
@@ -272,6 +272,8 @@ function buildBranchesData_(context) {
         .slice(0, 20);
     })(),
   };
+
+  return JSON.parse(JSON.stringify(result));
 }
 
 /**
@@ -695,7 +697,7 @@ function getSyncRunDetails(runId) {
     return String(row.runId).trim() === runId;
   });
 
-  return changes.map(function(change) {
+  const result = changes.map(function(change) {
     return {
       id: change.id,
       storeNumber: change.storeNumber,
@@ -707,6 +709,8 @@ function getSyncRunDetails(runId) {
       timestamp: formatDateValue_(change.timestamp)
     };
   });
+
+  return JSON.parse(JSON.stringify(result));
 }
 
 /**
