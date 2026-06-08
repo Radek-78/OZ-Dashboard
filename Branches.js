@@ -256,7 +256,7 @@ function buildBranchesData_(context) {
         .map(function(run) {
           return {
             id: run.id,
-            syncedAt: run.syncedAt,
+            syncedAt: formatDateValue_(run.syncedAt),
             actor: run.actor,
             fileName: run.fileName,
             fileId: run.fileId,
@@ -704,7 +704,7 @@ function getSyncRunDetails(runId) {
       fieldName: change.fieldName,
       oldValue: change.oldValue,
       newValue: change.newValue,
-      timestamp: change.timestamp
+      timestamp: formatDateValue_(change.timestamp)
     };
   });
 }
