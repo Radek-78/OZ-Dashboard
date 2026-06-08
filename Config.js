@@ -3,7 +3,7 @@
   appSubtitle: '',
   logoFileId: '18mu_Lq1F_FqqSZcolMjLwG0aaQDPMdyD',
   logoUrl: 'https://drive.google.com/thumbnail?id=18mu_Lq1F_FqqSZcolMjLwG0aaQDPMdyD&sz=w320',
-  version: 'v0.29.7',
+  version: 'v0.30.0',
   theme: {
     blue: '#0050aa',
     darkBlue: '#002466',
@@ -16,6 +16,15 @@
 };
 
 const APP_CHANGELOG = [
+  {
+    version: 'v0.30.0',
+    date: '2026-06-08',
+    changes: [
+      'Sjednocena konfigurace zdrojovych slozek subaplikaci v DB listu SUBAPP_SETTINGS',
+      'Automaticka migrace stavajici slozky Odpisu ze Script Properties',
+      'Dostupnost peciva pouziva stejne nastaveni zdrojove slozky jako ostatni subaplikace',
+    ],
+  },
   {
     version: 'v0.29.7',
     date: '2026-06-08',
