@@ -156,6 +156,7 @@ function syncBranchesFromLatestSourceTrigger() {
  * @param {string} actor
  */
 function syncBranchesFromLatestSourceInternal_(targetSpreadsheet, actor) {
+  const props = PropertiesService.getScriptProperties();
   const folderId = getConfigValue_('branchSourceFolderId');
   if (!folderId) {
     throw new Error('Nejdříve nastavte ID složky se zdrojovým přehledem filiálek.');
