@@ -127,20 +127,40 @@ function syncBranchesFromLatestSourceInternal_(targetSpreadsheet, actor) {
 
   const sourceFile = findLatestBranchSourceFile_(folderId);
   if (!sourceFile) {
-    throw new Error('Ve zdrojové složce nebyl nalezen žádný Google Spreadsheet.');
+    throw new Error('Ve zdrojové složce nebyl nalezen žádný Google Spreadsheet ani Excel (.xlsx) soubor.');
   }
 
-  const sourceSpreadsheet = SpreadsheetApp.openById(sourceFile.getId());
-  const sourceSheet = sourceSpreadsheet.getSheets()[0];
-  const values = sourceSheet.getDataRange().getValues();
-  const branches = parseBranchesFromValues_(values, sourceFile);
-  writeBranches_(targetSpreadsheet, branches);
+  let sourceSpreadsheet;
+  let tempSheetId = null;
+  const isXlsx = sourceFile.getMimeType() !== MimeType.GOOGLE_SHEETS;
 
-  const now = new Date().toISOString();
-  props.setProperty(BRANCH_LAST_SOURCE_FILE_ID_PROP, sourceFile.getId());
-  props.setProperty(BRANCH_LAST_SOURCE_FILE_NAME_PROP, sourceFile.getName());
-  props.setProperty(BRANCH_LAST_SYNC_AT_PROP, now);
-  Logger.log('[BRANCH_SYNC] by=%s file=%s rows=%s', actor, sourceFile.getId(), branches.length);
+  try {
+    if (isXlsx) {
+      tempSheetId = convertXlsxToTempGoogleSheet_(sourceFile, folderId);
+      sourceSpreadsheet = SpreadsheetApp.openById(tempSheetId);
+    } else {
+      sourceSpreadsheet = SpreadsheetApp.openById(sourceFile.getId());
+    }
+
+    const sourceSheet = sourceSpreadsheet.getSheets()[0];
+    const values = sourceSheet.getDataRange().getValues();
+    const branches = parseBranchesFromValues_(values, sourceFile);
+    writeBranches_(targetSpreadsheet, branches);
+
+    const now = new Date().toISOString();
+    props.setProperty(BRANCH_LAST_SOURCE_FILE_ID_PROP, sourceFile.getId());
+    props.setProperty(BRANCH_LAST_SOURCE_FILE_NAME_PROP, sourceFile.getName());
+    props.setProperty(BRANCH_LAST_SYNC_AT_PROP, now);
+    Logger.log('[BRANCH_SYNC] by=%s file=%s rows=%s type=%s', actor, sourceFile.getId(), branches.length, isXlsx ? 'xlsx' : 'g-sheet');
+  } finally {
+    if (tempSheetId) {
+      try {
+        DriveApp.getFileById(tempSheetId).setTrashed(true);
+      } catch (e) {
+        Logger.log('[BRANCH_SYNC_CLEANUP_FAIL] tempId=%s error=%s', tempSheetId, e && e.message ? e.message : e);
+      }
+    }
+  }
 }
 
 /**
@@ -262,7 +282,7 @@ function setupBranchesSyncTrigger() {
 }
 
 /**
- * Najde nejnovejsi Google Spreadsheet ve slozce podle data posledni aktualizace.
+ * Najde nejnovější Google Spreadsheet nebo Excel soubor ve složce podle data poslední aktualizace.
  * @param {string} folderId
  * @returns {GoogleAppsScript.Drive.File|null}
  */
@@ -270,16 +290,69 @@ function findLatestBranchSourceFile_(folderId) {
   const folder = DriveApp.getFolderById(folderId);
   const files = folder.getFiles();
   let latest = null;
+  
+  const allowedMimeTypes = [
+    MimeType.GOOGLE_SHEETS,
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'application/vnd.ms-excel'
+  ];
 
   while (files.hasNext()) {
     const file = files.next();
-    if (file.getMimeType() !== MimeType.GOOGLE_SHEETS) continue;
+    if (allowedMimeTypes.indexOf(file.getMimeType()) === -1) continue;
     if (!latest || file.getLastUpdated().getTime() > latest.getLastUpdated().getTime()) {
       latest = file;
     }
   }
 
   return latest;
+}
+
+/**
+ * Převede XLSX/XLS soubor na dočasný Google Sheet pomocí Drive API v3.
+ * @param {GoogleAppsScript.Drive.File} xlsxFile
+ * @param {string} parentFolderId
+ * @returns {string} ID vytvořeného Google Sheetu
+ */
+function convertXlsxToTempGoogleSheet_(xlsxFile, parentFolderId) {
+  const blob = xlsxFile.getBlob();
+  const fileMetadata = {
+    name: xlsxFile.getName() + '_TEMP_SYNC_' + Utilities.getUuid(),
+    mimeType: 'application/vnd.google-apps.spreadsheet',
+    parents: parentFolderId ? [parentFolderId] : []
+  };
+
+  const boundary = 'xxxxxxxxxx';
+  const delimiter = '\r\n--' + boundary + '\r\n';
+  const closeDelim = '\r\n--' + boundary + '--';
+
+  const metadataPart = 'Content-Type: application/json; charset=UTF-8\r\n\r\n' + JSON.stringify(fileMetadata);
+  const mediaPart = 'Content-Type: ' + blob.getContentType() + '\r\n' +
+                    'Content-Transfer-Encoding: base64\r\n\r\n' +
+                    Utilities.base64Encode(blob.getBytes());
+
+  const payload = delimiter + metadataPart + delimiter + mediaPart + closeDelim;
+
+  const options = {
+    method: 'post',
+    contentType: 'multipart/related; boundary=' + boundary,
+    payload: payload,
+    headers: {
+      'Authorization': 'Bearer ' + ScriptApp.getOAuthToken()
+    },
+    muteHttpExceptions: true
+  };
+
+  const response = UrlFetchApp.fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', options);
+  const responseCode = response.getResponseCode();
+  const responseText = response.getContentText();
+
+  if (responseCode !== 200) {
+    throw new Error('Nepodařilo se převést Excel na Google Sheet (Drive API). Kód: ' + responseCode + ', Odpověď: ' + responseText);
+  }
+
+  const result = JSON.parse(responseText);
+  return result.id;
 }
 
 /**
