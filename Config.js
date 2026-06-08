@@ -3,7 +3,7 @@
   appSubtitle: '',
   logoFileId: '18mu_Lq1F_FqqSZcolMjLwG0aaQDPMdyD',
   logoUrl: 'https://drive.google.com/thumbnail?id=18mu_Lq1F_FqqSZcolMjLwG0aaQDPMdyD&sz=w320',
-  version: 'v0.29.5',
+  version: 'v0.29.6',
   theme: {
     blue: '#0050aa',
     darkBlue: '#002466',
@@ -16,6 +16,13 @@
 };
 
 const APP_CHANGELOG = [
+  {
+    version: 'v0.29.6',
+    date: '2026-06-08',
+    changes: [
+      'Srovnání výšky a zarovnání checkboxu, nadpisu a šipek řazení v prvním sloupci tabulky prodejen',
+    ],
+  },
   {
     version: 'v0.29.5',
     date: '2026-06-08',
