@@ -15,6 +15,7 @@ var SUBAPP_STATUSES = ['ACTIVE', 'PREPARING', 'DISABLED'];
  */
 var INTERNAL_SUBAPP_URLS = [
   { nameContains: 'vyhodnoceniodpisuakcnich', url: '?page=odpisy' },
+  { nameContains: 'dostupnostpeciva', url: '?page=pecivo' },
 ];
 
 // ---------------------------------------------------------------------------

@@ -4082,6 +4082,15 @@
   .branches-table th.sortable.is-sorted::after { color: var(--lidl-yellow); }
   .branches-table th.sortable.is-sorted.is-sorted-desc::after { color: var(--lidl-yellow); }
 
+  /* Vycentrování a zamezení překryvu v prvním sloupci (Číslo) */
+  .branches-table th[data-col="storeNumber"]::after {
+    position: static !important;
+    display: inline-block;
+    vertical-align: middle;
+    margin-left: 4px;
+    transform: none !important;
+  }
+
   /* ── Popup menu pro sort/filter sloupce ── */
   .branch-col-menu {
     position: fixed;

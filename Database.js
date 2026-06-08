@@ -6,7 +6,7 @@
  */
 
 /** Aktuální verze databázového schématu. Navyšte při přidání nových listů/sloupců. */
-const DATABASE_SCHEMA_VERSION = '5';
+const DATABASE_SCHEMA_VERSION = '6';
 
 /** TTL cache záznamu o databázi v sekundách (6 hodin). */
 const DATABASE_CACHE_TTL_SECONDS = 21600;
@@ -190,6 +190,10 @@ function setupDatabaseSheets_(spreadsheet) {
     ['ADMIN',  'branches.sync', true, 'Synchronizace přehledu filiálek', new Date()],
     ['EDITOR', 'branches.view', true, 'Zobrazení přehledu filiálek', new Date()],
     ['VIEWER', 'branches.view', true, 'Zobrazení přehledu filiálek', new Date()],
+    ['ADMIN',  'pecivo.view', true, 'Zobrazení dostupnosti pečiva', new Date()],
+    ['ADMIN',  'pecivo.manage', true, 'Správa dostupnosti pečiva', new Date()],
+    ['EDITOR', 'pecivo.view', true, 'Zobrazení dostupnosti pečiva', new Date()],
+    ['VIEWER', 'pecivo.view', true, 'Zobrazení dostupnosti pečiva', new Date()],
   ]);
 
   ensureSheet_(spreadsheet, 'SUBAPP_PERMISSIONS', [

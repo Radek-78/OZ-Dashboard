@@ -1,0 +1,374 @@
+<style>
+  /* ── Base ──────────────────────────────────────────────────────────────── */
+  .pecivo-standalone-body {
+    margin: 0;
+    min-height: 100vh;
+    background: #dde4ef;
+    color: var(--text);
+    overflow: hidden;
+  }
+
+  .pecivo-standalone {
+    height: 100vh;
+    display: grid;
+    grid-template-rows: 52px 1fr;
+    box-sizing: border-box;
+  }
+
+  /* ── Toolbar ───────────────────────────────────────────────────────────── */
+  .pecivo-toolbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0 16px;
+    background: var(--lidl-blue);
+    color: #fff;
+    box-shadow: 0 2px 8px rgba(0,20,60,.18);
+    z-index: 10;
+  }
+
+  .pecivo-toolbar-left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .pecivo-back-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    height: 32px;
+    padding: 0 10px 0 6px;
+    border-radius: 6px;
+    border: 1px solid rgba(255,255,255,.22);
+    color: #fff;
+    font-size: 12px;
+    font-weight: 700;
+    text-decoration: none;
+    white-space: nowrap;
+    transition: background .15s;
+  }
+
+  .pecivo-back-link:hover { background: rgba(255,255,255,.12); }
+
+  .pecivo-back-link svg {
+    width: 16px;
+    height: 16px;
+  }
+
+  .pecivo-toolbar-divider {
+    width: 1px;
+    height: 20px;
+    background: rgba(255,255,255,.28);
+  }
+
+  .pecivo-toolbar-title {
+    margin: 0;
+    font-size: 14px;
+    font-weight: 850;
+    color: #fff;
+    text-transform: uppercase;
+    letter-spacing: .02em;
+  }
+
+  .pecivo-toolbar-right {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .pecivo-toolbar-user {
+    font-size: 11px;
+    color: rgba(255,255,255,.7);
+  }
+
+  .pecivo-toolbar-btn {
+    display: grid;
+    place-items: center;
+    width: 34px;
+    height: 34px;
+    border: 1px solid rgba(255,255,255,.22);
+    border-radius: 6px;
+    background: transparent;
+    color: #fff;
+    cursor: pointer;
+    transition: background .15s;
+  }
+
+  .pecivo-toolbar-btn:hover { background: rgba(255,255,255,.14); }
+  .pecivo-toolbar-btn svg { width: 16px; height: 16px; }
+
+  /* ── Workbook ──────────────────────────────────────────────────────────── */
+  .pecivo-workbook {
+    min-height: 0;
+    display: grid;
+    grid-template-rows: 1fr;
+    padding: 12px 18px 16px;
+    box-sizing: border-box;
+  }
+
+  .pecivo-workbook-page {
+    min-height: 0;
+    background: #fff;
+    border: 1.5px solid #5a6e8a;
+    border-top-color: #1e2d47;
+    border-top-width: 2.5px;
+    display: grid;
+    grid-template-rows: auto 1fr;
+    box-shadow: 0 8px 32px rgba(0,20,60,.10);
+    overflow: hidden;
+    padding: 24px;
+    gap: 16px;
+  }
+
+  .pecivo-sheet-header {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    border-bottom: 2px solid var(--lidl-blue);
+    padding-bottom: 16px;
+  }
+
+  .pecivo-lidl-mark {
+    width: 60px;
+    height: 60px;
+  }
+
+  .pecivo-lidl-mark img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+  }
+
+  .pecivo-title-block h2 {
+    margin: 0;
+    color: var(--lidl-blue);
+    font-size: 24px;
+    font-weight: 800;
+  }
+
+  .pecivo-title-block p {
+    margin: 4px 0 0;
+    color: var(--muted);
+    font-size: 13px;
+  }
+
+  /* ── State / Loader ────────────────────────────────────────────────────── */
+  .pecivo-state {
+    align-self: center;
+    justify-self: center;
+    text-align: center;
+    display: grid;
+    gap: 12px;
+    color: #5e6c82;
+    padding: 40px;
+  }
+
+  .pecivo-state strong { color: #102f61; font-size: 16px; }
+  .pecivo-state p { margin: 0; font-size: 13px; }
+
+  .pecivo-loader {
+    width: 32px;
+    height: 32px;
+    justify-self: center;
+    border: 3px solid #d0daea;
+    border-top-color: var(--lidl-blue);
+    border-radius: 50%;
+    animation: pecivo-spin .75s linear infinite;
+  }
+
+  @keyframes pecivo-spin { to { transform: rotate(360deg); } }
+
+  /* ── Content / Card ─────────────────────────────────────────────────────── */
+  .pecivo-content-frame {
+    display: grid;
+    gap: 16px;
+  }
+
+  .pecivo-card {
+    background: #f8fafc;
+    border: 1px solid rgba(0,36,102,.08);
+    border-radius: 8px;
+    padding: 20px;
+  }
+
+  .pecivo-card h3 {
+    margin: 0 0 10px;
+    color: var(--lidl-blue);
+    font-size: 16px;
+    font-weight: 700;
+  }
+
+  .pecivo-card p {
+    margin: 0;
+    font-size: 13px;
+    color: var(--text);
+  }
+
+  /* ── Modal Settings ────────────────────────────────────────────────────── */
+  .pecivo-modal {
+    border: none;
+    padding: 0;
+    border-radius: 10px;
+    box-shadow: 0 20px 60px rgba(0,20,60,.22);
+    width: min(500px, 94vw);
+  }
+
+  .pecivo-modal::backdrop { background: rgba(10,22,46,.45); }
+
+  .pecivo-modal-inner {
+    display: grid;
+    grid-template-rows: auto 1fr auto;
+  }
+
+  .pecivo-modal-head {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 18px 20px 16px;
+    border-bottom: 1px solid #e0e8f4;
+    background: #f4f8ff;
+    border-radius: 10px 10px 0 0;
+  }
+
+  .pecivo-modal-icon {
+    width: 38px;
+    height: 38px;
+    display: grid;
+    place-items: center;
+    background: var(--lidl-blue);
+    border-radius: 8px;
+    color: #fff;
+    flex-shrink: 0;
+  }
+
+  .pecivo-modal-icon svg { width: 20px; height: 20px; }
+
+  .pecivo-modal-kicker {
+    margin: 0;
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    color: #6a7e9a;
+  }
+
+  .pecivo-modal-head h3 {
+    margin: 3px 0 0;
+    font-size: 16px;
+    color: #0d2040;
+  }
+
+  .pecivo-modal-close {
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    color: #8c9ba5;
+    padding: 5px;
+  }
+
+  .pecivo-modal-close:hover { color: #1e2022; }
+  .pecivo-modal-close svg { width: 20px; height: 20px; }
+
+  .pecivo-modal-body {
+    padding: 20px;
+  }
+
+  .pecivo-modal-desc {
+    margin: 0 0 16px;
+    font-size: 13px;
+    color: #555;
+    line-height: 1.45;
+  }
+
+  .pecivo-field {
+    display: grid;
+    gap: 6px;
+  }
+
+  .pecivo-field span {
+    font-size: 12px;
+    font-weight: 700;
+    color: #4a5568;
+  }
+
+  .pecivo-field input {
+    height: 36px;
+    padding: 0 12px;
+    border: 1px solid #cbd5e0;
+    border-radius: 6px;
+    font-size: 13px;
+    outline: none;
+  }
+
+  .pecivo-field input:focus { border-color: var(--lidl-blue); }
+
+  .pecivo-modal-status {
+    margin-top: 10px;
+    padding: 8px 12px;
+    border-radius: 6px;
+    font-size: 12px;
+  }
+
+  .pecivo-modal-status.is-error { background: #fed7d7; color: #9b2c2c; }
+  .pecivo-modal-status.is-success { background: #c6f6d5; color: #22543d; }
+
+  .pecivo-modal-foot {
+    padding: 14px 20px;
+    border-top: 1px solid #e0e8f4;
+    background: #f8fafc;
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    border-radius: 0 0 10px 10px;
+  }
+
+  .pecivo-btn {
+    height: 36px;
+    padding: 0 16px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    border: 1px solid transparent;
+  }
+
+  .pecivo-btn-ghost {
+    background: transparent;
+    color: #4a5568;
+  }
+  .pecivo-btn-ghost:hover { background: rgba(0,0,0,.04); }
+
+  .pecivo-btn-primary {
+    background: var(--lidl-blue);
+    color: #fff;
+  }
+  .pecivo-btn-primary:hover { background: var(--lidl-dark-blue); }
+
+  /* ── Toast ─────────────────────────────────────────────────────────────── */
+  .toast-region {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    display: grid;
+    gap: 8px;
+    z-index: 10000;
+  }
+
+  .toast {
+    background: #1a202c;
+    color: #fff;
+    padding: 12px 18px;
+    border-radius: 8px;
+    font-size: 13px;
+    box-shadow: 0 10px 25px rgba(0,0,0,.15);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    animation: toast-in .25s ease-out;
+  }
+
+  .toast.is-error { background: #e53e3e; }
+
+  @keyframes toast-in { from { transform: translateY(20px); opacity: 0; } }
+</style>

@@ -1,0 +1,185 @@
+<script>
+  const PecivoApp = {
+    state: null,
+
+    init() {
+      const refreshBtn = document.querySelector('#pecivoRefreshBtn');
+      if (refreshBtn) refreshBtn.addEventListener('click', () => this.loadData());
+      
+      const settingsBtn = document.querySelector('#pecivoSettingsBtn');
+      if (settingsBtn) settingsBtn.addEventListener('click', () => this.openSettings());
+      
+      const settingsClose = document.querySelector('#pecivoSettingsClose');
+      if (settingsClose) settingsClose.addEventListener('click', () => this.closeSettings());
+      
+      const settingsCancel = document.querySelector('#pecivoSettingsCancel');
+      if (settingsCancel) settingsCancel.addEventListener('click', () => this.closeSettings());
+      
+      const folderSave = document.querySelector('#pecivoFolderSave');
+      if (folderSave) folderSave.addEventListener('click', () => this.saveFolder());
+      
+      const modal = document.querySelector('#pecivoSettingsModal');
+      if (modal) {
+        modal.addEventListener('click', (e) => {
+          if (e.target === e.currentTarget) this.closeSettings();
+        });
+      }
+
+      this.loadData();
+    },
+
+    callServer(fnName, payload) {
+      return new Promise((resolve, reject) => {
+        const runner = google.script.run.withSuccessHandler(resolve).withFailureHandler(reject);
+        if (payload === undefined) runner[fnName]();
+        else runner[fnName](payload);
+      });
+    },
+
+    loadData() {
+      this.setRefreshing(true);
+      this.showLoading('Načítám data o dostupnosti pečiva', 'Připojuji se k serveru, prosím strpení…');
+      this.callServer('getPecivoInitData')
+        .then((data) => {
+          this.state = data || {};
+          this.setRefreshing(false);
+          this.render();
+        })
+        .catch((err) => {
+          this.setRefreshing(false);
+          this.showMessage('Nepodařilo se načíst data', err && err.message ? err.message : String(err), true);
+        });
+    },
+
+    setRefreshing(on) {
+      const btn = document.querySelector('#pecivoRefreshBtn');
+      if (btn) btn.classList.toggle('is-loading', on);
+    },
+
+    // ── Settings modal ──────────────────────────────────────────────────────
+
+    openSettings() {
+      const modal = document.querySelector('#pecivoSettingsModal');
+      const input = document.querySelector('#pecivoFolderInput');
+      const status = document.querySelector('#pecivoModalStatus');
+      const state = this.state || {};
+
+      if (input) input.value = state.folderId || '';
+      if (status) {
+        status.hidden = true;
+        status.className = 'pecivo-modal-status';
+        status.textContent = '';
+      }
+
+      modal.showModal();
+    },
+
+    closeSettings() {
+      const modal = document.querySelector('#pecivoSettingsModal');
+      if (modal) modal.close();
+    },
+
+    saveFolder() {
+      const input = document.querySelector('#pecivoFolderInput');
+      const status = document.querySelector('#pecivoModalStatus');
+      const saveBtn = document.querySelector('#pecivoFolderSave');
+      const folderId = input ? input.value.trim() : '';
+
+      if (saveBtn) saveBtn.disabled = true;
+      if (status) {
+        status.hidden = false;
+        status.className = 'pecivo-modal-status';
+        status.textContent = 'Ukládám…';
+      }
+
+      this.callServer('savePecivoSourceFolder', { folderId })
+        .then((data) => {
+          this.state = data || {};
+          this.closeSettings();
+          this.toast('Složka uložena.');
+          this.render();
+        })
+        .catch((err) => {
+          if (status) {
+            status.hidden = false;
+            status.className = 'pecivo-modal-status is-error';
+            status.textContent = err && err.message ? err.message : 'Nepodařilo se uložit složku.';
+          }
+          if (saveBtn) saveBtn.disabled = false;
+        });
+    },
+
+    // ── Render ──────────────────────────────────────────────────────────────
+
+    render() {
+      const state = this.state || {};
+
+      const settingsBtn = document.querySelector('#pecivoSettingsBtn');
+      if (settingsBtn) {
+        settingsBtn.classList.toggle('has-config', !!state.folderId);
+      }
+
+      const stateBox = document.querySelector('#pecivoStateBox');
+      const frame = document.querySelector('#pecivoContentFrame');
+      
+      if (stateBox) stateBox.hidden = true;
+      if (frame) {
+        frame.hidden = false;
+        const msgEl = document.querySelector('#pecivoMessageText');
+        if (msgEl && state.message) {
+          msgEl.textContent = state.message;
+        }
+      }
+    },
+
+    showLoading(title, text) {
+      const stateBox = document.querySelector('#pecivoStateBox');
+      const frame = document.querySelector('#pecivoContentFrame');
+      if (frame) frame.hidden = true;
+      if (stateBox) {
+        stateBox.hidden = false;
+        stateBox.innerHTML = `
+          <div class="pecivo-loader"></div>
+          <strong>${this.escape(title)}</strong>
+          <p>${this.escape(text)}</p>
+        `;
+      }
+    },
+
+    showMessage(title, text, isError) {
+      const stateBox = document.querySelector('#pecivoStateBox');
+      const frame = document.querySelector('#pecivoContentFrame');
+      if (frame) frame.hidden = true;
+      if (stateBox) {
+        stateBox.hidden = false;
+        stateBox.innerHTML = `
+          <div class="pecivo-empty-state">
+            <strong>${this.escape(title)}</strong>
+            <p${isError ? ' style="color:var(--lidl-red)"' : ''}>${this.escape(text)}</p>
+          </div>
+        `;
+      }
+    },
+
+    toast(message, tone) {
+      const region = document.querySelector('#toastRegion');
+      if (!region) return;
+      const item = document.createElement('div');
+      item.className = `toast${tone === 'error' ? ' is-error' : ''}`;
+      item.textContent = message;
+      region.appendChild(item);
+      setTimeout(() => item.remove(), 3200);
+    },
+
+    escape(value) {
+      return String(value === null || value === undefined ? '' : value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    },
+  };
+
+  document.addEventListener('DOMContentLoaded', () => PecivoApp.init());
+</script>

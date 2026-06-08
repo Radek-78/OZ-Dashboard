@@ -32,6 +32,9 @@ function doGet(e) {
   if (page === 'odpisy' || page === 'vyhodnoceni-odpisu-akcnich-artiklu') {
     return renderOdpisyAppPage_();
   }
+  if (page === 'pecivo' || page === 'dostupnost-peciva') {
+    return renderPecivoAppPage_();
+  }
 
   return renderPage('index', {
     appName:    APP_CONFIG.appName,
@@ -70,6 +73,30 @@ function renderOdpisyAppPage_() {
     renderedAt:   new Date().toISOString(),
   })
     .setTitle('Vyhodnocení odpisů akčních artiklů')
+    .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+}
+
+/**
+ * Renderuje samostatnou stránku subaplikace Dostupnost pečiva.
+ * @returns {HtmlOutput}
+ */
+function renderPecivoAppPage_() {
+  const bootstrap = getAppBootstrap();
+  const webAppUrl = getWebAppUrl_();
+
+  return renderPage('PecivoApp', {
+    appName:      'Dostupnost pečiva',
+    appSubtitle:  APP_CONFIG.appName,
+    logoUrl:      APP_CONFIG.logoUrl,
+    version:      APP_CONFIG.version,
+    theme:        APP_CONFIG.theme,
+    user:         bootstrap.user.email,
+    auth:         bootstrap.auth,
+    webAppUrl:    webAppUrl,
+    dashboardUrl: webAppUrl,
+    renderedAt:   new Date().toISOString(),
+  })
+    .setTitle('Dostupnost pečiva')
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
 }
 

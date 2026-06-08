@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="cs">
+  <head>
+    <base target="_top">
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title><?= app.appName ?></title>
+    <?!= include('styles'); ?>
+    <?!= include('PecivoApp_Style'); ?>
+  </head>
+  <body class="pecivo-standalone-body">
+    <main class="pecivo-standalone">
+
+      <!-- Toolbar -->
+      <header class="pecivo-toolbar">
+        <div class="pecivo-toolbar-left">
+          <a class="pecivo-back-link" href="<?= app.dashboardUrl ?>" target="_top">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+            OZ Dashboard
+          </a>
+          <span class="pecivo-toolbar-divider"></span>
+          <h1 class="pecivo-toolbar-title">Dostupnost pečiva</h1>
+        </div>
+        <div class="pecivo-toolbar-right">
+          <span class="pecivo-toolbar-user"><?= app.user ?></span>
+          <button class="pecivo-toolbar-btn" type="button" id="pecivoRefreshBtn" title="Obnovit data">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+          </button>
+          <button class="pecivo-toolbar-btn pecivo-settings-btn" type="button" id="pecivoSettingsBtn" title="Nastavení">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+          </button>
+        </div>
+      </header>
+
+      <!-- Main Container -->
+      <section class="pecivo-workbook" aria-label="Dostupnost pečiva">
+        <div class="pecivo-workbook-page">
+          <section class="pecivo-sheet-header" id="pecivoSheetHeader">
+            <div class="pecivo-lidl-mark">
+              <img src="<?= app.logoUrl ?>" alt="Lidl">
+            </div>
+            <div class="pecivo-title-block">
+              <h2>Dostupnost pečiva</h2>
+              <p>Steuerung - Frischemanagement</p>
+            </div>
+          </section>
+
+          <section class="pecivo-state" id="pecivoStateBox">
+            <div class="pecivo-loader"></div>
+            <strong>Načítám data o dostupnosti pečiva</strong>
+            <p>Připojuji se k serveru, prosím strpení…</p>
+          </section>
+
+          <!-- Kostra pro budoucí tabulky a grafy -->
+          <div class="pecivo-content-frame" id="pecivoContentFrame" hidden>
+            <div class="pecivo-card">
+              <h3>Přehled dostupnosti</h3>
+              <p id="pecivoMessageText">Data byla úspěšně načtena ze serveru.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <div class="toast-region" id="toastRegion" aria-live="polite" aria-atomic="true"></div>
+    </main>
+
+    <!-- Settings dialog -->
+    <dialog class="pecivo-modal" id="pecivoSettingsModal">
+      <div class="pecivo-modal-inner">
+        <header class="pecivo-modal-head">
+          <div class="pecivo-modal-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+          </div>
+          <div>
+            <p class="pecivo-modal-kicker">Konfigurace</p>
+            <h3>Nastavení zdrojové složky</h3>
+          </div>
+          <button class="pecivo-modal-close" type="button" id="pecivoSettingsClose" aria-label="Zavřít">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </header>
+        <div class="pecivo-modal-body">
+          <p class="pecivo-modal-desc">Zadejte ID nebo URL Google Drive složky s daty pro dostupnost pečiva.</p>
+          <label class="pecivo-field">
+            <span>Zdrojová složka</span>
+            <input type="text" id="pecivoFolderInput" placeholder="ID nebo URL složky…" autocomplete="off">
+          </label>
+          <div class="pecivo-modal-status" id="pecivoModalStatus" hidden></div>
+        </div>
+        <footer class="pecivo-modal-foot">
+          <button class="pecivo-btn pecivo-btn-ghost" type="button" id="pecivoSettingsCancel">Zrušit</button>
+          <button class="pecivo-btn pecivo-btn-primary" type="button" id="pecivoFolderSave">Uložit složku</button>
+        </footer>
+      </div>
+    </dialog>
+
+    <script>
+      window.APP_BOOTSTRAP = <?!= JSON.stringify(app) ?>;
+    </script>
+    <?!= include('PecivoApp_Script'); ?>
+  </body>
+</html>
