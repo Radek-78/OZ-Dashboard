@@ -347,3 +347,70 @@ function seedInitialUserIfNeeded_(spreadsheet) {
   ]);
   Logger.log('[SEED] První superadmin vytvořen: %s v %s', email, now.toISOString());
 }
+
+/**
+ * Načte hodnotu z listu CONFIG podle klíče.
+ * @param {string} key
+ * @returns {string}
+ */
+function getConfigValue_(key) {
+  const db = ensureDatabase_();
+  const sheet = db.spreadsheet.getSheetByName('CONFIG');
+  if (!sheet) return '';
+  const data = getObjects_(sheet);
+  const found = data.find(function(row) { return String(row.key).trim() === key; });
+  return found ? String(found.value || '') : '';
+}
+
+/**
+ * Uloží nebo aktualizuje hodnotu v listu CONFIG podle klíče.
+ * @param {string} key
+ * @param {string} value
+ * @param {string} updatedBy
+ */
+function setConfigValue_(key, value, updatedBy) {
+  const db = ensureDatabase_();
+  const sheet = db.spreadsheet.getSheetByName('CONFIG');
+  if (!sheet) return;
+
+  const lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    const values = sheet.getDataRange().getValues();
+    const headers = values[0];
+    const keyIdx = headers.indexOf('key');
+    const valIdx = headers.indexOf('value');
+    const dateIdx = headers.indexOf('updatedAt');
+    const userIdx = headers.indexOf('updatedBy');
+
+    if (keyIdx === -1 || valIdx === -1) throw new Error('List CONFIG nemá správné sloupce.');
+
+    let rowIndex = -1;
+    for (let r = 1; r < values.length; r++) {
+      if (String(values[r][keyIdx]).trim() === key) {
+        rowIndex = r + 1; // 1-indexed
+        break;
+      }
+    }
+
+    const now = new Date();
+    const rowValues = [];
+    headers.forEach(function(header) {
+      if (header === 'key') rowValues.push(key);
+      else if (header === 'value') rowValues.push(value);
+      else if (header === 'updatedAt') rowValues.push(now);
+      else if (header === 'updatedBy') rowValues.push(updatedBy || 'system');
+      else rowValues.push('');
+    });
+
+    if (rowIndex >= 2) {
+      // Aktualizace
+      sheet.getRange(rowIndex, 1, 1, headers.length).setValues([rowValues]);
+    } else {
+      // Vložení
+      sheet.appendRow(rowValues);
+    }
+  } finally {
+    lock.releaseLock();
+  }
+}

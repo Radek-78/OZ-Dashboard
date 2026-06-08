@@ -10,13 +10,10 @@ const ACTION_WRITEOFFS_APP_KEY = 'VYHODNOCENI_ODPISU_AKCNICH_ARTIKLU';
 const ACTION_WRITEOFFS_APP_NAME = 'Vyhodnocení odpisů akčních artiklů';
 const ACTION_WRITEOFFS_FOLDER_ID_PROP = 'ACTION_WRITEOFFS_FOLDER_ID';
 const ACTION_WRITEOFFS_SPREADSHEET_ID_PROP = 'ACTION_WRITEOFFS_SPREADSHEET_ID';
-const BRANCH_SOURCE_FOLDER_ID_PROP = 'ACTION_WRITEOFFS_BRANCH_SOURCE_FOLDER_ID';
 const BRANCH_LAST_SOURCE_FILE_ID_PROP = 'ACTION_WRITEOFFS_BRANCH_LAST_SOURCE_FILE_ID';
 const BRANCH_LAST_SOURCE_FILE_NAME_PROP = 'ACTION_WRITEOFFS_BRANCH_LAST_SOURCE_FILE_NAME';
 const BRANCH_LAST_SYNC_AT_PROP = 'ACTION_WRITEOFFS_BRANCH_LAST_SYNC_AT';
 const BRANCH_SYNC_TRIGGER_FN = 'syncBranchesFromLatestSourceTrigger';
-const BRANCH_TEMP_FOLDER_ID_PROP = 'ACTION_WRITEOFFS_BRANCH_TEMP_FOLDER_ID';
-const BRANCH_SEARCH_PATTERN_PROP = 'ACTION_WRITEOFFS_BRANCH_SEARCH_PATTERN';
 
 const BRANCH_DAY_FIELDS = [
   ['mondayOpen', 'mondayClose', ['pondeli', 'po', 'monday']],
@@ -48,7 +45,7 @@ function saveBranchesSourceFolder(payload) {
   if (!folderId) throw new Error('Vyplňte ID zdrojové složky.');
 
   const folder = DriveApp.getFolderById(folderId);
-  PropertiesService.getScriptProperties().setProperty(BRANCH_SOURCE_FOLDER_ID_PROP, folder.getId());
+  setConfigValue_('branchSourceFolderId', folder.getId(), context.user.email);
   ensureActionWriteoffsResources_();
   ensureBranchesSyncTrigger_();
   Logger.log('[BRANCH_SOURCE_FOLDER_SET] by=%s folder=%s', context.user.email, folder.getId());
@@ -62,13 +59,12 @@ function saveBranchesSourceFolder(payload) {
  */
 function saveBranchesSyncSettings(payload) {
   const context = requirePermission_('branches.sync');
-  const props = PropertiesService.getScriptProperties();
 
   if (payload.folderId !== undefined) {
     const folderId = extractDriveId_(payload.folderId);
     if (!folderId) throw new Error('Vyplňte ID zdrojové složky.');
     const folder = DriveApp.getFolderById(folderId);
-    props.setProperty(BRANCH_SOURCE_FOLDER_ID_PROP, folder.getId());
+    setConfigValue_('branchSourceFolderId', folder.getId(), context.user.email);
     Logger.log('[BRANCH_SOURCE_FOLDER_SET] by=%s folder=%s', context.user.email, folder.getId());
   }
 
@@ -76,23 +72,18 @@ function saveBranchesSyncSettings(payload) {
     const tempFolderId = extractDriveId_(payload.tempFolderId);
     if (tempFolderId) {
       const folder = DriveApp.getFolderById(tempFolderId);
-      props.setProperty(BRANCH_TEMP_FOLDER_ID_PROP, folder.getId());
+      setConfigValue_('branchTempFolderId', folder.getId(), context.user.email);
       Logger.log('[BRANCH_TEMP_FOLDER_SET] by=%s folder=%s', context.user.email, folder.getId());
     } else {
-      props.deleteProperty(BRANCH_TEMP_FOLDER_ID_PROP);
+      setConfigValue_('branchTempFolderId', '', context.user.email);
       Logger.log('[BRANCH_TEMP_FOLDER_DELETE] by=%s', context.user.email);
     }
   }
 
   if (payload.searchPattern !== undefined) {
     const pattern = String(payload.searchPattern || '').trim();
-    if (pattern) {
-      props.setProperty(BRANCH_SEARCH_PATTERN_PROP, pattern);
-      Logger.log('[BRANCH_SEARCH_PATTERN_SET] by=%s pattern=%s', context.user.email, pattern);
-    } else {
-      props.deleteProperty(BRANCH_SEARCH_PATTERN_PROP);
-      Logger.log('[BRANCH_SEARCH_PATTERN_DELETE] by=%s', context.user.email);
-    }
+    setConfigValue_('branchSearchPattern', pattern, context.user.email);
+    Logger.log('[BRANCH_SEARCH_PATTERN_SET] by=%s pattern=%s', context.user.email, pattern);
   }
 
   ensureActionWriteoffsResources_();
@@ -165,13 +156,12 @@ function syncBranchesFromLatestSourceTrigger() {
  * @param {string} actor
  */
 function syncBranchesFromLatestSourceInternal_(targetSpreadsheet, actor) {
-  const props = PropertiesService.getScriptProperties();
-  const folderId = props.getProperty(BRANCH_SOURCE_FOLDER_ID_PROP);
+  const folderId = getConfigValue_('branchSourceFolderId');
   if (!folderId) {
     throw new Error('Nejdříve nastavte ID složky se zdrojovým přehledem filiálek.');
   }
 
-  const tempFolderId = props.getProperty(BRANCH_TEMP_FOLDER_ID_PROP) || folderId;
+  const tempFolderId = getConfigValue_('branchTempFolderId') || folderId;
 
   ensureActionWriteoffsResources_();
 
@@ -249,9 +239,9 @@ function buildBranchesData_(context) {
       vtCount: uniqueCount_(activeRows.map(function(row) { return row.vt; })),
     },
     sync: {
-      sourceFolderId: props.getProperty(BRANCH_SOURCE_FOLDER_ID_PROP) || '',
-      tempFolderId: props.getProperty(BRANCH_TEMP_FOLDER_ID_PROP) || '',
-      searchPattern: props.getProperty(BRANCH_SEARCH_PATTERN_PROP) || '',
+      sourceFolderId: getConfigValue_('branchSourceFolderId') || '',
+      tempFolderId: getConfigValue_('branchTempFolderId') || '',
+      searchPattern: getConfigValue_('branchSearchPattern') || '',
       lastSourceFileId: props.getProperty(BRANCH_LAST_SOURCE_FILE_ID_PROP) || '',
       lastSourceFileName: props.getProperty(BRANCH_LAST_SOURCE_FILE_NAME_PROP) || '',
       lastSyncAt: props.getProperty(BRANCH_LAST_SYNC_AT_PROP) || '',
@@ -340,8 +330,7 @@ function setupBranchesSyncTrigger() {
  */
 function findLatestBranchSourceFile_(folderId) {
   const folder = DriveApp.getFolderById(folderId);
-  const props = PropertiesService.getScriptProperties();
-  const pattern = String(props.getProperty(BRANCH_SEARCH_PATTERN_PROP) || '').trim().toLowerCase();
+  const pattern = String(getConfigValue_('branchSearchPattern') || '').trim().toLowerCase();
 
   const files = folder.getFiles();
   let latest = null;
