@@ -1744,7 +1744,16 @@ const App = {
     const related = this.getBranchRelatedQuickValues('rm');
     const quick = this.branchesFilter.quick || {};
     const hasContext = !!(quick.lc || quick.vt);
-    const filtered = query ? values.filter((v) => v.toLowerCase().includes(query)) : values;
+    let filtered = query ? values.filter((v) => v.toLowerCase().includes(query)) : values;
+    if (hasContext) {
+      const relatedList = [];
+      const unrelatedList = [];
+      filtered.forEach((v) => {
+        if (related.has(v)) relatedList.push(v);
+        else unrelatedList.push(v);
+      });
+      filtered = [...relatedList, ...unrelatedList];
+    }
     list.innerHTML = `
       <button class="branch-rm-item${!quick.rm ? ' is-active' : ''}" data-rm-value=""><span>Všichni RM</span></button>
       ${filtered.map((value) => {
