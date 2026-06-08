@@ -3,7 +3,7 @@
   appSubtitle: '',
   logoFileId: '18mu_Lq1F_FqqSZcolMjLwG0aaQDPMdyD',
   logoUrl: 'https://drive.google.com/thumbnail?id=18mu_Lq1F_FqqSZcolMjLwG0aaQDPMdyD&sz=w320',
-  version: 'v0.22.2',
+  version: 'v0.23.0',
   theme: {
     blue: '#0050aa',
     darkBlue: '#002466',
@@ -16,6 +16,14 @@
 };
 
 const APP_CHANGELOG = [
+  {
+    version: 'v0.23.0',
+    date: '2026-06-08',
+    changes: [
+      'Sloučeny položky Umístění a Sync LC a filiálek do jediné sekce „Správa LC a filiálek" se záložkami',
+      'Umístění a synchronizace filiálek jsou nyní dostupné na jednom místě',
+    ],
+  },
   {
     version: 'v0.22.2',
     date: '2026-06-02',
