@@ -599,8 +599,8 @@ function writeBranchesWithAudit_(spreadsheet, newBranches, sourceFile, actor) {
       // Existující - zkontrolujeme změny
       let isModified = false;
       fieldsToCompare.forEach(function(field) {
-        const oldVal = String(oldBranch[field.key] || '').trim();
-        const newVal = String(nb[field.key] !== undefined ? nb[field.key] : '').trim();
+        const oldVal = stringifyBranchCell_(oldBranch[field.key]);
+        const newVal = stringifyBranchCell_(nb[field.key]);
         if (oldVal !== newVal) {
           isModified = true;
           changeRows.push([

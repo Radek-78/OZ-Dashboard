@@ -787,6 +787,7 @@ const App = {
       canSync: data.canSync === true,
       canManageLocations: data.canManageLocations === true,
       syncTriggerActive: data.syncTriggerActive,
+      syncHistory: data.syncHistory || [],
     };
 
     document.querySelectorAll('[data-action="sync-branches"]').forEach((button) => {
