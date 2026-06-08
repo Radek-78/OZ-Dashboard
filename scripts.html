@@ -74,7 +74,7 @@ const App = {
   usersSort:   { field: 'fullName', dir: 'asc' },
 
   /** Stavové objekty pro jednotlivé sekce nastavení */
-  branchesState:    { branches: [], lcs: [], stats: {}, sync: {}, canSync: false },
+  branchesState:    { branches: [], lcs: [], locations: [], stats: {}, sync: {}, canSync: false, canManageLocations: false, syncTriggerActive: null },
   branchesSubtab:   'fili',
   branchesSelected: {},
   branchesFilter:   { query: '', sort: { col: null, dir: 'asc' }, colFilters: {}, quick: { lc: '', vt: '', rm: '' } },
@@ -209,6 +209,8 @@ const App = {
     if (saveBranchesSource) saveBranchesSource.addEventListener('click', () => this.saveBranchesSourceFolder());
     const syncBranches = document.querySelector('[data-action="sync-branches"]');
     if (syncBranches) syncBranches.addEventListener('click', () => this.syncBranches());
+    const setupTrigger = document.querySelector('[data-action="setup-branches-trigger"]');
+    if (setupTrigger) setupTrigger.addEventListener('click', () => this.setupBranchesTrigger());
 
     // Filiálky — hromadná aktivace/deaktivace
     const branchActivate   = document.querySelector('[data-action="branches-activate"]');
@@ -216,15 +218,19 @@ const App = {
     const branchDeactivate = document.querySelector('[data-action="branches-deactivate"]');
     if (branchDeactivate) branchDeactivate.addEventListener('click', () => this.bulkSetBranchesActive(false));
     const branchSelectAll  = document.querySelector('#branchesSelectAll');
-    if (branchSelectAll) branchSelectAll.addEventListener('change', () => {
-      const checked = branchSelectAll.checked;
-      document.querySelectorAll('.branch-check').forEach((cb) => {
-        cb.checked = checked;
-        if (checked) this.branchesSelected[cb.dataset.id] = true;
-        else delete this.branchesSelected[cb.dataset.id];
+    if (branchSelectAll) {
+      // Checkbox je v hlavičce sloupce „Číslo" — klik nesmí otevřít menu řazení.
+      branchSelectAll.addEventListener('click', (e) => e.stopPropagation());
+      branchSelectAll.addEventListener('change', () => {
+        const checked = branchSelectAll.checked;
+        document.querySelectorAll('.branch-check').forEach((cb) => {
+          cb.checked = checked;
+          if (checked) this.branchesSelected[cb.dataset.id] = true;
+          else delete this.branchesSelected[cb.dataset.id];
+        });
+        this.updateBranchesBulkBar();
       });
-      this.updateBranchesBulkBar();
-    });
+    }
 
     // LC a filiálky — přepínání podzáložek (Filiálky / Logistická centra)
     document.querySelectorAll('#branchesPage .lc-tab').forEach((btn) => {
@@ -335,6 +341,8 @@ const App = {
     if (createLocation) createLocation.addEventListener('click', () => this.openLocationForm());
     const locationForm = document.querySelector('#locationForm');
     if (locationForm) locationForm.addEventListener('submit', (e) => { e.preventDefault(); this.saveLocationFromForm(); });
+    const locationType = document.querySelector('#locationType');
+    if (locationType) locationType.addEventListener('change', () => this.updateLocationFormFields());
     document.querySelectorAll('[data-action="close-location-modal"]').forEach((b) => b.addEventListener('click', () => this.closeLocationForm()));
 
     // Úseky
@@ -746,9 +754,12 @@ const App = {
     this.branchesState = {
       branches: data.branches || [],
       lcs: data.lcs || [],
+      locations: data.locations || [],
       stats: data.stats || {},
       sync: data.sync || {},
       canSync: data.canSync === true,
+      canManageLocations: data.canManageLocations === true,
+      syncTriggerActive: data.syncTriggerActive,
     };
     const folderInput = document.querySelector('#branchesSourceFolderId');
     if (folderInput) folderInput.value = (this.branchesState.sync || {}).sourceFolderId || '';
@@ -845,9 +856,11 @@ const App = {
       btn.classList.toggle('is-active', btn.dataset.lcTab === tab));
     const panelFili = document.querySelector('#branchesTabFili');
     const panelLc   = document.querySelector('#branchesTabLc');
+    const panelLoc  = document.querySelector('#branchesTabLocations');
     const panelSync = document.querySelector('#branchesTabSync');
     if (panelFili) panelFili.classList.toggle('is-active', tab === 'fili');
     if (panelLc)   panelLc.classList.toggle('is-active', tab === 'lc');
+    if (panelLoc)  panelLoc.classList.toggle('is-active', tab === 'locations');
     if (panelSync) panelSync.classList.toggle('is-active', tab === 'sync');
 
     // Vyhledávání + souhrn jen pro Filiálky; tlačítko „Přidat LC" jen pro adminy na záložce LC
@@ -859,6 +872,7 @@ const App = {
     if (toolsLc) toolsLc.hidden = !(tab === 'lc' && this.branchesState.canSync);
 
     if (tab === 'lc') this.renderLcList();
+    else if (tab === 'locations') this.renderLocations();
     else if (tab === 'sync') this.renderLcBranchesSettings();
     else this.renderBranches();
   },
@@ -916,14 +930,24 @@ const App = {
     }
   },
 
-  /** Aktualizuje lištu hromadných akcí (počet označených, viditelnost pro adminy). */
+  /** Aktualizuje banner hromadných akcí — zobrazí se jen když je něco označeno. */
   updateBranchesBulkBar() {
-    const bar = document.querySelector('#branchesBulkBar');
-    if (bar) bar.hidden = this.branchesState.canSync !== true;
+    const canSync = this.branchesState.canSync === true;
     const count = Object.keys(this.branchesSelected || {}).length;
+
+    // Banner s počtem + tlačítky jen pro adminy a jen při označení.
+    const bar = document.querySelector('#branchesBulkBar');
+    if (bar) bar.hidden = !(canSync && count > 0);
     this.setText('#branchesSelectedCount', String(count));
+
+    // „Vybrat vše" v hlavičce: viditelný pro adminy; stav podle počtu označených.
     const selectAll = document.querySelector('#branchesSelectAll');
-    if (selectAll) selectAll.checked = false;
+    if (selectAll) {
+      selectAll.hidden = !canSync;
+      const visible = document.querySelectorAll('.branch-check').length;
+      selectAll.checked = visible > 0 && count >= visible;
+      selectAll.indeterminate = count > 0 && count < visible;
+    }
   },
 
   /** Hromadně nastaví aktivní/neaktivní u označených filiálek. */
@@ -940,12 +964,13 @@ const App = {
       .catch((err) => this.toast(err.message || 'Změnu se nepodařilo uložit.', 'error'));
   },
 
-  /** Vykreslí stránku „Sync LC a fili" (admin) — pouze nastavení synchronizace. */
+  /** Vykreslí podzáložku „Synchronizace" (admin) — nastavení složky + stav triggeru. */
   renderLcBranchesSettings() {
     const headSub = document.querySelector('#lcBranchesHeadSub');
     if (headSub) headSub.textContent = 'Zdrojový přehled prodejen a automatická synchronizace';
     this.renderBranchesSyncInfo();
     this.renderBranchSettings();
+    this.renderBranchesTrigger();
   },
 
   renderBranchesSyncInfo() {
@@ -953,6 +978,35 @@ const App = {
     this.setText('#branchesSourceFolderLabel', sync.sourceFolderId || 'Nenastaveno');
     this.setText('#branchesLastSync', this.formatDateTime(sync.lastSyncAt));
     this.setText('#branchesSourceFile', sync.lastSourceFileName || sync.lastSourceFileId || '-');
+  },
+
+  /** Vykreslí sekci stavu automatického triggeru (jen pro adminy). */
+  renderBranchesTrigger() {
+    const panel = document.querySelector('#branchesTriggerPanel');
+    if (!panel) return;
+    panel.hidden = this.branchesState.canSync !== true;
+
+    const active = this.branchesState.syncTriggerActive;
+    const status = document.querySelector('#branchesTriggerStatus');
+    if (status) {
+      if (active === true) status.textContent = 'Aktivní — kontrola každou hodinu.';
+      else if (active === false) status.textContent = 'Neaktivní — automatická synchronizace neběží.';
+      else status.textContent = 'Stav neznámý.';
+    }
+    panel.classList.toggle('is-active-trigger', active === true);
+    panel.classList.toggle('is-inactive-trigger', active === false);
+  },
+
+  /** Zkontroluje/vytvoří trigger automatické synchronizace. */
+  setupBranchesTrigger() {
+    this.callServer('setupBranchesSyncTrigger')
+      .then((data) => {
+        this.applyBranchesState(data);
+        this.renderLcBranchesSettings();
+        this.toast(data.syncTriggerActive ? 'Automatická synchronizace je aktivní.' : 'Trigger se nepodařilo ověřit.',
+          data.syncTriggerActive ? 'success' : 'error');
+      })
+      .catch((err) => this.toast(err.message || 'Trigger se nepodařilo nastavit.', 'error'));
   },
 
   // =========================================================================
@@ -1750,31 +1804,50 @@ const App = {
   // SEKCE: Umístění
   // =========================================================================
 
+  /** Sjednotí seznam umístění napříč stavy po serverové změně. */
+  applyLocationsList(allLocations) {
+    const all = allLocations || [];
+    this.locationsState = { locations: all };
+    this.usersState.locations = all;
+    this.branchesState.locations = all.filter((l) => l.type !== 'LC');
+    this.branchesState.lcs = all.filter((l) => l.type === 'LC' && l.active);
+  },
+
+  /** Vykreslí podzáložku Umístění (ne-LC lokace) v sekci LC a filiálky. */
   renderLocations() {
     const rows      = document.querySelector('#locationsRows');
     const empty     = document.querySelector('#locationsEmpty');
-    const locations = (this.locationsState || {}).locations || [];
+    const counter   = document.querySelector('#branchesHeadCount');
+    const noun      = document.querySelector('#branchesHeadNoun');
+    const canManage = this.branchesState.canManageLocations === true;
+    const locations = (this.branchesState.locations || []);
+
+    const actions = document.querySelector('#branchesLocationsActions');
+    if (actions) actions.hidden = !canManage;
+
+    const n = locations.length;
+    if (counter) counter.textContent = String(n);
+    if (noun)    noun.textContent = n === 1 ? 'umístění' : 'umístění (mimo LC)';
+
     if (!rows) return;
     if (!locations.length) { rows.innerHTML = ''; if (empty) empty.hidden = false; return; }
     if (empty) empty.hidden = true;
 
     rows.innerHTML = locations.map((loc) => `
-      <tr>
+      <tr class="${loc.active ? '' : 'is-inactive'}">
         <td><strong>${this.escape(loc.displayName)}</strong></td>
-        <td>${this.escape(loc.type === 'CENTRALA' ? 'Centrála' : 'LC')}</td>
-        <td>${this.escape(loc.code ? 'LC' + loc.code : '–')}</td>
-        <td>${this.escape(loc.abbreviation || '–')}</td>
+        <td>${this.escape(loc.type === 'CENTRALA' ? 'Centrála' : 'Ostatní')}</td>
         <td>${this.escape(loc.city || '–')}</td>
         <td><span class="state-chip ${loc.active ? 'is-active' : 'is-muted'}">${loc.active ? 'Aktivní' : 'Vypnutý'}</span></td>
         <td class="table-actions">
-          <button type="button" class="icon-button" data-action="edit-location" data-id="${this.escape(loc.id)}" aria-label="Upravit"><svg><use href="#i-pencil"></use></svg></button>
-          ${loc.type !== 'CENTRALA' ? `<button type="button" class="icon-button danger" data-action="delete-location" data-id="${this.escape(loc.id)}" aria-label="Smazat"><svg><use href="#i-trash"></use></svg></button>` : ''}
+          ${canManage ? `<button type="button" class="icon-button" data-action="edit-location" data-id="${this.escape(loc.id)}" aria-label="Upravit"><svg><use href="#i-pencil"></use></svg></button>` : ''}
+          ${canManage && loc.type !== 'CENTRALA' ? `<button type="button" class="icon-button danger" data-action="delete-location" data-id="${this.escape(loc.id)}" aria-label="Smazat"><svg><use href="#i-trash"></use></svg></button>` : ''}
         </td>
       </tr>
     `).join('');
 
     rows.querySelectorAll('[data-action="edit-location"]').forEach((b) =>
-      b.addEventListener('click', () => this.openLocationForm((this.locationsState.locations || []).find((l) => l.id === b.dataset.id))));
+      b.addEventListener('click', () => this.openLocationForm((this.branchesState.locations || []).find((l) => l.id === b.dataset.id))));
     rows.querySelectorAll('[data-action="delete-location"]').forEach((b) =>
       b.addEventListener('click', () => this.confirmDeleteLocation(b.dataset.id)));
   },
@@ -1784,13 +1857,22 @@ const App = {
     if (!form) return;
     form.reset();
     this.setText('#locationModalTitle', loc ? 'Upravit umístění' : 'Nové umístění');
-    form.elements.id.value           = loc ? loc.id                  : '';
-    form.elements.type.value         = loc ? loc.type                : 'LC';
-    form.elements.code.value         = loc ? (loc.code         || '') : '';
-    form.elements.abbreviation.value = loc ? (loc.abbreviation || '') : '';
-    form.elements.city.value         = loc ? (loc.city         || '') : '';
-    form.elements.active.checked     = loc ? loc.active              : true;
+    form.elements.id.value     = loc ? loc.id   : '';
+    form.elements.type.value   = loc ? loc.type : 'OSTATNI';
+    form.elements.name.value   = loc ? (loc.name || (loc.type === 'CENTRALA' ? 'Centrála' : '')) : '';
+    form.elements.city.value   = loc ? (loc.city || '') : '';
+    form.elements.active.checked = loc ? loc.active : true;
+    this.updateLocationFormFields();
     document.querySelector('#locationModal').showModal();
+  },
+
+  /** Zobrazí pole Název jen pro typ Ostatní (u Centrály je název pevný). */
+  updateLocationFormFields() {
+    const form = document.querySelector('#locationForm');
+    if (!form) return;
+    const isCentrala = form.elements.type.value === 'CENTRALA';
+    const nameLabel = form.elements.name.closest('label');
+    if (nameLabel) nameLabel.hidden = isCentrala;
   },
 
   closeLocationForm() { document.querySelector('#locationModal').close(); },
@@ -1798,59 +1880,54 @@ const App = {
   saveLocationFromForm() {
     const form    = document.querySelector('#locationForm');
     const payload = {
-      id:           form.elements.id.value,
-      type:         form.elements.type.value,
-      code:         form.elements.code.value,
-      abbreviation: form.elements.abbreviation.value,
-      city:         form.elements.city.value,
-      active:       form.elements.active.checked,
+      id:     form.elements.id.value,
+      type:   form.elements.type.value,
+      name:   form.elements.name.value.trim(),
+      city:   form.elements.city.value.trim(),
+      active: form.elements.active.checked,
     };
+    if (payload.type === 'OSTATNI' && !payload.name) {
+      this.toast('Vyplňte název umístění.', 'error');
+      return;
+    }
     this.closeLocationForm();
 
     const isNew       = !payload.id;
     const tempId      = isNew ? 'temp_' + Date.now() : payload.id;
-    const displayName = payload.type === 'CENTRALA' ? 'Centrála'
-      : [payload.code, payload.abbreviation, payload.city].filter(Boolean).join(' ');
+    const displayName = payload.type === 'CENTRALA' ? 'Centrála' : (payload.name || payload.city || 'Umístění');
 
     this.optimisticUpdate(
       () => {
-        const optimistic = { id: tempId, type: payload.type, code: payload.code,
-          abbreviation: payload.abbreviation, city: payload.city, displayName, active: payload.active,
-          createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
-        if (isNew) {
-          this.locationsState.locations = [...this.locationsState.locations, optimistic]
-            .sort((a, b) => a.type === 'CENTRALA' ? -1 : b.type === 'CENTRALA' ? 1 : parseInt(a.code, 10) - parseInt(b.code, 10));
-        } else {
-          this.locationsState.locations = this.locationsState.locations.map((l) => l.id === payload.id ? { ...l, ...optimistic } : l);
-        }
-        this.usersState.locations = this.locationsState.locations;
-        this.renderUserOptions();
+        const optimistic = { id: tempId, type: payload.type, code: '', abbreviation: '',
+          city: payload.city, name: payload.name, displayName, active: payload.active };
+        const list = this.branchesState.locations || [];
+        this.branchesState.locations = isNew
+          ? [...list, optimistic]
+          : list.map((l) => l.id === payload.id ? { ...l, ...optimistic } : l);
+        this.renderLocations();
       },
       () => this.callServer('saveLocation', payload, { silent: true }),
       (data) => {
-        this.locationsState = { locations: data.locations || [] };
-        this.usersState.locations = data.locations || [];
+        this.applyLocationsList(data.locations || []);
         this.renderLocations();
         this.renderUserOptions();
       },
-      'Umístění uloženo.',
+      isNew ? 'Umístění přidáno.' : 'Umístění uloženo.',
     );
   },
 
   confirmDeleteLocation(id) {
-    const loc = (this.locationsState.locations || []).find((l) => l.id === id);
+    const loc = (this.branchesState.locations || []).find((l) => l.id === id);
     if (!loc) return;
     this.openModal('Smazat umístění', 'Opravdu chcete smazat ' + loc.displayName + '?', () =>
       this.optimisticUpdate(
         () => {
-          this.locationsState.locations = this.locationsState.locations.filter((l) => l.id !== id);
-          this.usersState.locations     = this.locationsState.locations;
-          this.renderUserOptions();
+          this.branchesState.locations = (this.branchesState.locations || []).filter((l) => l.id !== id);
+          this.renderLocations();
         },
         () => this.callServer('deleteLocation', id, { silent: true }),
         (data) => {
-          this.locationsState = { locations: data.locations || [] };
-          this.usersState.locations = data.locations || [];
+          this.applyLocationsList(data.locations || []);
           this.renderLocations();
           this.renderUserOptions();
         },

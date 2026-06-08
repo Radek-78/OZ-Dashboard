@@ -6,7 +6,7 @@
  */
 
 /** Aktuální verze databázového schématu. Navyšte při přidání nových listů/sloupců. */
-const DATABASE_SCHEMA_VERSION = '3';
+const DATABASE_SCHEMA_VERSION = '4';
 
 /** TTL cache záznamu o databázi v sekundách (6 hodin). */
 const DATABASE_CACHE_TTL_SECONDS = 21600;
@@ -202,9 +202,9 @@ function setupDatabaseSheets_(spreadsheet) {
   ]);
 
   ensureSheet_(spreadsheet, 'LOCATIONS', [
-    'id', 'type', 'code', 'abbreviation', 'city', 'active', 'createdAt', 'updatedAt',
+    'id', 'type', 'code', 'abbreviation', 'city', 'name', 'active', 'createdAt', 'updatedAt',
   ], [
-    [Utilities.getUuid(), 'CENTRALA', '', '', '', true, new Date(), new Date()],
+    [Utilities.getUuid(), 'CENTRALA', '', '', '', 'Centrála', true, new Date(), new Date()],
   ]);
 
   ensureSheet_(spreadsheet, 'DEPARTMENTS', [

@@ -114,13 +114,13 @@
             <div class="lc-branches-tabs">
               <button class="lc-tab is-active" type="button" data-lc-tab="fili"><svg><use href="#i-store"></use></svg><span>Filiálky</span></button>
               <button class="lc-tab" type="button" data-lc-tab="lc"><svg><use href="#i-map-pin"></use></svg><span>Logistická centra</span></button>
+              <button class="lc-tab" type="button" data-lc-tab="locations"><svg><use href="#i-briefcase"></use></svg><span>Umístění</span></button>
               <button class="lc-tab" type="button" data-lc-tab="sync"><svg><use href="#i-download"></use></svg><span>Synchronizace</span></button>
             </div>
 
             <div id="branchesTabFili" class="lc-tab-panel is-active">
               <div class="branches-quick-filters" id="branchesQuickFilters"></div>
               <div class="branches-bulk-bar" id="branchesBulkBar" hidden>
-                <label class="branches-bulk-all"><input type="checkbox" id="branchesSelectAll"> Vybrat zobrazené</label>
                 <span class="branches-bulk-count"><strong id="branchesSelectedCount">0</strong> označeno</span>
                 <div class="branches-bulk-actions">
                   <button type="button" class="button button-secondary" data-action="branches-activate"><svg viewBox="0 0 24 24"><use href="#i-check"></use></svg>Aktivovat</button>
@@ -131,7 +131,7 @@
                 <table class="users-table branches-table" aria-label="Přehled filiálek">
                   <thead>
                     <tr>
-                      <th class="sortable" data-col="storeNumber">Číslo</th>
+                      <th class="sortable" data-col="storeNumber"><span class="branch-num-th"><input type="checkbox" id="branchesSelectAll" class="branch-select-all" aria-label="Vybrat zobrazené" hidden>Číslo</span></th>
                       <th class="sortable" data-col="storeName">Filiálka</th>
                       <th class="sortable" data-col="lc">LC</th>
                       <th class="sortable" data-col="storePhone">Telefon</th>
@@ -180,6 +180,23 @@
               </div>
             </div>
 
+            <div id="branchesTabLocations" class="lc-tab-panel">
+              <div class="branch-locations-actions" id="branchesLocationsActions" hidden>
+                <button class="button button-primary" type="button" data-action="create-location"><svg><use href="#i-briefcase"></use></svg>Nové umístění</button>
+              </div>
+              <div class="table-shell">
+                <table class="users-table" aria-label="Umístění">
+                  <thead><tr><th>Název</th><th>Typ</th><th>Město</th><th>Stav</th><th></th></tr></thead>
+                  <tbody id="locationsRows"></tbody>
+                </table>
+              </div>
+              <div class="empty-state users-empty" id="locationsEmpty" hidden>
+                <svg><use href="#i-briefcase"></use></svg>
+                <strong>Žádná umístění</strong>
+                <span>Přidejte Centrálu nebo další pracoviště.</span>
+              </div>
+            </div>
+
             <div id="branchesTabSync" class="lc-tab-panel">
               <div class="branch-sync-actions">
                 <button class="button button-primary" type="button" data-action="sync-branches"><svg><use href="#i-download"></use></svg>Synchronizovat</button>
@@ -201,6 +218,15 @@
               <div class="table-toolbar branch-settings-toolbar">
                 <input type="text" id="branchesSourceFolderId" class="table-search" placeholder="ID nebo URL složky se zdrojovým přehledem" aria-label="ID nebo URL složky se zdrojovým přehledem">
                 <button type="button" class="button button-secondary" data-action="save-branches-source"><svg><use href="#i-check"></use></svg>Uložit složku</button>
+              </div>
+
+              <div class="branch-trigger-panel" id="branchesTriggerPanel" hidden>
+                <span class="branch-trigger-icon"><svg><use href="#i-activity"></use></svg></span>
+                <div class="branch-trigger-text">
+                  <strong>Automatická synchronizace</strong>
+                  <span id="branchesTriggerStatus">Zjišťuji stav…</span>
+                </div>
+                <button type="button" class="button button-secondary" data-action="setup-branches-trigger"><svg><use href="#i-check"></use></svg>Zkontrolovat / vytvořit</button>
               </div>
             </div>
           </section>
@@ -453,11 +479,10 @@
           <input type="hidden" name="id">
           <div class="form-grid">
             <label>Typ<select name="type" id="locationType" required>
-              <option value="LC">Logistické centrum (LC)</option>
+              <option value="OSTATNI">Ostatní umístění</option>
               <option value="CENTRALA">Centrála</option>
             </select></label>
-            <label>Číslo LC<input type="text" name="code" placeholder="01" maxlength="4"></label>
-            <label>Zkratka<input type="text" name="abbreviation" placeholder="BRN" maxlength="6"></label>
+            <label>Název<input type="text" name="name" id="locationName" placeholder="např. Pobočka Brno"></label>
             <label>Město<input type="text" name="city" placeholder="Brno"></label>
           </div>
           <label class="switch-row"><input type="checkbox" name="active" checked> <span>Aktivní</span></label>

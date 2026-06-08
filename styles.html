@@ -3528,6 +3528,7 @@
   }
 
   .branch-check,
+  .branch-select-all,
   .branches-bulk-all input[type="checkbox"] {
     -webkit-appearance: auto;
     appearance: auto;
@@ -3542,6 +3543,14 @@
     cursor: pointer;
     accent-color: var(--lidl-blue);
   }
+
+  .branch-num-th {
+    align-items: center;
+    display: inline-flex;
+    gap: 8px;
+    white-space: nowrap;
+  }
+  .branch-num-th input[hidden] { display: none; }
 
   .branches-table tr.is-inactive {
     background: #f7f9fc;
@@ -3787,10 +3796,44 @@
     padding: 16px 18px;
   }
 
-  .branch-sync-actions {
+  .branch-sync-actions,
+  .branch-locations-actions {
     display: flex;
     justify-content: flex-end;
   }
+
+  .branch-locations-actions {
+    padding: 12px 16px 0;
+  }
+
+  /* ── Stav automatického triggeru ── */
+  .branch-trigger-panel {
+    align-items: center;
+    display: flex;
+    gap: 14px;
+    padding: 14px 16px;
+    border: 1px solid rgba(0,36,102,.1);
+    border-radius: 10px;
+    background: rgba(255,255,255,.78);
+  }
+  .branch-trigger-panel.is-active-trigger { border-color: rgba(28,160,90,.4); background: rgba(28,160,90,.06); }
+  .branch-trigger-panel.is-inactive-trigger { border-color: rgba(200,60,60,.4); background: rgba(200,60,60,.06); }
+  .branch-trigger-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 34px;
+    height: 34px;
+    flex-shrink: 0;
+    border-radius: 8px;
+    background: rgba(0,80,170,.1);
+    color: var(--lidl-dark-blue);
+  }
+  .branch-trigger-icon svg { width: 18px; height: 18px; }
+  .branch-trigger-text { display: flex; flex-direction: column; gap: 2px; }
+  .branch-trigger-text strong { font-size: 13px; color: var(--ink); }
+  .branch-trigger-text span { font-size: 12px; color: var(--muted); }
+  .branch-trigger-panel .button { margin-left: auto; }
 
   .branches-stats {
     grid-template-columns: repeat(4, minmax(130px, 1fr));

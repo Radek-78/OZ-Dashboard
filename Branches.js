@@ -153,15 +153,25 @@ function buildBranchesData_(context) {
   const props = PropertiesService.getScriptProperties();
   const rows = getObjects_(spreadsheet.getSheetByName('FILIALKY')).map(mapBranchRow_);
   const activeRows = rows.filter(function(row) { return row.active; });
-  const lcs = listLocations_(spreadsheet).filter(function(loc) { return loc.type === 'LC'; });
+  const allLocations = getObjects_(spreadsheet.getSheetByName('LOCATIONS'))
+    .map(mapLocationRow_)
+    .sort(locationSortFn_);
+  const lcs = allLocations.filter(function(loc) { return loc.type === 'LC' && loc.active; });
   const canSync = hasPermission_(context.auth, 'branches.sync');
+  const canManageLocations = hasPermission_(context.auth, 'users.manage');
 
   return {
     auth: context.auth,
     canSync: canSync,
+    canManageLocations: canManageLocations,
     // Admin (sprava) vidi i neaktivni filialky kvuli reaktivaci; ostatni jen aktivni.
     branches: canSync ? rows : activeRows,
     lcs: lcs,
+    // Ne-LC umisteni (Centrala + ostatni) pro podzalozku Umisteni. Neaktivni vidi jen spravce.
+    locations: allLocations.filter(function(loc) {
+      return loc.type !== 'LC' && (canManageLocations || loc.active);
+    }),
+    syncTriggerActive: canSync ? branchesSyncTriggerExists_() : null,
     stats: {
       total: activeRows.length,
       lcCount: uniqueCount_(activeRows.map(function(row) { return row.lc; })),
@@ -221,15 +231,34 @@ function ensureActionWriteoffsResources_() {
 }
 
 /**
+ * Zjisti, zda existuje casovy trigger pro automatickou synchronizaci filialek.
+ * @returns {boolean}
+ */
+function branchesSyncTriggerExists_() {
+  return ScriptApp.getProjectTriggers().some(function(trigger) {
+    return trigger.getHandlerFunction() === BRANCH_SYNC_TRIGGER_FN;
+  });
+}
+
+/**
  * Zajisti hodinovy trigger pro automatickou synchronizaci filialek.
  */
 function ensureBranchesSyncTrigger_() {
-  const exists = ScriptApp.getProjectTriggers().some(function(trigger) {
-    return trigger.getHandlerFunction() === BRANCH_SYNC_TRIGGER_FN;
-  });
-  if (exists) return;
+  if (branchesSyncTriggerExists_()) return;
   ScriptApp.newTrigger(BRANCH_SYNC_TRIGGER_FN).timeBased().everyHours(1).create();
   Logger.log('[BRANCH_SYNC_TRIGGER_CREATE] function=%s interval=1h', BRANCH_SYNC_TRIGGER_FN);
+}
+
+/**
+ * Zkontroluje a v pripade potreby vytvori trigger automaticke synchronizace.
+ * Volano z UI (zalozka Synchronizace).
+ * @returns {Object}
+ */
+function setupBranchesSyncTrigger() {
+  const context = requirePermission_('branches.sync');
+  ensureBranchesSyncTrigger_();
+  Logger.log('[BRANCH_SYNC_TRIGGER_SETUP] by=%s', context.user.email);
+  return buildBranchesData_(context);
 }
 
 /**

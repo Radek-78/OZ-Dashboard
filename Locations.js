@@ -32,10 +32,12 @@ function saveLocation(payload) {
   const code        = String(data.code        || '').trim();
   const abbreviation = String(data.abbreviation || '').trim().toUpperCase();
   const city        = String(data.city        || '').trim();
+  const name        = String(data.name        || '').trim();
   const active      = data.active === true || data.active === 'true';
 
   if (type === 'LC' && !code) throw new Error('Vyplňte číslo LC.');
   if (type === 'LC' && !city) throw new Error('Vyplňte město.');
+  if (type === 'OSTATNI' && !name) throw new Error('Vyplňte název umístění.');
 
   const lock = LockService.getScriptLock();
   lock.waitLock(10000);
@@ -56,7 +58,7 @@ function saveLocation(payload) {
       }
     }
 
-    const map = { id: id || Utilities.getUuid(), type, code, abbreviation, city, active, updatedAt: now };
+    const map = { id: id || Utilities.getUuid(), type, code, abbreviation, city, name, active, updatedAt: now };
     if (!id) map.createdAt = now;
     const rowValues = headers.map(function(h) {
       if (map[h] !== undefined) return map[h];
@@ -194,6 +196,7 @@ function mapLocationRow_(loc) {
     code:         String(loc.code         || ''),
     abbreviation: String(loc.abbreviation || ''),
     city:         String(loc.city         || ''),
+    name:         String(loc.name         || ''),
     displayName:  mapLocationDisplayName_(loc),
     active:       isTruthy_(loc.active),
   };
@@ -205,18 +208,20 @@ function mapLocationRow_(loc) {
  * @returns {string}
  */
 function mapLocationDisplayName_(loc) {
-  return loc.type === 'CENTRALA'
-    ? 'Centrála'
-    : [loc.code, loc.abbreviation, loc.city].filter(Boolean).join(' ');
+  if (loc.type === 'CENTRALA') return 'Centrála';
+  if (loc.type === 'LC') return [loc.code, loc.abbreviation, loc.city].filter(Boolean).join(' ');
+  return String(loc.name || '').trim() || String(loc.city || '').trim() || 'Umístění';
 }
 
 /**
- * Komparátor řazení umístění: Centrála první, pak LC vzestupně dle kódu.
+ * Komparátor řazení umístění: Centrála první, pak LC dle kódu, pak ostatní dle názvu.
  */
 function locationSortFn_(a, b) {
   if (a.type === 'CENTRALA') return -1;
   if (b.type === 'CENTRALA') return  1;
-  return parseInt(a.code, 10) - parseInt(b.code, 10);
+  if (a.type !== b.type) return a.type === 'LC' ? -1 : 1;
+  if (a.type === 'LC') return parseInt(a.code, 10) - parseInt(b.code, 10);
+  return String(a.displayName || '').localeCompare(String(b.displayName || ''), 'cs');
 }
 
 // ===========================================================================
