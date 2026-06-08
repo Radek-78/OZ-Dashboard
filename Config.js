@@ -3,7 +3,7 @@
   appSubtitle: '',
   logoFileId: '18mu_Lq1F_FqqSZcolMjLwG0aaQDPMdyD',
   logoUrl: 'https://drive.google.com/thumbnail?id=18mu_Lq1F_FqqSZcolMjLwG0aaQDPMdyD&sz=w320',
-  version: 'v0.25.3',
+  version: 'v0.26.0',
   theme: {
     blue: '#0050aa',
     darkBlue: '#002466',
@@ -16,6 +16,13 @@
 };
 
 const APP_CHANGELOG = [
+  {
+    version: 'v0.26.0',
+    date: '2026-06-08',
+    changes: [
+      'Přidána podpora pro synchronizaci filiálek z Excel (.xlsx) souborů',
+    ],
+  },
   {
     version: 'v0.25.3',
     date: '2026-06-08',
