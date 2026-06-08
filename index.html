@@ -52,9 +52,8 @@
           <button class="nav-link" type="button" data-section="branches" data-tooltip="LC a filiálky"><svg><use href="#i-store"></use></svg><span>LC a filiálky</span></button>
           <div class="nav-group-item" aria-label="Nastavení"><svg><use href="#i-settings"></use></svg><span>Nastavení</span></div>
           <button class="nav-link nav-link-child" type="button" data-section="users" data-tooltip="Uživatelé"><svg><use href="#i-users"></use></svg><span>Uživatelé</span></button>
-          <button class="nav-link nav-link-child" type="button" data-section="locations" data-tooltip="Umístění"><svg><use href="#i-map-pin"></use></svg><span>Umístění</span></button>
+          <button class="nav-link nav-link-child" type="button" data-section="lcManage" data-tooltip="Správa LC a filiálek"><svg><use href="#i-store"></use></svg><span>Správa LC a filiálek</span></button>
           <button class="nav-link nav-link-child" type="button" data-section="departments" data-tooltip="Úseky"><svg><use href="#i-list"></use></svg><span>Úseky</span></button>
-          <button class="nav-link nav-link-child" type="button" data-section="lcBranches" data-tooltip="Sync LC a fili"><svg><use href="#i-branch-shelf"></use></svg><span>Sync LC a fili</span></button>
           <button class="nav-link nav-link-child" type="button" data-section="subapps" data-tooltip="Dlaždice"><svg><use href="#i-layout"></use></svg><span>Dlaždice</span></button>
           <button class="nav-link nav-link-child" type="button" data-section="roles" data-tooltip="Role"><svg><use href="#i-user"></use></svg><span>Role</span></button>
         </nav>
@@ -182,39 +181,6 @@
             </div>
           </section>
         </section>
-        <section class="page settings-page" id="lcBranchesPage" hidden>
-          <section class="admin-panel branches-panel">
-            <div class="admin-panel-head">
-              <span class="admin-panel-icon"><svg><use href="#i-branch-shelf"></use></svg></span>
-              <div class="admin-panel-title">
-                <h3>Sync LC a filiálky</h3>
-                <p id="lcBranchesHeadSub">Zdrojový přehled prodejen a automatická synchronizace</p>
-              </div>
-              <div class="branches-head-tools">
-                <button class="button button-primary" type="button" data-action="sync-branches"><svg><use href="#i-download"></use></svg>Synchronizovat</button>
-              </div>
-            </div>
-
-            <div class="branches-sync-panel" id="branchesSyncPanel">
-              <div>
-                <span>Zdrojová složka</span>
-                <strong id="branchesSourceFolderLabel">Nenastaveno</strong>
-              </div>
-              <div>
-                <span>Poslední synchronizace</span>
-                <strong id="branchesLastSync">-</strong>
-              </div>
-              <div>
-                <span>Zdrojový soubor</span>
-                <strong id="branchesSourceFile">-</strong>
-              </div>
-            </div>
-            <div class="table-toolbar branch-settings-toolbar">
-              <input type="text" id="branchesSourceFolderId" class="table-search" placeholder="ID nebo URL složky se zdrojovým přehledem" aria-label="ID nebo URL složky se zdrojovým přehledem">
-              <button type="button" class="button button-secondary" data-action="save-branches-source"><svg><use href="#i-check"></use></svg>Uložit složku</button>
-            </div>
-          </section>
-        </section>
         <section class="page settings-page" id="usersPage" hidden>
 
           <section class="admin-panel">
@@ -266,28 +232,71 @@
           </section>
         </section>
 
-        <section class="page settings-page" id="locationsPage" hidden>
-          <section class="admin-panel">
-            <div class="admin-panel-head">
-              <span class="admin-panel-icon"><svg><use href="#i-briefcase"></use></svg></span>
-              <div class="admin-panel-title">
-                <h3>Umístění</h3>
-                <p>Centrála a logistická centra</p>
-              </div>
-              <button class="button button-primary admin-add-user" type="button" data-action="create-location"><svg><use href="#i-briefcase"></use></svg>Nové umístění</button>
+        <section class="page settings-page lc-manage-page" id="lcManagePage" hidden>
+          <div class="lc-manage-shell">
+            <div class="lc-branches-tabs lc-manage-tabs">
+              <button class="lc-tab is-active" type="button" data-lcm-tab="locations"><svg><use href="#i-map-pin"></use></svg><span>Umístění</span></button>
+              <button class="lc-tab" type="button" data-lcm-tab="sync"><svg><use href="#i-branch-shelf"></use></svg><span>Synchronizace</span></button>
             </div>
-            <div class="table-shell">
-              <table class="users-table" aria-label="Umístění">
-                <thead><tr><th>Název</th><th>Typ</th><th>Kód</th><th>Zkratka</th><th>Město</th><th>Stav</th><th></th></tr></thead>
-                <tbody id="locationsRows"></tbody>
-              </table>
+
+            <div class="lc-tab-panel is-active" data-lcm-panel="locations">
+              <section class="admin-panel">
+                <div class="admin-panel-head">
+                  <span class="admin-panel-icon"><svg><use href="#i-briefcase"></use></svg></span>
+                  <div class="admin-panel-title">
+                    <h3>Umístění</h3>
+                    <p>Centrála a logistická centra (nadřazena filiálkám)</p>
+                  </div>
+                  <button class="button button-primary admin-add-user" type="button" data-action="create-location"><svg><use href="#i-briefcase"></use></svg>Nové umístění</button>
+                </div>
+                <div class="table-shell">
+                  <table class="users-table" aria-label="Umístění">
+                    <thead><tr><th>Název</th><th>Typ</th><th>Kód</th><th>Zkratka</th><th>Město</th><th>Stav</th><th></th></tr></thead>
+                    <tbody id="locationsRows"></tbody>
+                  </table>
+                </div>
+                <div class="empty-state users-empty" id="locationsEmpty" hidden>
+                  <svg><use href="#i-briefcase"></use></svg>
+                  <strong>Žádná umístění</strong>
+                  <span>Přidejte Centrálu nebo logistická centra.</span>
+                </div>
+              </section>
             </div>
-            <div class="empty-state users-empty" id="locationsEmpty" hidden>
-              <svg><use href="#i-briefcase"></use></svg>
-              <strong>Žádná umístění</strong>
-              <span>Přidejte Centrálu nebo logistická centra.</span>
+
+            <div class="lc-tab-panel" data-lcm-panel="sync">
+              <section class="admin-panel branches-panel">
+                <div class="admin-panel-head">
+                  <span class="admin-panel-icon"><svg><use href="#i-branch-shelf"></use></svg></span>
+                  <div class="admin-panel-title">
+                    <h3>Synchronizace</h3>
+                    <p id="lcBranchesHeadSub">Zdrojový přehled prodejen a automatická synchronizace</p>
+                  </div>
+                  <div class="branches-head-tools">
+                    <button class="button button-primary" type="button" data-action="sync-branches"><svg><use href="#i-download"></use></svg>Synchronizovat</button>
+                  </div>
+                </div>
+
+                <div class="branches-sync-panel" id="branchesSyncPanel">
+                  <div>
+                    <span>Zdrojová složka</span>
+                    <strong id="branchesSourceFolderLabel">Nenastaveno</strong>
+                  </div>
+                  <div>
+                    <span>Poslední synchronizace</span>
+                    <strong id="branchesLastSync">-</strong>
+                  </div>
+                  <div>
+                    <span>Zdrojový soubor</span>
+                    <strong id="branchesSourceFile">-</strong>
+                  </div>
+                </div>
+                <div class="table-toolbar branch-settings-toolbar">
+                  <input type="text" id="branchesSourceFolderId" class="table-search" placeholder="ID nebo URL složky se zdrojovým přehledem" aria-label="ID nebo URL složky se zdrojovým přehledem">
+                  <button type="button" class="button button-secondary" data-action="save-branches-source"><svg><use href="#i-check"></use></svg>Uložit složku</button>
+                </div>
+              </section>
             </div>
-          </section>
+          </div>
         </section>
 
         <section class="page settings-page" id="departmentsPage" hidden>

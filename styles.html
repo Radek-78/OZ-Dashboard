@@ -3217,17 +3217,17 @@
     min-height: 9px !important;
     flex: 0 0 9px !important;
   }
-  .app[data-view="locations"] .dashboard-topbar,
+  .app[data-view="lcManage"] .dashboard-topbar,
   .app[data-view="departments"] .dashboard-topbar,
   .app[data-view="subapps"] .dashboard-topbar {
     display: none;
   }
-  .app[data-view="locations"] .main,
+  .app[data-view="lcManage"] .main,
   .app[data-view="departments"] .main,
   .app[data-view="subapps"] .main {
     grid-template-rows: 1fr auto;
   }
-  #locationsPage,
+  #lcManagePage,
   #departmentsPage,
   #subappsPage {
     padding-top: 26px;
@@ -3855,6 +3855,18 @@
   /* ── Tab panels ── */
   .lc-tab-panel { display: none; flex-direction: column; flex: 1; min-height: 0; }
   .lc-tab-panel.is-active { display: flex; }
+
+  /* ── Sloučená sekce „Správa LC a filiálek" ── */
+  .lc-manage-shell {
+    display: flex;
+    flex-direction: column;
+    background: rgba(255,255,255,.94);
+    border: 1px solid rgba(0,36,102,.1);
+    border-radius: 14px;
+    overflow: hidden;
+    box-shadow: 0 18px 44px rgba(0,36,102,.07);
+  }
+  .lc-manage-shell .admin-panel { border: 0; box-shadow: none; }
 
   /* ── LC tabulka ── */
   .lc-table-shell {

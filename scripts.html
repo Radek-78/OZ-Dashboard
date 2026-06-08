@@ -76,6 +76,7 @@ const App = {
   /** Stavové objekty pro jednotlivé sekce nastavení */
   branchesState:    { branches: [], lcs: [], stats: {}, sync: {}, canSync: false },
   branchesSubtab:   'fili',
+  lcManageTab:      'locations',
   branchesSelected: {},
   branchesFilter:   { query: '', sort: { col: null, dir: 'asc' }, colFilters: {}, quick: { lc: '', vt: '', rm: '' } },
   _branchColMenuCurrentCol: null,
@@ -227,8 +228,13 @@ const App = {
     });
 
     // LC a filiálky — přepínání podzáložek (Filiálky / Logistická centra)
-    document.querySelectorAll('.lc-tab').forEach((btn) => {
+    document.querySelectorAll('#branchesPage .lc-tab').forEach((btn) => {
       btn.addEventListener('click', () => this.renderBranchesPage(btn.dataset.lcTab || 'fili'));
+    });
+
+    // Správa LC a filiálek — přepínání záložek (Umístění / Synchronizace)
+    document.querySelectorAll('#lcManagePage [data-lcm-tab]').forEach((btn) => {
+      btn.addEventListener('click', () => this.renderLcManageTabs(btn.dataset.lcmTab));
     });
 
     // LC — CRUD
@@ -544,9 +550,8 @@ const App = {
     const pages = {
       home:        '#dashboardPage',
       branches:    '#branchesPage',
-      lcBranches:  '#lcBranchesPage',
       users:       '#usersPage',
-      locations:   '#locationsPage',
+      lcManage:    '#lcManagePage',
       departments: '#departmentsPage',
       subapps:     '#subappsPage',
       roles:       '#rolesPage',
@@ -571,9 +576,8 @@ const App = {
     section = section || 'home';
     this.setActiveNav(section);
     if (section === 'branches')    { this.branchesSubtab = subtab || 'fili'; this.showView('branches'); this.loadBranches(); return; }
-    if (section === 'lcBranches')  { this.showView('lcBranches');  this.loadBranches();      return; }
     if (section === 'users')       { this.showView('users');       this.ensureSettingsData(); return; }
-    if (section === 'locations')   { this.showView('locations');   this.ensureSettingsData(); return; }
+    if (section === 'lcManage')    { this.showView('lcManage'); this.renderLcManageTabs(subtab); this.ensureSettingsData(); this.loadBranches(); return; }
     if (section === 'departments') { this.showView('departments'); this.ensureSettingsData(); return; }
     if (section === 'subapps')     { this.showView('subapps');     this.ensureSettingsData(); return; }
     if (section === 'roles')       { this.showView('roles');       this.loadRoles();          return; }
@@ -845,7 +849,7 @@ const App = {
     if (subtab) this.branchesSubtab = subtab;
     const tab = this.branchesSubtab || 'fili';
 
-    document.querySelectorAll('.lc-tab').forEach((btn) =>
+    document.querySelectorAll('#branchesPage .lc-tab').forEach((btn) =>
       btn.classList.toggle('is-active', btn.dataset.lcTab === tab));
     const panelFili = document.querySelector('#branchesTabFili');
     const panelLc   = document.querySelector('#branchesTabLc');
@@ -954,6 +958,16 @@ const App = {
     this.setText('#branchesSourceFolderLabel', sync.sourceFolderId || 'Nenastaveno');
     this.setText('#branchesLastSync', this.formatDateTime(sync.lastSyncAt));
     this.setText('#branchesSourceFile', sync.lastSourceFileName || sync.lastSourceFileId || '-');
+  },
+
+  /** Přepne záložku ve „Správě LC a filiálek" (Umístění / Synchronizace). */
+  renderLcManageTabs(tab) {
+    if (tab) this.lcManageTab = tab;
+    const active = this.lcManageTab || 'locations';
+    document.querySelectorAll('#lcManagePage [data-lcm-tab]').forEach((btn) =>
+      btn.classList.toggle('is-active', btn.dataset.lcmTab === active));
+    document.querySelectorAll('#lcManagePage [data-lcm-panel]').forEach((panel) =>
+      panel.classList.toggle('is-active', panel.dataset.lcmPanel === active));
   },
 
   // =========================================================================
@@ -2804,9 +2818,8 @@ const App = {
 
   renderCurrentSettingsView() {
     if      (this.currentView === 'branches')   this.renderBranchesPage();
-    else if (this.currentView === 'lcBranches') this.renderLcBranchesSettings();
     else if (this.currentView === 'users')      { this.renderUserOptions(); this.renderUsers(); }
-    else if (this.currentView === 'locations')  this.renderLocations();
+    else if (this.currentView === 'lcManage')   { this.renderLocations(); this.renderLcBranchesSettings(); }
     else if (this.currentView === 'departments') this.renderDepartments();
     else if (this.currentView === 'subapps')    this.renderSubApps();
   },
