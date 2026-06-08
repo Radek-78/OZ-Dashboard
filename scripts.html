@@ -56,6 +56,7 @@ const App = {
   permissionsModal: null,
   rolesModal:       null,
   changelogModal:   null,
+  syncEditModal:    null,
 
   // ── Stav aplikace ─────────────────────────────────────────────────────────
   clockTimer:       null,
@@ -105,6 +106,7 @@ const App = {
     this.permissionsModal = document.querySelector('#permissionsModal');
     this.rolesModal      = document.querySelector('#rolesModal');
     this.changelogModal  = document.querySelector('#changelogModal');
+    this.syncEditModal   = document.querySelector('#syncEditModal');
     this.lcModal         = document.querySelector('#lcModal');
     this.iconCatalog     = window.LIDL_ICON_CATALOG || [];
     this.applyBootstrap(window.APP_BOOTSTRAP || {});
@@ -205,8 +207,28 @@ const App = {
         this.renderBranches();
       });
     }
-    const saveBranchesSource = document.querySelector('[data-action="save-branches-source"]');
-    if (saveBranchesSource) saveBranchesSource.addEventListener('click', () => this.saveBranchesSourceFolder());
+    // Synchronizace edit tlačítka na kartách
+    const branchesTabSync = document.querySelector('#branchesTabSync');
+    if (branchesTabSync) {
+      branchesTabSync.addEventListener('click', (e) => {
+        const btn = e.target.closest('[data-action="edit-sync-setting"]');
+        if (btn) {
+          e.preventDefault();
+          this.openSyncEditModal(btn.dataset.setting);
+        }
+      });
+    }
+    const syncEditForm = document.querySelector('#syncEditForm');
+    if (syncEditForm) {
+      syncEditForm.addEventListener('submit', (e) => {
+        e.preventDefault();
+        this.saveSyncSettingFromForm();
+      });
+    }
+    document.querySelectorAll('[data-action="close-sync-edit"]').forEach((b) => {
+      b.addEventListener('click', () => this.closeSyncEditModal());
+    });
+
     const syncBranches = document.querySelector('[data-action="sync-branches"]');
     if (syncBranches) syncBranches.addEventListener('click', () => this.syncBranches());
     const setupTrigger = document.querySelector('[data-action="setup-branches-trigger"]');
@@ -761,13 +783,10 @@ const App = {
       canManageLocations: data.canManageLocations === true,
       syncTriggerActive: data.syncTriggerActive,
     };
-    const folderInput = document.querySelector('#branchesSourceFolderId');
-    if (folderInput) folderInput.value = (this.branchesState.sync || {}).sourceFolderId || '';
 
-    document.querySelectorAll('[data-action="save-branches-source"], [data-action="sync-branches"]').forEach((button) => {
+    document.querySelectorAll('[data-action="sync-branches"]').forEach((button) => {
       button.hidden = !this.branchesState.canSync;
     });
-    if (folderInput) folderInput.hidden = !this.branchesState.canSync;
   },
 
   saveBranchesSourceFolder() {
@@ -979,9 +998,117 @@ const App = {
 
   renderBranchesSyncInfo() {
     const sync = this.branchesState.sync || {};
-    this.setText('#branchesSourceFolderLabel', sync.sourceFolderId || 'Nenastaveno');
+    const canSync = this.branchesState.canSync === true;
+
+    // 1. Poslední synchronizace
     this.setText('#branchesLastSync', this.formatDateTime(sync.lastSyncAt));
-    this.setText('#branchesSourceFile', sync.lastSourceFileName || sync.lastSourceFileId || '-');
+    this.setText('#branchesLastSyncFile', sync.lastSourceFileName ? 'Soubor: ' + sync.lastSourceFileName : 'Soubor: -');
+
+    // 2. Zdrojová složka
+    const hasSource = !!sync.sourceFolderId;
+    this.setText('#branchesSourceFolderLabel', hasSource ? 'Nastaveno' : 'Nenastaveno');
+    this.setText('#branchesSourceFolderSub', hasSource ? 'ID: ' + sync.sourceFolderId : 'ID: -');
+    const sourceLink = document.querySelector('#branchesSourceFolderLink');
+    if (sourceLink) {
+      sourceLink.hidden = !hasSource;
+      if (hasSource) sourceLink.href = 'https://drive.google.com/drive/folders/' + sync.sourceFolderId;
+    }
+
+    // 3. Zdrojový soubor (hledaný výraz)
+    this.setText('#branchesSourceFile', sync.lastSourceFileName || '-');
+    this.setText('#branchesSearchPatternSub', sync.searchPattern ? 'Hledat výraz: "' + sync.searchPattern + '"' : 'Hledat výraz: libovolný sheet/excel');
+
+    // 4. Dočasná složka
+    const hasTemp = !!sync.tempFolderId;
+    this.setText('#branchesTempFolderLabel', hasTemp ? 'Vlastní složka' : 'Stejná jako zdrojová');
+    this.setText('#branchesTempFolderSub', hasTemp ? 'ID: ' + sync.tempFolderId : 'ID: -');
+    const tempLink = document.querySelector('#branchesTempFolderLink');
+    if (tempLink) {
+      tempLink.hidden = !hasTemp;
+      if (hasTemp) tempLink.href = 'https://drive.google.com/drive/folders/' + sync.tempFolderId;
+    }
+
+    // Zobrazení editačních tlačítek podle oprávnění
+    document.querySelectorAll('[data-action="edit-sync-setting"]').forEach((btn) => {
+      btn.hidden = !canSync;
+    });
+  },
+
+  openSyncEditModal(settingKey) {
+    const form = document.querySelector('#syncEditForm');
+    if (!form) return;
+    form.reset();
+
+    const keyField = document.querySelector('#syncEditKey');
+    const valField = document.querySelector('#syncEditValue');
+    const titleEl = document.querySelector('#syncEditTitle');
+    const helpEl = document.querySelector('#syncEditHelpText');
+
+    if (keyField) keyField.value = settingKey;
+
+    const sync = this.branchesState.sync || {};
+
+    if (settingKey === 'folderId') {
+      if (titleEl) titleEl.textContent = 'Upravit zdrojovou složku';
+      if (helpEl) helpEl.textContent = 'Zadejte ID nebo kompletní URL adresu Google Drive složky se zdrojovým přehledem filiálek.';
+      if (valField) {
+        valField.value = sync.sourceFolderId || '';
+        valField.placeholder = 'ID nebo URL složky';
+        valField.required = true;
+      }
+    } else if (settingKey === 'tempFolderId') {
+      if (titleEl) titleEl.textContent = 'Upravit dočasnou složku';
+      if (helpEl) helpEl.textContent = 'Zadejte ID nebo URL složky pro vytváření dočasných souborů při konverzi Excelu. Ponechte prázdné pro uložení do zdrojové složky.';
+      if (valField) {
+        valField.value = sync.tempFolderId || '';
+        valField.placeholder = 'ID nebo URL složky (nepovinné)';
+        valField.required = false;
+      }
+    } else if (settingKey === 'searchPattern') {
+      if (titleEl) titleEl.textContent = 'Upravit vyhledávací výraz';
+      if (helpEl) helpEl.textContent = 'Zadejte výraz pro vyhledání souboru ve složce (case-insensitive). Ponechte prázdné pro vyhledání nejnovější tabulky bez ohledu na název.';
+      if (valField) {
+        valField.value = sync.searchPattern || '';
+        valField.placeholder = 'Např. filialky (nepovinné)';
+        valField.required = false;
+      }
+    }
+
+    if (this.syncEditModal) this.syncEditModal.showModal();
+  },
+
+  closeSyncEditModal() {
+    if (this.syncEditModal) this.syncEditModal.close();
+  },
+
+  saveSyncSettingFromForm() {
+    const form = document.querySelector('#syncEditForm');
+    if (!form) return;
+    const key = form.elements.settingKey.value;
+    let val = form.elements.settingValue.value.trim();
+
+    if (key === 'folderId' || key === 'tempFolderId') {
+      val = this.extractDriveFolderId(val);
+      if (key === 'folderId' && !val) {
+        this.toast('Vyplňte ID zdrojové složky.', 'error');
+        return;
+      }
+    }
+
+    const payload = {};
+    payload[key] = val;
+
+    this.closeSyncEditModal();
+    this.showLoader('Ukládám nastavení...');
+
+    this.callServer('saveBranchesSyncSettings', payload)
+      .then((data) => {
+        this.applyBranchesState(data);
+        this.renderLcBranchesSettings();
+        this.toast('Nastavení bylo uloženo.');
+      })
+      .catch((err) => this.toast(err.message || 'Nepodařilo se uložit nastavení.', 'error'))
+      .finally(() => this.hideLoader());
   },
 
   /** Vykreslí sekci stavu automatického triggeru (jen pro adminy). */
@@ -1164,13 +1291,9 @@ const App = {
   },
 
   renderBranchSettings() {
-    const sync = this.branchesState.sync || {};
-    const folderInput = document.querySelector('#branchesSourceFolderId');
-    if (folderInput && folderInput.value.trim() === '') folderInput.value = sync.sourceFolderId || '';
-    document.querySelectorAll('[data-action="save-branches-source"], [data-action="sync-branches"]').forEach((button) => {
+    document.querySelectorAll('[data-action="sync-branches"]').forEach((button) => {
       button.hidden = !this.branchesState.canSync;
     });
-    if (folderInput) folderInput.hidden = !this.branchesState.canSync;
   },
 
   renderBranchesStats() {

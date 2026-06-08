@@ -33,6 +33,7 @@
       <symbol id="i-map-pin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/><circle cx="12" cy="9" r="2.5"/></symbol>
       <symbol id="i-branch-shelf" viewBox="0 0 24 24" fill="currentColor"><path d="M23 6V4.25A3.254 3.254 0 0 0 19.75 1H4.25A3.254 3.254 0 0 0 1 4.25V6h1.5v15.5h-.75V23h20.5v-1.5h-.75V6zM2.5 4.25c0-.965.785-1.75 1.75-1.75h15.5c.965 0 1.75.785 1.75 1.75v.25h-19zM20 16H4v-2h16zm0-3.5H4v-2h16zm-16 9v-4h16v4zM20 9H4V6h16z"/></symbol>
       <symbol id="i-percent" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="5" x2="5" y2="19"/><circle cx="6.5" cy="6.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/></symbol>
+      <symbol id="i-folder" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></symbol>
       <?!= include('icons'); ?>
     </svg>
 
@@ -204,22 +205,62 @@
 
             <div id="branchesTabSync" class="lc-tab-panel">
               <div class="branches-sync-panel" id="branchesSyncPanel">
-                <div>
-                  <span>Zdrojová složka</span>
-                  <strong id="branchesSourceFolderLabel">Nenastaveno</strong>
-                </div>
-                <div>
-                  <span>Poslední synchronizace</span>
+                <!-- 1. Poslední synchronizace -->
+                <div class="sync-card">
+                  <div class="sync-card-header">
+                    <span>Poslední synchronizace</span>
+                  </div>
                   <strong id="branchesLastSync">-</strong>
+                  <div class="sync-card-subtext" id="branchesLastSyncFile" title="Importovaný soubor">Soubor: -</div>
                 </div>
-                <div>
-                  <span>Zdrojový soubor</span>
+
+                <!-- 2. Zdrojová složka -->
+                <div class="sync-card">
+                  <div class="sync-card-header">
+                    <span>Zdrojová složka</span>
+                    <div class="sync-card-actions">
+                      <a href="#" id="branchesSourceFolderLink" target="_blank" class="icon-link" title="Otevřít složku" hidden>
+                        <svg><use href="#i-folder"></use></svg>
+                      </a>
+                      <button type="button" class="icon-button" data-action="edit-sync-setting" data-setting="folderId" title="Upravit složku" hidden>
+                        <svg><use href="#i-pencil"></use></svg>
+                      </button>
+                    </div>
+                  </div>
+                  <strong id="branchesSourceFolderLabel">Nenastaveno</strong>
+                  <div class="sync-card-subtext" id="branchesSourceFolderSub">ID: -</div>
+                </div>
+
+                <!-- 3. Zdrojový soubor -->
+                <div class="sync-card">
+                  <div class="sync-card-header">
+                    <span>Zdrojový soubor</span>
+                    <div class="sync-card-actions">
+                      <button type="button" class="icon-button" data-action="edit-sync-setting" data-setting="searchPattern" title="Upravit vyhledávací výraz" hidden>
+                        <svg><use href="#i-pencil"></use></svg>
+                      </button>
+                    </div>
+                  </div>
                   <strong id="branchesSourceFile">-</strong>
+                  <div class="sync-card-subtext" id="branchesSearchPatternSub">Hledat výraz: libovolný</div>
                 </div>
-              </div>
-              <div class="table-toolbar branch-settings-toolbar">
-                <input type="text" id="branchesSourceFolderId" class="table-search" placeholder="ID nebo URL složky se zdrojovým přehledem" aria-label="ID nebo URL složky se zdrojovým přehledem">
-                <button type="button" class="button button-secondary" data-action="save-branches-source"><svg><use href="#i-check"></use></svg>Uložit složku</button>
+
+                <!-- 4. Dočasná složka -->
+                <div class="sync-card">
+                  <div class="sync-card-header">
+                    <span>Dočasná složka</span>
+                    <div class="sync-card-actions">
+                      <a href="#" id="branchesTempFolderLink" target="_blank" class="icon-link" title="Otevřít složku" hidden>
+                        <svg><use href="#i-folder"></use></svg>
+                      </a>
+                      <button type="button" class="icon-button" data-action="edit-sync-setting" data-setting="tempFolderId" title="Upravit dočasnou složku" hidden>
+                        <svg><use href="#i-pencil"></use></svg>
+                      </button>
+                    </div>
+                  </div>
+                  <strong id="branchesTempFolderLabel">Stejná jako zdrojová</strong>
+                  <div class="sync-card-subtext" id="branchesTempFolderSub">ID: -</div>
+                </div>
               </div>
 
               <div class="branch-trigger-panel" id="branchesTriggerPanel" hidden>
@@ -668,6 +709,33 @@
           <button class="button button-secondary" type="button" data-action="close-roles-modal"><svg><use href="#i-close"></use></svg>Zavřít</button>
         </footer>
       </div>
+    </dialog>
+
+
+    <dialog class="modal user-modal" id="syncEditModal">
+      <form id="syncEditForm">
+        <header class="modal-header">
+          <span class="modal-icon"><svg><use href="#i-settings"></use></svg></span>
+          <div class="modal-header-text">
+            <p class="kicker">Nastavení synchronizace</p>
+            <h2 id="syncEditTitle">Upravit nastavení</h2>
+          </div>
+          <button class="modal-close" type="button" data-action="close-sync-edit" aria-label="Zavřít"><svg><use href="#i-close"></use></svg></button>
+        </header>
+        <div class="modal-body">
+          <input type="hidden" name="settingKey" id="syncEditKey">
+          <div class="form-grid" style="grid-template-columns: 1fr;">
+            <label id="syncEditFieldLabel">Hodnota
+              <input type="text" name="settingValue" id="syncEditValue" style="width: 100%;">
+            </label>
+            <p class="form-help-text" id="syncEditHelpText" style="margin-top: 4px; font-size: 11px; color: var(--muted);"></p>
+          </div>
+        </div>
+        <footer class="modal-actions">
+          <button class="button button-secondary" type="button" data-action="close-sync-edit"><svg><use href="#i-close"></use></svg>Zrušit</button>
+          <button class="button button-primary" type="submit"><svg><use href="#i-check"></use></svg>Uložit</button>
+        </footer>
+      </form>
     </dialog>
 
     <dialog class="modal changelog-modal" id="changelogModal">

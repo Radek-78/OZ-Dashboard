@@ -15,6 +15,8 @@ const BRANCH_LAST_SOURCE_FILE_ID_PROP = 'ACTION_WRITEOFFS_BRANCH_LAST_SOURCE_FIL
 const BRANCH_LAST_SOURCE_FILE_NAME_PROP = 'ACTION_WRITEOFFS_BRANCH_LAST_SOURCE_FILE_NAME';
 const BRANCH_LAST_SYNC_AT_PROP = 'ACTION_WRITEOFFS_BRANCH_LAST_SYNC_AT';
 const BRANCH_SYNC_TRIGGER_FN = 'syncBranchesFromLatestSourceTrigger';
+const BRANCH_TEMP_FOLDER_ID_PROP = 'ACTION_WRITEOFFS_BRANCH_TEMP_FOLDER_ID';
+const BRANCH_SEARCH_PATTERN_PROP = 'ACTION_WRITEOFFS_BRANCH_SEARCH_PATTERN';
 
 const BRANCH_DAY_FIELDS = [
   ['mondayOpen', 'mondayClose', ['pondeli', 'po', 'monday']],
@@ -50,6 +52,52 @@ function saveBranchesSourceFolder(payload) {
   ensureActionWriteoffsResources_();
   ensureBranchesSyncTrigger_();
   Logger.log('[BRANCH_SOURCE_FOLDER_SET] by=%s folder=%s', context.user.email, folder.getId());
+  return buildBranchesData_(context);
+}
+
+/**
+ * Uloží nastavení synchronizace filiálek (zdrojová složka, dočasná složka, vyhledávací výraz).
+ * @param {{ folderId?: string, tempFolderId?: string, searchPattern?: string }} payload
+ * @returns {Object}
+ */
+function saveBranchesSyncSettings(payload) {
+  const context = requirePermission_('branches.sync');
+  const props = PropertiesService.getScriptProperties();
+
+  if (payload.folderId !== undefined) {
+    const folderId = extractDriveId_(payload.folderId);
+    if (!folderId) throw new Error('Vyplňte ID zdrojové složky.');
+    const folder = DriveApp.getFolderById(folderId);
+    props.setProperty(BRANCH_SOURCE_FOLDER_ID_PROP, folder.getId());
+    Logger.log('[BRANCH_SOURCE_FOLDER_SET] by=%s folder=%s', context.user.email, folder.getId());
+  }
+
+  if (payload.tempFolderId !== undefined) {
+    const tempFolderId = extractDriveId_(payload.tempFolderId);
+    if (tempFolderId) {
+      const folder = DriveApp.getFolderById(tempFolderId);
+      props.setProperty(BRANCH_TEMP_FOLDER_ID_PROP, folder.getId());
+      Logger.log('[BRANCH_TEMP_FOLDER_SET] by=%s folder=%s', context.user.email, folder.getId());
+    } else {
+      props.deleteProperty(BRANCH_TEMP_FOLDER_ID_PROP);
+      Logger.log('[BRANCH_TEMP_FOLDER_DELETE] by=%s', context.user.email);
+    }
+  }
+
+  if (payload.searchPattern !== undefined) {
+    const pattern = String(payload.searchPattern || '').trim();
+    if (pattern) {
+      props.setProperty(BRANCH_SEARCH_PATTERN_PROP, pattern);
+      Logger.log('[BRANCH_SEARCH_PATTERN_SET] by=%s pattern=%s', context.user.email, pattern);
+    } else {
+      props.deleteProperty(BRANCH_SEARCH_PATTERN_PROP);
+      Logger.log('[BRANCH_SEARCH_PATTERN_DELETE] by=%s', context.user.email);
+    }
+  }
+
+  ensureActionWriteoffsResources_();
+  ensureBranchesSyncTrigger_();
+
   return buildBranchesData_(context);
 }
 
@@ -123,6 +171,8 @@ function syncBranchesFromLatestSourceInternal_(targetSpreadsheet, actor) {
     throw new Error('Nejdříve nastavte ID složky se zdrojovým přehledem filiálek.');
   }
 
+  const tempFolderId = props.getProperty(BRANCH_TEMP_FOLDER_ID_PROP) || folderId;
+
   ensureActionWriteoffsResources_();
 
   const sourceFile = findLatestBranchSourceFile_(folderId);
@@ -136,7 +186,7 @@ function syncBranchesFromLatestSourceInternal_(targetSpreadsheet, actor) {
 
   try {
     if (isXlsx) {
-      tempSheetId = convertXlsxToTempGoogleSheet_(sourceFile, folderId);
+      tempSheetId = convertXlsxToTempGoogleSheet_(sourceFile, tempFolderId);
       sourceSpreadsheet = SpreadsheetApp.openById(tempSheetId);
     } else {
       sourceSpreadsheet = SpreadsheetApp.openById(sourceFile.getId());
@@ -200,6 +250,8 @@ function buildBranchesData_(context) {
     },
     sync: {
       sourceFolderId: props.getProperty(BRANCH_SOURCE_FOLDER_ID_PROP) || '',
+      tempFolderId: props.getProperty(BRANCH_TEMP_FOLDER_ID_PROP) || '',
+      searchPattern: props.getProperty(BRANCH_SEARCH_PATTERN_PROP) || '',
       lastSourceFileId: props.getProperty(BRANCH_LAST_SOURCE_FILE_ID_PROP) || '',
       lastSourceFileName: props.getProperty(BRANCH_LAST_SOURCE_FILE_NAME_PROP) || '',
       lastSyncAt: props.getProperty(BRANCH_LAST_SYNC_AT_PROP) || '',
@@ -288,6 +340,9 @@ function setupBranchesSyncTrigger() {
  */
 function findLatestBranchSourceFile_(folderId) {
   const folder = DriveApp.getFolderById(folderId);
+  const props = PropertiesService.getScriptProperties();
+  const pattern = String(props.getProperty(BRANCH_SEARCH_PATTERN_PROP) || '').trim().toLowerCase();
+
   const files = folder.getFiles();
   let latest = null;
   
@@ -300,6 +355,13 @@ function findLatestBranchSourceFile_(folderId) {
   while (files.hasNext()) {
     const file = files.next();
     if (allowedMimeTypes.indexOf(file.getMimeType()) === -1) continue;
+
+    // Filtrování podle vyhledávacího výrazu (pokud je nastaven)
+    if (pattern) {
+      const fileName = file.getName().toLowerCase();
+      if (fileName.indexOf(pattern) === -1) continue;
+    }
+
     if (!latest || file.getLastUpdated().getTime() > latest.getLastUpdated().getTime()) {
       latest = file;
     }
