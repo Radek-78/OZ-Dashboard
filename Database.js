@@ -6,7 +6,7 @@
  */
 
 /** Aktuální verze databázového schématu. Navyšte při přidání nových listů/sloupců. */
-const DATABASE_SCHEMA_VERSION = '4';
+const DATABASE_SCHEMA_VERSION = '5';
 
 /** TTL cache záznamu o databázi v sekundách (6 hodin). */
 const DATABASE_CACHE_TTL_SECONDS = 21600;
