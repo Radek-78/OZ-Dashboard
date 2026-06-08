@@ -870,6 +870,10 @@ const App = {
     if (stats) stats.hidden = tab !== 'fili';
     const toolsLc = document.querySelector('#branchesToolsLc');
     if (toolsLc) toolsLc.hidden = !(tab === 'lc' && this.branchesState.canSync);
+    const toolsLocations = document.querySelector('#branchesToolsLocations');
+    if (toolsLocations) toolsLocations.hidden = !(tab === 'locations' && this.branchesState.canManageLocations);
+    const toolsSync = document.querySelector('#branchesToolsSync');
+    if (toolsSync) toolsSync.hidden = !(tab === 'sync' && this.branchesState.canSync);
 
     if (tab === 'lc') this.renderLcList();
     else if (tab === 'locations') this.renderLocations();
@@ -1821,9 +1825,6 @@ const App = {
     const noun      = document.querySelector('#branchesHeadNoun');
     const canManage = this.branchesState.canManageLocations === true;
     const locations = (this.branchesState.locations || []);
-
-    const actions = document.querySelector('#branchesLocationsActions');
-    if (actions) actions.hidden = !canManage;
 
     const n = locations.length;
     if (counter) counter.textContent = String(n);

@@ -105,8 +105,16 @@
               <div class="branches-head-tools">
                 <input type="search" id="branchesSearch" class="branches-head-search" placeholder="Hledat filiálku, LC, VT nebo RM…" aria-label="Hledat filiálky" autocomplete="off">
                 <div class="branches-summary" id="branchesStats"></div>
-                <div id="branchesToolsLc" hidden>
-                  <button type="button" class="button button-primary" data-action="create-lc"><svg><use href="#i-map-pin"></use></svg>Přidat LC</button>
+                <div class="branches-head-actions">
+                  <div id="branchesToolsLc" hidden>
+                    <button type="button" class="button button-primary" data-action="create-lc"><svg><use href="#i-map-pin"></use></svg>Přidat LC</button>
+                  </div>
+                  <div id="branchesToolsLocations" hidden>
+                    <button type="button" class="button button-primary" data-action="create-location"><svg><use href="#i-briefcase"></use></svg>Nové umístění</button>
+                  </div>
+                  <div id="branchesToolsSync" hidden>
+                    <button type="button" class="button button-primary" data-action="sync-branches"><svg><use href="#i-download"></use></svg>Synchronizovat</button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -181,9 +189,6 @@
             </div>
 
             <div id="branchesTabLocations" class="lc-tab-panel">
-              <div class="branch-locations-actions" id="branchesLocationsActions" hidden>
-                <button class="button button-primary" type="button" data-action="create-location"><svg><use href="#i-briefcase"></use></svg>Nové umístění</button>
-              </div>
               <div class="table-shell">
                 <table class="users-table" aria-label="Umístění">
                   <thead><tr><th>Název</th><th>Typ</th><th>Město</th><th>Stav</th><th></th></tr></thead>
@@ -198,9 +203,6 @@
             </div>
 
             <div id="branchesTabSync" class="lc-tab-panel">
-              <div class="branch-sync-actions">
-                <button class="button button-primary" type="button" data-action="sync-branches"><svg><use href="#i-download"></use></svg>Synchronizovat</button>
-              </div>
               <div class="branches-sync-panel" id="branchesSyncPanel">
                 <div>
                   <span>Zdrojová složka</span>
