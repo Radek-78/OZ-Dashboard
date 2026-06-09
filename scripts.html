@@ -1001,6 +1001,7 @@ const App = {
     this.renderBranchSettings();
     this.renderBranchesTrigger();
     this.renderBranchesSyncHistory();
+    this.initSyncHistorySubtabs();
   },
 
   renderBranchesSyncInfo() {
@@ -1043,46 +1044,90 @@ const App = {
 
   renderBranchesSyncHistory() {
     const history = this.branchesState.syncHistory || [];
-    const tbody = document.querySelector('#branchesSyncHistoryBody');
-    if (!tbody) return;
+    const withChanges = history.filter((r) => r.addedCount > 0 || r.updatedCount > 0 || r.deletedCount > 0);
+    const noChanges = history.filter((r) => r.addedCount === 0 && r.updatedCount === 0 && r.deletedCount === 0);
 
-    if (history.length === 0) {
-      tbody.innerHTML = `
-        <tr>
-          <td colspan="7" class="table-empty" style="text-align: center; padding: 2rem; color: var(--muted);">
-            <strong>Žádná historie</strong>
-            <span style="display: block; font-size: 12px; margin-top: 4px;">Dosud neproběhla žádná synchronizace se sledováním změn.</span>
-          </td>
-        </tr>
-      `;
-      return;
+    const countEl1 = document.querySelector('#syncHistoryChangesCount');
+    const countEl2 = document.querySelector('#syncHistoryNoChangesCount');
+    if (countEl1) countEl1.textContent = withChanges.length;
+    if (countEl2) countEl2.textContent = noChanges.length;
+
+    const tbody = document.querySelector('#branchesSyncHistoryBody');
+    if (tbody) {
+      if (withChanges.length === 0) {
+        tbody.innerHTML = `
+          <tr>
+            <td colspan="7" class="table-empty" style="text-align: center; padding: 2rem; color: var(--muted);">
+              <strong>Žádná historie</strong>
+              <span style="display: block; font-size: 12px; margin-top: 4px;">Dosud neproběhla žádná synchronizace se změnami.</span>
+            </td>
+          </tr>
+        `;
+      } else {
+        tbody.innerHTML = withChanges.map((run) => {
+          const fileNameTruncated = run.fileName.length > 30
+            ? run.fileName.substring(0, 27) + '...'
+            : run.fileName;
+          return `
+            <tr>
+              <td>${this.formatDateTime(run.syncedAt)}</td>
+              <td>${run.actor}</td>
+              <td title="${run.fileName}">${fileNameTruncated}</td>
+              <td style="text-align: center;"><strong style="color: #007646;">+${run.addedCount}</strong></td>
+              <td style="text-align: center;"><strong style="color: var(--blue);">~${run.updatedCount}</strong></td>
+              <td style="text-align: center;"><strong style="color: #a61c1c;">-${run.deletedCount}</strong></td>
+              <td>
+                <button class="button button-secondary button-small" type="button" data-action="view-sync-details" data-id="${run.id}">
+                  Podrobnosti
+                </button>
+              </td>
+            </tr>
+          `;
+        }).join('');
+        tbody.querySelectorAll('[data-action="view-sync-details"]').forEach((btn) => {
+          btn.addEventListener('click', () => this.openSyncHistoryDetails(btn.getAttribute('data-id')));
+        });
+      }
     }
 
-    tbody.innerHTML = history.map((run) => {
-      const fileNameTruncated = run.fileName.length > 30 
-        ? run.fileName.substring(0, 27) + '...' 
-        : run.fileName;
-      return `
-        <tr>
-          <td>${this.formatDateTime(run.syncedAt)}</td>
-          <td>${run.actor}</td>
-          <td title="${run.fileName}">${fileNameTruncated}</td>
-          <td style="text-align: center;"><strong style="color: #007646;">+${run.addedCount}</strong></td>
-          <td style="text-align: center;"><strong style="color: var(--blue);">~${run.updatedCount}</strong></td>
-          <td style="text-align: center;"><strong style="color: #a61c1c;">-${run.deletedCount}</strong></td>
-          <td>
-            <button class="button button-secondary button-small" type="button" data-action="view-sync-details" data-id="${run.id}">
-              Podrobnosti
-            </button>
-          </td>
-        </tr>
-      `;
-    }).join('');
+    const tbodyNo = document.querySelector('#branchesSyncHistoryNoChangesBody');
+    if (tbodyNo) {
+      if (noChanges.length === 0) {
+        tbodyNo.innerHTML = `
+          <tr>
+            <td colspan="3" class="table-empty" style="text-align: center; padding: 2rem; color: var(--muted);">
+              <strong>Žádná historie</strong>
+              <span style="display: block; font-size: 12px; margin-top: 4px;">Dosud neproběhla žádná synchronizace bez změn.</span>
+            </td>
+          </tr>
+        `;
+      } else {
+        tbodyNo.innerHTML = noChanges.map((run) => {
+          const fileNameTruncated = run.fileName.length > 30
+            ? run.fileName.substring(0, 27) + '...'
+            : run.fileName;
+          return `
+            <tr>
+              <td>${this.formatDateTime(run.syncedAt)}</td>
+              <td>${run.actor}</td>
+              <td title="${run.fileName}">${fileNameTruncated}</td>
+            </tr>
+          `;
+        }).join('');
+      }
+    }
+  },
 
-    tbody.querySelectorAll('[data-action="view-sync-details"]').forEach((btn) => {
-      btn.addEventListener('click', () => {
-        const runId = btn.getAttribute('data-id');
-        this.openSyncHistoryDetails(runId);
+  initSyncHistorySubtabs() {
+    const panel = document.querySelector('#branchesSyncHistoryPanel');
+    if (!panel) return;
+    panel.querySelectorAll('.sync-history-subtab').forEach((tab) => {
+      tab.addEventListener('click', () => {
+        panel.querySelectorAll('.sync-history-subtab').forEach((t) => t.classList.remove('is-active'));
+        panel.querySelectorAll('.sync-history-subtab-panel').forEach((p) => p.classList.remove('is-active'));
+        tab.classList.add('is-active');
+        const key = tab.getAttribute('data-subtab');
+        panel.querySelector(`[data-subtab-panel="${key}"]`)?.classList.add('is-active');
       });
     });
   },

@@ -4749,7 +4749,51 @@
     color: var(--blue);
     background: rgba(0, 80, 170, 0.08);
   }
+  .sync-history-panel {
+    margin-top: 1rem;
+  }
   .sync-history-panel .data-table {
     margin-top: 0.5rem;
   }
+  .sync-history-scroll {
+    max-height: 400px;
+    overflow-y: auto;
+  }
+  .sync-history-subtabs {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 0.75rem;
+    border-bottom: 2px solid rgba(0,36,102,.1);
+    padding-bottom: 0;
+  }
+  .sync-history-subtab {
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -2px;
+    padding: 6px 14px;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--muted);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    transition: color .15s, border-color .15s;
+  }
+  .sync-history-subtab:hover { color: var(--ink); }
+  .sync-history-subtab.is-active { color: var(--blue); border-bottom-color: var(--blue); }
+  .sync-history-subtab-count {
+    background: rgba(0,80,170,.1);
+    color: var(--blue);
+    border-radius: 10px;
+    padding: 1px 7px;
+    font-size: 11px;
+    font-weight: 600;
+  }
+  .sync-history-subtab.is-active .sync-history-subtab-count {
+    background: rgba(0,80,170,.15);
+  }
+  .sync-history-subtab-panel { display: none; }
+  .sync-history-subtab-panel.is-active { display: block; }
 </style>

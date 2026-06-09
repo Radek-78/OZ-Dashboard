@@ -272,30 +272,57 @@
                 <button type="button" class="button button-secondary" data-action="setup-branches-trigger"><svg><use href="#i-check"></use></svg>Zkontrolovat / vytvořit</button>
               </div>
 
-              <div class="sync-history-panel" id="branchesSyncHistoryPanel" style="margin-top: 2rem;">
-                <h4 style="margin-bottom: 1rem; color: var(--color-blue); font-weight: 600;">Historie synchronizací a změn</h4>
-                <div class="table-wrap">
-                  <table class="data-table" style="width: 100%;">
-                    <thead>
-                      <tr>
-                        <th>Čas synchronizace</th>
-                        <th>Provedl</th>
-                        <th>Zdrojový soubor</th>
-                        <th style="text-align: center; width: 80px;">Přidáno</th>
-                        <th style="text-align: center; width: 80px;">Upraveno</th>
-                        <th style="text-align: center; width: 80px;">Smazáno</th>
-                        <th style="text-align: center; width: 120px;">Akce</th>
-                      </tr>
-                    </thead>
-                    <tbody id="branchesSyncHistoryBody">
-                      <tr>
-                        <td colspan="7" class="table-empty" style="text-align: center; padding: 2rem; color: var(--muted);">
-                          <strong>Žádná historie</strong>
-                          <span style="display: block; font-size: 12px; margin-top: 4px;">Dosud neproběhla žádná synchronizace se sledováním změn.</span>
-                        </td>
-                      </tr>
-                    </tbody>
-                  </table>
+              <div class="sync-history-panel" id="branchesSyncHistoryPanel">
+                <h4 style="margin-bottom: 0.75rem; color: var(--color-blue); font-weight: 600;">Historie synchronizací a změn</h4>
+                <div class="sync-history-subtabs">
+                  <button type="button" class="sync-history-subtab is-active" data-subtab="changes">Změny <span class="sync-history-subtab-count" id="syncHistoryChangesCount">0</span></button>
+                  <button type="button" class="sync-history-subtab" data-subtab="nochanges">Beze změn <span class="sync-history-subtab-count" id="syncHistoryNoChangesCount">0</span></button>
+                </div>
+                <div class="sync-history-subtab-panel is-active" data-subtab-panel="changes">
+                  <div class="table-wrap sync-history-scroll">
+                    <table class="data-table" style="width: 100%;">
+                      <thead>
+                        <tr>
+                          <th>Čas synchronizace</th>
+                          <th>Provedl</th>
+                          <th>Zdrojový soubor</th>
+                          <th style="text-align: center; width: 80px;">Přidáno</th>
+                          <th style="text-align: center; width: 80px;">Upraveno</th>
+                          <th style="text-align: center; width: 80px;">Smazáno</th>
+                          <th style="text-align: center; width: 120px;">Akce</th>
+                        </tr>
+                      </thead>
+                      <tbody id="branchesSyncHistoryBody">
+                        <tr>
+                          <td colspan="7" class="table-empty" style="text-align: center; padding: 2rem; color: var(--muted);">
+                            <strong>Žádná historie</strong>
+                            <span style="display: block; font-size: 12px; margin-top: 4px;">Dosud neproběhla žádná synchronizace se změnami.</span>
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+                <div class="sync-history-subtab-panel" data-subtab-panel="nochanges">
+                  <div class="table-wrap sync-history-scroll">
+                    <table class="data-table" style="width: 100%;">
+                      <thead>
+                        <tr>
+                          <th>Čas synchronizace</th>
+                          <th>Provedl</th>
+                          <th>Zdrojový soubor</th>
+                        </tr>
+                      </thead>
+                      <tbody id="branchesSyncHistoryNoChangesBody">
+                        <tr>
+                          <td colspan="3" class="table-empty" style="text-align: center; padding: 2rem; color: var(--muted);">
+                            <strong>Žádná historie</strong>
+                            <span style="display: block; font-size: 12px; margin-top: 4px;">Dosud neproběhla žádná synchronizace bez změn.</span>
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               </div>
             </div>
